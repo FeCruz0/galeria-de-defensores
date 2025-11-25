@@ -87,7 +87,7 @@ class CharacterSheetFragment : Fragment() {
         view.findViewById<Button>(R.id.btn_defense).setOnClickListener { viewModel.rollDice(RollType.DEFENSE) }
         
         view.findViewById<View>(R.id.btn_reset).setOnClickListener { 
-            // Reset logic if needed
+            parentFragmentManager.popBackStack()
         }
 
         // Name Listener
@@ -139,6 +139,20 @@ class CharacterSheetFragment : Fragment() {
                 rollResultCard.visibility = View.GONE
             }
         }
+
+        viewModel.isRolling.observe(viewLifecycleOwner) { isRolling ->
+            val buttons = listOf<Button>(
+                view.findViewById(R.id.btn_attack_f),
+                view.findViewById(R.id.btn_attack_pdf),
+                view.findViewById(R.id.btn_defense)
+            )
+            buttons.forEach { it.isEnabled = !isRolling }
+            
+            if (isRolling) {
+                rollResultCard.visibility = View.VISIBLE
+                rollTotalText.setTextColor(Color.YELLOW)
+            }
+        }
     }
 
     private fun setupAttributeInput(view: View, label: String, iconRes: Int, colorHex: String, attrKey: String) {
@@ -161,6 +175,22 @@ class CharacterSheetFragment : Fragment() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
+
+        view.findViewById<Button>(R.id.btn_minus).setOnClickListener {
+            val currentValue = inputView.text.toString().toIntOrNull() ?: 0
+            if (currentValue > 0) {
+                viewModel.updateAttribute(attrKey, currentValue - 1)
+                inputView.setText((currentValue - 1).toString())
+            }
+        }
+
+        view.findViewById<Button>(R.id.btn_plus).setOnClickListener {
+            val currentValue = inputView.text.toString().toIntOrNull() ?: 0
+            if (currentValue < 99) {
+                viewModel.updateAttribute(attrKey, currentValue + 1)
+                inputView.setText((currentValue + 1).toString())
+            }
+        }
     }
     
     private fun updateAttributeValue(view: View, value: Int) {

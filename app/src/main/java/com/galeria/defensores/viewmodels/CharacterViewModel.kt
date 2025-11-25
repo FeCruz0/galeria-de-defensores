@@ -1,22 +1,32 @@
 package com.galeria.defensores.viewmodels
 
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.galeria.defensores.data.CharacterRepository
 import com.galeria.defensores.models.Character
 import com.galeria.defensores.models.RollResult
 import com.galeria.defensores.models.RollType
-import kotlin.math.max
 import kotlin.random.Random
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-class CharacterViewModel : ViewModel() {
+class CharacterViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _character = MutableLiveData<Character>()
     val character: LiveData<Character> = _character
 
-    private val _lastRoll = MutableLiveData<RollResult?>()
-    val lastRoll: LiveData<RollResult?> = _lastRoll
+    private val _isRolling = MutableLiveData<Boolean>()
+    val isRolling: LiveData<Boolean> = _isRolling
+
+    private val _lastRoll = MutableLiveData<RollResult>()
+    val lastRoll: LiveData<RollResult> = _lastRoll
+
+    // Settings
+    var isAnimationEnabled = true
 
     fun loadCharacter(id: String?) {
         if (id != null) {
@@ -31,44 +41,47 @@ class CharacterViewModel : ViewModel() {
     }
 
     fun saveCharacter() {
-        _character.value?.let {
-            CharacterRepository.saveCharacter(it)
-        }
+        _character.value?.let { CharacterRepository.saveCharacter(it) }
     }
 
+    /**
+     * Update an attribute (forca, habilidade, resistencia, armadura, poderFogo).
+     * When resistencia changes, also update current PV and PM to the new maximums.
+     */
     fun updateAttribute(attribute: String, value: Int) {
         val currentChar = _character.value ?: return
         val newValue = value.coerceIn(0, 99)
-        
         when (attribute) {
             "forca" -> currentChar.forca = newValue
             "habilidade" -> currentChar.habilidade = newValue
-            "resistencia" -> currentChar.resistencia = newValue
+            "resistencia" -> {
+                currentChar.resistencia = newValue
+                // Recalculate max PV/PM and set current values to the new max
+                currentChar.currentPv = currentChar.getMaxPv()
+                currentChar.currentPm = currentChar.getMaxPm()
+            }
             "armadura" -> currentChar.armadura = newValue
             "poderFogo" -> currentChar.poderFogo = newValue
         }
-        
-        // Update derived stats if Resistencia changed
-        if (attribute == "resistencia") {
-            // Logic to auto-update max PV/PM could go here, 
-            // but usually we just cap current if it exceeds max in the UI or next update
-        }
-        
         _character.value = currentChar // Trigger LiveData update
         saveCharacter()
     }
 
+    /**
+     * Update status bars (PV or PM) by a delta, respecting the calculated maximums.
+     */
     fun updateStatus(type: String, delta: Int) {
         val currentChar = _character.value ?: return
-        
-        if (type == "pv") {
-            val maxPv = currentChar.getMaxPv()
-            currentChar.currentPv = (currentChar.currentPv + delta).coerceIn(0, maxPv)
-        } else if (type == "pm") {
-            val maxPm = currentChar.getMaxPm()
-            currentChar.currentPm = (currentChar.currentPm + delta).coerceIn(0, maxPm)
+        when (type) {
+            "pv" -> {
+                val maxPv = currentChar.getMaxPv()
+                currentChar.currentPv = (currentChar.currentPv + delta).coerceIn(0, maxPv)
+            }
+            "pm" -> {
+                val maxPm = currentChar.getMaxPm()
+                currentChar.currentPm = (currentChar.currentPm + delta).coerceIn(0, maxPm)
+            }
         }
-        
         _character.value = currentChar
         saveCharacter()
     }
@@ -82,57 +95,82 @@ class CharacterViewModel : ViewModel() {
 
     fun rollDice(type: RollType) {
         val char = _character.value ?: return
-        
-        var bonus = 0
-        var isSpecial = false
+        viewModelScope.launch {
+            _isRolling.value = true
+            var bonus = 0
+            var isSpecial = false
 
-        if (type == RollType.SPECIAL_F || type == RollType.SPECIAL_PDF) {
-            if (char.currentPm < 1) {
-                // TODO: Signal error (not enough PM)
-                return
+            if (type == RollType.SPECIAL_F || type == RollType.SPECIAL_PDF) {
+                if (char.currentPm < 1) {
+                    // Not enough PM – could signal an error to UI
+                    _isRolling.value = false
+                    return@launch
+                }
+                char.currentPm -= 1
+                bonus = 2
+                isSpecial = true
+                _character.value = char // Update UI for PM change
             }
-            char.currentPm -= 1
-            bonus = 2
-            isSpecial = true
-            _character.value = char // Update UI for PM change
+
+            var attrVal = 0
+            var displayAttr = ""
+            when (type) {
+                RollType.ATTACK_F, RollType.SPECIAL_F -> {
+                    attrVal = char.forca
+                    displayAttr = "Força"
+                }
+                RollType.ATTACK_PDF, RollType.SPECIAL_PDF -> {
+                    attrVal = char.poderFogo
+                    displayAttr = "Poder de Fogo"
+                }
+                RollType.DEFENSE -> {
+                    attrVal = char.armadura
+                    displayAttr = "Armadura"
+                }
+            }
+
+            val prefs = getApplication<Application>().getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+            val animationEnabled = prefs.getBoolean("animation_enabled", true)
+
+            if (animationEnabled) {
+                val animationDuration = 3000L
+                val startTime = System.currentTimeMillis()
+                while (System.currentTimeMillis() - startTime < animationDuration) {
+                    val fakeDie = Random.nextInt(6) + 1
+                    val fakeTotal = attrVal + char.habilidade + fakeDie + bonus
+                    val fakeResult = RollResult(
+                        total = fakeTotal,
+                        die = fakeDie,
+                        attributeUsed = displayAttr,
+                        attributeValue = attrVal,
+                        skillValue = char.habilidade,
+                        bonus = bonus,
+                        isCritical = fakeDie == 6,
+                        timestamp = System.currentTimeMillis(),
+                        name = "Rolando..."
+                    )
+                    _lastRoll.value = fakeResult
+                    delay(100)
+                }
+            }
+
+            val die = Random.nextInt(6) + 1
+            val isCritical = die == 6
+            val effectiveAttr = if (isCritical) attrVal * 2 else attrVal
+            val total = effectiveAttr + char.habilidade + die + bonus
+            val result = RollResult(
+                total = total,
+                die = die,
+                attributeUsed = displayAttr,
+                attributeValue = attrVal,
+                skillValue = char.habilidade,
+                bonus = bonus,
+                isCritical = isCritical,
+                timestamp = System.currentTimeMillis(),
+                name = type.displayName
+            )
+            _lastRoll.value = result
+            _isRolling.value = false
         }
-
-        val die = Random.nextInt(6) + 1
-        val isCritical = die == 6
-        
-        var attrVal = 0
-        var displayAttr = ""
-
-        when (type) {
-            RollType.ATTACK_F, RollType.SPECIAL_F -> {
-                attrVal = char.forca
-                displayAttr = "Força"
-            }
-            RollType.ATTACK_PDF, RollType.SPECIAL_PDF -> {
-                attrVal = char.poderFogo
-                displayAttr = "Poder de Fogo"
-            }
-            RollType.DEFENSE -> {
-                attrVal = char.armadura
-                displayAttr = "Armadura"
-            }
-        }
-
-        val effectiveAttr = if (isCritical) attrVal * 2 else attrVal
-        val total = effectiveAttr + char.habilidade + die + bonus
-
-        val result = RollResult(
-            total = total,
-            die = die,
-            attributeUsed = displayAttr,
-            attributeValue = attrVal,
-            skillValue = char.habilidade,
-            bonus = bonus,
-            isCritical = isCritical,
-            timestamp = System.currentTimeMillis(),
-            name = type.displayName
-        )
-
-        _lastRoll.value = result
     }
 }

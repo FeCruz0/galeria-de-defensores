@@ -1260,6 +1260,7 @@ color button_material_dark
 color button_material_light
 color call_notification_answer_color
 color call_notification_decline_color
+color card_background
 color cardview_dark_background
 color cardview_light_background
 color cardview_shadow_end_color
@@ -1313,6 +1314,7 @@ color error_color_material_dark
 color error_color_material_light
 color foreground_material_dark
 color foreground_material_light
+color header_background
 color highlighted_text_material_dark
 color highlighted_text_material_light
 color m3_appbar_overlay_color
@@ -1940,6 +1942,7 @@ color mtrl_textinput_focused_box_stroke_color
 color mtrl_textinput_hovered_box_stroke_color
 color notification_action_color_filter
 color notification_icon_bg_color
+color page_background
 color primary_dark_material_dark
 color primary_dark_material_light
 color primary_material_dark
@@ -1960,6 +1963,7 @@ color switch_thumb_material_dark
 color switch_thumb_material_light
 color switch_thumb_normal_material_dark
 color switch_thumb_normal_material_light
+color text_primary
 color tooltip_background_dark
 color tooltip_background_light
 color white
@@ -3028,11 +3032,14 @@ id btn_attack_pdf
 id btn_defense
 id btn_manage_advantages
 id btn_manage_inventory
+id btn_minus
 id btn_minus_1
 id btn_minus_5
+id btn_plus
 id btn_plus_1
 id btn_plus_5
 id btn_reset
+id btn_settings
 id buttonPanel
 id cancel_button
 id card_roll_result
@@ -3346,6 +3353,8 @@ id stop
 id stretch
 id submenuarrow
 id submit_area
+id switch_animation
+id switch_dark_mode
 id tabMode
 id tag_accessibility_actions
 id tag_accessibility_clickable_spans
@@ -3546,6 +3555,7 @@ layout design_text_input_start_icon
 layout fragment_character_detail
 layout fragment_character_list
 layout fragment_character_sheet
+layout fragment_settings
 layout item_character
 layout m3_alert_dialog
 layout m3_alert_dialog_actions

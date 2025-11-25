@@ -50,5 +50,9 @@
     {
         "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_activity_main.xml.flat",
         "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/layout/activity_main.xml"
+    },
+    {
+        "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_fragment_settings.xml.flat",
+        "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/layout/fragment_settings.xml"
     }
 ]

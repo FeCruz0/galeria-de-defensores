@@ -32,6 +32,13 @@ class CharacterListFragment : Fragment() {
             openCharacterSheet(null)
         }
 
+        view.findViewById<View>(R.id.btn_settings).setOnClickListener {
+            parentFragmentManager.beginTransaction()
+                .replace(R.id.fragment_container, SettingsFragment())
+                .addToBackStack(null)
+                .commit()
+        }
+
         return view
     }
 

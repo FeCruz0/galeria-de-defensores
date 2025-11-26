@@ -173,4 +173,67 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
             _isRolling.value = false
         }
     }
+
+    fun addAdvantage(advantage: com.galeria.defensores.models.AdvantageItem) {
+        val currentChar = _character.value ?: return
+        // Create a copy of the list to trigger LiveData update
+        val newAdvantages = currentChar.vantagens.toMutableList()
+        newAdvantages.add(advantage)
+        currentChar.vantagens = newAdvantages
+        
+        _character.value = currentChar
+        saveCharacter()
+    }
+
+    fun updateAdvantage(advantage: com.galeria.defensores.models.AdvantageItem) {
+        val currentChar = _character.value ?: return
+        val newAdvantages = currentChar.vantagens.toMutableList()
+        val index = newAdvantages.indexOfFirst { it.id == advantage.id }
+        if (index != -1) {
+            newAdvantages[index] = advantage
+            currentChar.vantagens = newAdvantages
+            _character.value = currentChar
+            saveCharacter()
+        }
+    }
+
+    fun addDisadvantage(disadvantage: com.galeria.defensores.models.AdvantageItem) {
+        val currentChar = _character.value ?: return
+        val newDisadvantages = currentChar.desvantagens.toMutableList()
+        newDisadvantages.add(disadvantage)
+        currentChar.desvantagens = newDisadvantages
+        
+        _character.value = currentChar
+        saveCharacter()
+    }
+
+    fun updateDisadvantage(disadvantage: com.galeria.defensores.models.AdvantageItem) {
+        val currentChar = _character.value ?: return
+        val newDisadvantages = currentChar.desvantagens.toMutableList()
+        val index = newDisadvantages.indexOfFirst { it.id == disadvantage.id }
+        if (index != -1) {
+            newDisadvantages[index] = disadvantage
+            currentChar.desvantagens = newDisadvantages
+            _character.value = currentChar
+            saveCharacter()
+        }
+    }
+
+    fun removeAdvantage(advantage: com.galeria.defensores.models.AdvantageItem) {
+        val currentChar = _character.value ?: return
+        val newAdvantages = currentChar.vantagens.toMutableList()
+        newAdvantages.removeAll { it.id == advantage.id }
+        currentChar.vantagens = newAdvantages
+        _character.value = currentChar
+        saveCharacter()
+    }
+
+    fun removeDisadvantage(disadvantage: com.galeria.defensores.models.AdvantageItem) {
+        val currentChar = _character.value ?: return
+        val newDisadvantages = currentChar.desvantagens.toMutableList()
+        newDisadvantages.removeAll { it.id == disadvantage.id }
+        currentChar.desvantagens = newDisadvantages
+        _character.value = currentChar
+        saveCharacter()
+    }
 }

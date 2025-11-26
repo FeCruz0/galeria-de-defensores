@@ -14,9 +14,10 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.cardview.widget.CardView
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.galeria.defensores.R
 import com.galeria.defensores.models.RollType
 import com.galeria.defensores.viewmodels.CharacterViewModel
@@ -117,6 +118,42 @@ class CharacterSheetFragment : Fragment() {
 
             updateStatusValue(view.findViewById(R.id.status_pv), char.currentPv, char.getMaxPv())
             updateStatusValue(view.findViewById(R.id.status_pm), char.currentPm, char.getMaxPm())
+
+            // Update Advantages List
+            val advantagesRecycler = view.findViewById<RecyclerView>(R.id.recycler_advantages)
+            advantagesRecycler.layoutManager = LinearLayoutManager(context)
+            val adapter = AdvantagesAdapter(char.vantagens) { selectedItem ->
+                // Open Edit Dialog with Remove option
+                val editDialog = EditAdvantageDialogFragment(
+                    advantage = selectedItem,
+                    onSave = { updatedItem ->
+                        viewModel.updateAdvantage(updatedItem)
+                    },
+                    onDelete = { itemToDelete ->
+                        viewModel.removeAdvantage(itemToDelete)
+                    }
+                )
+                editDialog.show(parentFragmentManager, "EditAdvantageDialog")
+            }
+            advantagesRecycler.adapter = adapter
+
+            // Update Disadvantages List
+            val disadvantagesRecycler = view.findViewById<RecyclerView>(R.id.recycler_disadvantages)
+            disadvantagesRecycler.layoutManager = LinearLayoutManager(context)
+            val disAdapter = AdvantagesAdapter(char.desvantagens) { selectedItem ->
+                // Open Edit Dialog with Remove option
+                val editDialog = EditAdvantageDialogFragment(
+                    advantage = selectedItem,
+                    onSave = { updatedItem ->
+                        viewModel.updateDisadvantage(updatedItem)
+                    },
+                    onDelete = { itemToDelete ->
+                        viewModel.removeDisadvantage(itemToDelete)
+                    }
+                )
+                editDialog.show(parentFragmentManager, "EditDisadvantageDialog")
+            }
+            disadvantagesRecycler.adapter = disAdapter
         }
 
         viewModel.lastRoll.observe(viewLifecycleOwner) { result ->
@@ -152,6 +189,20 @@ class CharacterSheetFragment : Fragment() {
                 rollResultCard.visibility = View.VISIBLE
                 rollTotalText.setTextColor(Color.YELLOW)
             }
+        }
+
+        view.findViewById<Button>(R.id.btn_add_advantage).setOnClickListener {
+            val dialog = SelectAdvantageDialogFragment { selectedAdvantage ->
+                viewModel.addAdvantage(selectedAdvantage)
+            }
+            dialog.show(parentFragmentManager, "SelectAdvantageDialog")
+        }
+
+        view.findViewById<Button>(R.id.btn_add_disadvantage).setOnClickListener {
+            val dialog = SelectDisadvantageDialogFragment { selectedDisadvantage ->
+                viewModel.addDisadvantage(selectedDisadvantage)
+            }
+            dialog.show(parentFragmentManager, "SelectDisadvantageDialog")
         }
     }
 

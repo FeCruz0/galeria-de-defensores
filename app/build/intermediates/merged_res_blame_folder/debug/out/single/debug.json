@@ -20,16 +20,20 @@
         "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/layout/fragment_character_detail.xml"
     },
     {
+        "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_dialog_select_disadvantage.xml.flat",
+        "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/layout/dialog_select_disadvantage.xml"
+    },
+    {
         "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_fragment_character_sheet.xml.flat",
         "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/layout/fragment_character_sheet.xml"
     },
     {
-        "merged": "com.galeria.defensores.app-merged_res-39:/layout_fragment_character_sheet.xml.flat",
-        "source": "com.galeria.defensores.app-main-41:/layout/fragment_character_sheet.xml"
-    },
-    {
         "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
         "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_dialog_select_advantage.xml.flat",
+        "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/layout/dialog_select_advantage.xml"
     },
     {
         "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_item_character.xml.flat",
@@ -48,8 +52,20 @@
         "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/mipmap-anydpi-v26/ic_launcher.xml"
     },
     {
+        "merged": "com.galeria.defensores.app-merged_res-39:/layout_item_advantage.xml.flat",
+        "source": "com.galeria.defensores.app-main-41:/layout/item_advantage.xml"
+    },
+    {
         "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_activity_main.xml.flat",
         "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/layout/activity_main.xml"
+    },
+    {
+        "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_item_advantage.xml.flat",
+        "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/layout/item_advantage.xml"
+    },
+    {
+        "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_dialog_edit_advantage.xml.flat",
+        "source": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-main-41:/layout/dialog_edit_advantage.xml"
     },
     {
         "merged": "/tmp/gradle_home/daemon/7.5/com.galeria.defensores.app-merged_res-39:/layout_fragment_settings.xml.flat",

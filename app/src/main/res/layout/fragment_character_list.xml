@@ -27,6 +27,15 @@
             android:src="@android:drawable/ic_menu_preferences"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Settings" />
+
+        <ImageButton
+            android:id="@+id/btn_add_player"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_input_add"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Add Player"
+            android:layout_marginStart="8dp" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
@@ -46,5 +55,4 @@
         android:contentDescription="Add Character"
         android:backgroundTint="#B91C1C"
         app:tint="#FFFFFF" />
-
 </LinearLayout>

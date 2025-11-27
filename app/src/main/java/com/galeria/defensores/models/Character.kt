@@ -5,6 +5,7 @@ import java.util.UUID
 data class Character(
     val id: String = UUID.randomUUID().toString(),
     var name: String = "Defensor",
+    var tableId: String = "",
     
     // Attributes
     var forca: Int = 0,

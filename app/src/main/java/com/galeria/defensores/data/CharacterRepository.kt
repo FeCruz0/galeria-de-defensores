@@ -10,8 +10,12 @@ object CharacterRepository {
         characters.add(Character(name = "Defensor Inicial"))
     }
 
-    fun getCharacters(): List<Character> {
-        return characters.toList()
+    fun getCharacters(tableId: String? = null): List<Character> {
+        return if (tableId != null) {
+            characters.filter { it.tableId == tableId }
+        } else {
+            characters.toList()
+        }
     }
 
     fun getCharacter(id: String): Character? {

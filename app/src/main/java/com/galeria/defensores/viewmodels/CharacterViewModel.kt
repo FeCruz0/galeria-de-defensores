@@ -28,7 +28,7 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
     // Settings
     var isAnimationEnabled = true
 
-    fun loadCharacter(id: String?) {
+    fun loadCharacter(id: String?, tableId: String? = null) {
         if (id != null) {
             val char = CharacterRepository.getCharacter(id)
             if (char != null) {
@@ -37,7 +37,7 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
         // Default new character if ID not found or null
-        _character.value = Character()
+        _character.value = Character(tableId = tableId ?: "")
     }
 
     fun saveCharacter() {

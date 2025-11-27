@@ -11,44 +11,53 @@ import androidx.recyclerview.widget.RecyclerView
 import com.galeria.defensores.R
 import com.galeria.defensores.data.CharacterRepository
 import com.galeria.defensores.models.Character
+import com.galeria.defensores.ui.CharacterSheetFragment
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 class CharacterListFragment : Fragment() {
 
     private lateinit var characterRecyclerView: RecyclerView
     private lateinit var adapter: CharacterAdapter
+    private var tableId: String? = null
+
+    companion object {
+        private const val ARG_TABLE_ID = "table_id"
+
+        fun newInstance(tableId: String): CharacterListFragment {
+            val fragment = CharacterListFragment()
+            val args = Bundle()
+            args.putString(ARG_TABLE_ID, tableId)
+            fragment.arguments = args
+            return fragment
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        arguments?.let {
+            tableId = it.getString(ARG_TABLE_ID)
+        }
+    }
 
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
+        inflater: LayoutInflater,
+        container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_character_list, container, false)
-        
         characterRecyclerView = view.findViewById(R.id.character_recycler_view)
         characterRecyclerView.layoutManager = LinearLayoutManager(context)
-        
-        val fab = view.findViewById<FloatingActionButton>(R.id.fab_add_character)
-        fab.setOnClickListener {
-            openCharacterSheet(null)
-        }
+        loadCharacters()
 
-        view.findViewById<View>(R.id.btn_settings).setOnClickListener {
-            parentFragmentManager.beginTransaction()
-                .replace(R.id.fragment_container, SettingsFragment())
-                .addToBackStack(null)
-                .commit()
+        // FAB to add new character (optional, kept for future use)
+        view.findViewById<FloatingActionButton>(R.id.fab_add_character).setOnClickListener {
+            // TODO: implement add character flow
         }
-
         return view
     }
 
-    override fun onResume() {
-        super.onResume()
-        loadCharacters()
-    }
-
     private fun loadCharacters() {
-        val characters = CharacterRepository.getCharacters()
+        val characters = CharacterRepository.getCharacters(tableId)
         adapter = CharacterAdapter(characters) { character ->
             openCharacterSheet(character.id)
         }
@@ -56,9 +65,9 @@ class CharacterListFragment : Fragment() {
     }
 
     private fun openCharacterSheet(characterId: String?) {
-        val fragment = CharacterSheetFragment.newInstance(characterId)
+        val fragment = CharacterSheetFragment.newInstance(characterId, tableId)
         parentFragmentManager.beginTransaction()
-            .replace(R.id.fragment_container, fragment) // Assuming MainActivity has a container with this ID
+            .replace(R.id.fragment_container, fragment)
             .addToBackStack(null)
             .commit()
     }
@@ -88,10 +97,7 @@ class CharacterListFragment : Fragment() {
             fun bind(character: Character) {
                 nameText.text = character.name
                 descText.text = "F:${character.forca} H:${character.habilidade} R:${character.resistencia} A:${character.armadura} PdF:${character.poderFogo}"
-                
-                itemView.setOnClickListener {
-                    onItemClick(character)
-                }
+                itemView.setOnClickListener { onItemClick(character) }
             }
         }
     }

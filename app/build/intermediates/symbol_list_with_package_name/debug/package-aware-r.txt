@@ -3029,12 +3029,15 @@ id bottom
 id bounce
 id btn_add_advantage
 id btn_add_disadvantage
+id btn_add_player
 id btn_attack_f
 id btn_attack_pdf
 id btn_cancel
 id btn_cancel_selection
 id btn_defense
 id btn_delete_item
+id btn_invite
+id btn_login
 id btn_manage_inventory
 id btn_minus
 id btn_minus_1
@@ -3131,6 +3134,7 @@ id exitUntilCollapsed
 id expand_activities_button
 id expanded_menu
 id fab_add_character
+id fab_add_table
 id fade
 id fill
 id fill_horizontal
@@ -3168,6 +3172,8 @@ id ignoreRequest
 id image
 id indeterminate
 id info
+id input_name
+id input_phone
 id invisible
 id inward
 id is_pooling_container_tag
@@ -3285,6 +3291,7 @@ id ratio
 id rectangles
 id recycler_advantages
 id recycler_disadvantages
+id recycler_tables
 id report_drawn
 id reverseSawtooth
 id right
@@ -3400,6 +3407,8 @@ id text_input_start_icon
 id text_roll_detail
 id text_roll_name
 id text_roll_total
+id text_table_description
+id text_table_name
 id textinput_counter
 id textinput_error
 id textinput_helper_text
@@ -3576,9 +3585,12 @@ layout dialog_select_disadvantage
 layout fragment_character_detail
 layout fragment_character_list
 layout fragment_character_sheet
+layout fragment_login
 layout fragment_settings
+layout fragment_table_list
 layout item_advantage
 layout item_character
+layout item_table
 layout m3_alert_dialog
 layout m3_alert_dialog_actions
 layout m3_alert_dialog_title

@@ -26,6 +26,7 @@ class CharacterSheetFragment : Fragment() {
 
     private lateinit var viewModel: CharacterViewModel
     private var characterId: String? = null
+    private var tableId: String? = null
 
     // UI References
     private lateinit var nameEdit: EditText
@@ -36,11 +37,13 @@ class CharacterSheetFragment : Fragment() {
 
     companion object {
         private const val ARG_CHARACTER_ID = "character_id"
+        private const val ARG_TABLE_ID = "table_id"
 
-        fun newInstance(characterId: String?): CharacterSheetFragment {
+        fun newInstance(characterId: String?, tableId: String? = null): CharacterSheetFragment {
             val fragment = CharacterSheetFragment()
             val args = Bundle()
             args.putString(ARG_CHARACTER_ID, characterId)
+            args.putString(ARG_TABLE_ID, tableId)
             fragment.arguments = args
             return fragment
         }
@@ -50,6 +53,7 @@ class CharacterSheetFragment : Fragment() {
         super.onCreate(savedInstanceState)
         arguments?.let {
             characterId = it.getString(ARG_CHARACTER_ID)
+            tableId = it.getString(ARG_TABLE_ID)
         }
         viewModel = ViewModelProvider(this).get(CharacterViewModel::class.java)
     }
@@ -103,7 +107,8 @@ class CharacterSheetFragment : Fragment() {
         })
 
         // Observe Data
-        viewModel.loadCharacter(characterId)
+        // Observe Data
+        viewModel.loadCharacter(characterId, tableId)
 
         viewModel.character.observe(viewLifecycleOwner) { char ->
             if (!nameEdit.hasFocus()) {

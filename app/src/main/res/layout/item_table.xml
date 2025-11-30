@@ -14,12 +14,30 @@
         android:padding="16dp">
 
         <TextView
+            android:id="@+id/text_table_privacy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Privativa"
+            android:textColor="#D32F2F"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/text_table_name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Nome da Mesa"
             android:textSize="18sp"
             android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/text_table_creator"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Criado por: ..."
+            android:textSize="12sp"
+            android:textColor="#757575" />
 
         <TextView
             android:id="@+id/text_table_description"
@@ -29,13 +47,29 @@
             android:text="Descrição da mesa..."
             android:textSize="14sp" />
 
-        <Button
-            android:id="@+id/btn_invite"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Convidar"
-            android:visibility="gone" />
+            android:orientation="horizontal"
+            android:gravity="end">
+
+            <Button
+                android:id="@+id/btn_invite"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Convidar"
+                android:visibility="visible" />
+
+            <ImageButton
+                android:id="@+id/btn_more"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_more"
+                android:visibility="visible" />
+        </LinearLayout>
 
     </LinearLayout>
 </androidx.cardview.widget.CardView>

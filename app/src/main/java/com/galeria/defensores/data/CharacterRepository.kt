@@ -1,37 +1,31 @@
 package com.galeria.defensores.data
 
 import com.galeria.defensores.models.Character
+import kotlinx.coroutines.tasks.await
 
 object CharacterRepository {
-    private val characters = mutableListOf<Character>()
+    private val collection = FirebaseConfig.firestore.collection("characters")
 
-    init {
-        // Add a default character for testing
-        characters.add(Character(name = "Defensor Inicial"))
-    }
-
-    fun getCharacters(tableId: String? = null): List<Character> {
+    suspend fun getCharacters(tableId: String? = null): List<Character> {
         return if (tableId != null) {
-            characters.filter { it.tableId == tableId }
+            val snapshot = collection.whereEqualTo("tableId", tableId).get().await()
+            snapshot.toObjects(Character::class.java)
         } else {
-            characters.toList()
+            val snapshot = collection.get().await()
+            snapshot.toObjects(Character::class.java)
         }
     }
 
-    fun getCharacter(id: String): Character? {
-        return characters.find { it.id == id }
+    suspend fun getCharacter(id: String): Character? {
+        val snapshot = collection.document(id).get().await()
+        return snapshot.toObject(Character::class.java)
     }
 
-    fun saveCharacter(character: Character) {
-        val index = characters.indexOfFirst { it.id == character.id }
-        if (index >= 0) {
-            characters[index] = character
-        } else {
-            characters.add(character)
-        }
+    suspend fun saveCharacter(character: Character) {
+        collection.document(character.id).set(character).await()
     }
 
-    fun deleteCharacter(id: String) {
-        characters.removeAll { it.id == id }
+    suspend fun deleteCharacter(id: String) {
+        collection.document(id).delete().await()
     }
 }

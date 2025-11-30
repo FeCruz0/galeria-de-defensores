@@ -16,11 +16,13 @@ import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.galeria.defensores.R
 import com.galeria.defensores.models.RollType
 import com.galeria.defensores.viewmodels.CharacterViewModel
+import kotlinx.coroutines.launch
 
 class CharacterSheetFragment : Fragment() {
 
@@ -34,7 +36,6 @@ class CharacterSheetFragment : Fragment() {
     private lateinit var rollTotalText: TextView
     private lateinit var rollDetailText: TextView
     private lateinit var rollNameText: TextView
-
     companion object {
         private const val ARG_CHARACTER_ID = "character_id"
         private const val ARG_TABLE_ID = "table_id"
@@ -107,59 +108,7 @@ class CharacterSheetFragment : Fragment() {
         })
 
         // Observe Data
-        // Observe Data
         viewModel.loadCharacter(characterId, tableId)
-
-        viewModel.character.observe(viewLifecycleOwner) { char ->
-            if (!nameEdit.hasFocus()) {
-                nameEdit.setText(char.name)
-            }
-            
-            updateAttributeValue(view.findViewById(R.id.attr_forca), char.forca)
-            updateAttributeValue(view.findViewById(R.id.attr_habilidade), char.habilidade)
-            updateAttributeValue(view.findViewById(R.id.attr_resistencia), char.resistencia)
-            updateAttributeValue(view.findViewById(R.id.attr_armadura), char.armadura)
-            updateAttributeValue(view.findViewById(R.id.attr_pdf), char.poderFogo)
-
-            updateStatusValue(view.findViewById(R.id.status_pv), char.currentPv, char.getMaxPv())
-            updateStatusValue(view.findViewById(R.id.status_pm), char.currentPm, char.getMaxPm())
-
-            // Update Advantages List
-            val advantagesRecycler = view.findViewById<RecyclerView>(R.id.recycler_advantages)
-            advantagesRecycler.layoutManager = LinearLayoutManager(context)
-            val adapter = AdvantagesAdapter(char.vantagens) { selectedItem ->
-                // Open Edit Dialog with Remove option
-                val editDialog = EditAdvantageDialogFragment(
-                    advantage = selectedItem,
-                    onSave = { updatedItem ->
-                        viewModel.updateAdvantage(updatedItem)
-                    },
-                    onDelete = { itemToDelete ->
-                        viewModel.removeAdvantage(itemToDelete)
-                    }
-                )
-                editDialog.show(parentFragmentManager, "EditAdvantageDialog")
-            }
-            advantagesRecycler.adapter = adapter
-
-            // Update Disadvantages List
-            val disadvantagesRecycler = view.findViewById<RecyclerView>(R.id.recycler_disadvantages)
-            disadvantagesRecycler.layoutManager = LinearLayoutManager(context)
-            val disAdapter = AdvantagesAdapter(char.desvantagens) { selectedItem ->
-                // Open Edit Dialog with Remove option
-                val editDialog = EditAdvantageDialogFragment(
-                    advantage = selectedItem,
-                    onSave = { updatedItem ->
-                        viewModel.updateDisadvantage(updatedItem)
-                    },
-                    onDelete = { itemToDelete ->
-                        viewModel.removeDisadvantage(itemToDelete)
-                    }
-                )
-                editDialog.show(parentFragmentManager, "EditDisadvantageDialog")
-            }
-            disadvantagesRecycler.adapter = disAdapter
-        }
 
         viewModel.lastRoll.observe(viewLifecycleOwner) { result ->
             if (result != null) {
@@ -170,44 +119,122 @@ class CharacterSheetFragment : Fragment() {
                 val critText = if (result.isCritical) " (CRÍTICO!)" else ""
                 val bonusText = if (result.bonus > 0) " + ${result.bonus}" else ""
                 
-                rollDetailText.text = "H(${result.skillValue}) + ${result.attributeUsed}(${result.attributeValue}${if(result.isCritical) "x2" else ""}) + 1d6(${result.die})$bonusText$critText"
+                rollDetailText.text = "${result.attributeUsed}(${result.attributeValue}) + H(${result.skillValue}) + 1d6(${result.die})$bonusText$critText"
+            }
+        }
+
+        // Fetch Table for Permissions
+        lifecycleScope.launch {
+            if (tableId != null) {
+                val table = com.galeria.defensores.data.TableRepository.getTable(tableId!!)
+                val currentUser = com.galeria.defensores.data.SessionManager.currentUser
                 
-                if (result.isCritical) {
-                    rollTotalText.setTextColor(Color.parseColor("#D97706")) // Yellow/Gold
-                } else {
-                    rollTotalText.setTextColor(Color.WHITE)
+                viewModel.character.observe(viewLifecycleOwner) { char ->
+                    if (!nameEdit.hasFocus()) {
+                        nameEdit.setText(char.name)
+                    }
+                    
+                    // Permission Check
+                    val isMaster = table?.masterId == currentUser?.id
+                    val isOwner = char.ownerId == currentUser?.id
+                    val canEdit = isMaster || isOwner
+                    
+                    // Privacy Checkbox
+                    val privateCheckbox = view.findViewById<android.widget.CheckBox>(R.id.checkbox_private)
+                    if (canEdit) {
+                        privateCheckbox.visibility = View.VISIBLE
+                        privateCheckbox.isChecked = char.isPrivate
+                        privateCheckbox.setOnCheckedChangeListener { _, isChecked ->
+                            if (char.isPrivate != isChecked) {
+                                viewModel.updatePrivacy(isChecked)
+                            }
+                        }
+                    } else {
+                        privateCheckbox.visibility = View.GONE
+                    }
+
+                    // Enforce Edit Permissions
+                    nameEdit.isEnabled = canEdit
+                    view.findViewById<View>(R.id.btn_add_advantage).isEnabled = canEdit
+                    view.findViewById<View>(R.id.btn_add_disadvantage).isEnabled = canEdit
+                    // Set click listeners for adding advantage/disadvantage
+                    view.findViewById<Button>(R.id.btn_add_advantage).setOnClickListener { showAddAdvantageDialog() }
+                    view.findViewById<Button>(R.id.btn_add_disadvantage).setOnClickListener { showAddDisadvantageDialog() }
+                    view.findViewById<View>(R.id.btn_manage_inventory).isEnabled = canEdit
+                    view.findViewById<View>(R.id.btn_notes).isEnabled = canEdit
+                    
+                    // Disable attribute inputs
+                    val inputs = listOf(
+                        R.id.attr_forca, R.id.attr_habilidade, R.id.attr_resistencia, 
+                        R.id.attr_armadura, R.id.attr_pdf
+                    )
+                    inputs.forEach { resId ->
+                        val container = view.findViewById<View>(resId)
+                        container.findViewById<View>(R.id.btn_minus).isEnabled = canEdit
+                        container.findViewById<View>(R.id.btn_plus).isEnabled = canEdit
+                        container.findViewById<EditText>(R.id.attribute_input).isEnabled = canEdit
+                    }
+                    
+                    // Disable status buttons
+                    val statusInputs = listOf(R.id.status_pv, R.id.status_pm)
+                    statusInputs.forEach { resId ->
+                        val container = view.findViewById<View>(resId)
+                        container.findViewById<View>(R.id.btn_minus_5).isEnabled = canEdit
+                        container.findViewById<View>(R.id.btn_minus_1).isEnabled = canEdit
+                        container.findViewById<View>(R.id.btn_plus_1).isEnabled = canEdit
+                        container.findViewById<View>(R.id.btn_plus_5).isEnabled = canEdit
+                    }
+
+                    updateAttributeValue(view.findViewById(R.id.attr_forca), char.forca)
+                    updateAttributeValue(view.findViewById(R.id.attr_habilidade), char.habilidade)
+                    updateAttributeValue(view.findViewById(R.id.attr_resistencia), char.resistencia)
+                    updateAttributeValue(view.findViewById(R.id.attr_armadura), char.armadura)
+                    updateAttributeValue(view.findViewById(R.id.attr_pdf), char.poderFogo)
+        
+                    updateStatusValue(view.findViewById(R.id.status_pv), char.currentPv, char.getMaxPv())
+                    updateStatusValue(view.findViewById(R.id.status_pm), char.currentPm, char.getMaxPm())
+        
+                    // Update Advantages List
+                    val advantagesRecycler = view.findViewById<RecyclerView>(R.id.recycler_advantages)
+                    advantagesRecycler.layoutManager = LinearLayoutManager(context)
+                    val adapter = AdvantagesAdapter(char.vantagens) { selectedItem ->
+                        if (canEdit) {
+                            // Open Edit Dialog with Remove option
+                            val editDialog = EditAdvantageDialogFragment(
+                                advantage = selectedItem,
+                                onSave = { updatedItem ->
+                                    viewModel.updateAdvantage(updatedItem)
+                                },
+                                onDelete = { itemToDelete ->
+                                    viewModel.removeAdvantage(itemToDelete)
+                                }
+                            )
+                            editDialog.show(parentFragmentManager, "EditAdvantageDialog")
+                        }
+                    }
+                    advantagesRecycler.adapter = adapter
+        
+                    // Update Disadvantages List
+                    val disadvantagesRecycler = view.findViewById<RecyclerView>(R.id.recycler_disadvantages)
+                    disadvantagesRecycler.layoutManager = LinearLayoutManager(context)
+                    val disAdapter = AdvantagesAdapter(char.desvantagens) { selectedItem ->
+                        if (canEdit) {
+                            // Open Edit Dialog with Remove option
+                            val editDialog = EditAdvantageDialogFragment(
+                                advantage = selectedItem,
+                                onSave = { updatedItem ->
+                                    viewModel.updateDisadvantage(updatedItem)
+                                },
+                                onDelete = { itemToDelete ->
+                                    viewModel.removeDisadvantage(itemToDelete)
+                                }
+                            )
+                            editDialog.show(parentFragmentManager, "EditDisadvantageDialog")
+                        }
+                    }
+                    disadvantagesRecycler.adapter = disAdapter
                 }
-            } else {
-                rollResultCard.visibility = View.GONE
             }
-        }
-
-        viewModel.isRolling.observe(viewLifecycleOwner) { isRolling ->
-            val buttons = listOf<Button>(
-                view.findViewById(R.id.btn_attack_f),
-                view.findViewById(R.id.btn_attack_pdf),
-                view.findViewById(R.id.btn_defense)
-            )
-            buttons.forEach { it.isEnabled = !isRolling }
-            
-            if (isRolling) {
-                rollResultCard.visibility = View.VISIBLE
-                rollTotalText.setTextColor(Color.YELLOW)
-            }
-        }
-
-        view.findViewById<Button>(R.id.btn_add_advantage).setOnClickListener {
-            val dialog = SelectAdvantageDialogFragment { selectedAdvantage ->
-                viewModel.addAdvantage(selectedAdvantage)
-            }
-            dialog.show(parentFragmentManager, "SelectAdvantageDialog")
-        }
-
-        view.findViewById<Button>(R.id.btn_add_disadvantage).setOnClickListener {
-            val dialog = SelectDisadvantageDialogFragment { selectedDisadvantage ->
-                viewModel.addDisadvantage(selectedDisadvantage)
-            }
-            dialog.show(parentFragmentManager, "SelectDisadvantageDialog")
         }
     }
 
@@ -281,5 +308,19 @@ class CharacterSheetFragment : Fragment() {
         valueView.text = "$current / $max"
         barView.max = max
         barView.progress = current
+    }
+
+    private fun showAddAdvantageDialog() {
+        val dialog = SelectAdvantageDialogFragment { selectedAdvantage ->
+            viewModel.addAdvantage(selectedAdvantage)
+        }
+        dialog.show(parentFragmentManager, "SelectAdvantageDialog")
+    }
+
+    private fun showAddDisadvantageDialog() {
+        val dialog = SelectDisadvantageDialogFragment { selectedDisadvantage ->
+            viewModel.addDisadvantage(selectedDisadvantage)
+        }
+        dialog.show(parentFragmentManager, "SelectDisadvantageDialog")
     }
 }

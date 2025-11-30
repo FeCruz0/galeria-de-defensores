@@ -19,14 +19,14 @@ object SessionManager {
         val id = preferences.getString(KEY_USER_ID, null)
         val name = preferences.getString(KEY_USER_NAME, null)
         val phone = preferences.getString(KEY_USER_PHONE, null)
-
         if (id != null && name != null && phone != null) {
             currentUser = User(id, name, phone)
-            // Ensure user exists in repository (sync)
-            UserRepository.registerUser(currentUser!!)
         }
     }
 
+    /**
+     * Save the logged‑in user locally and update the in‑memory reference.
+     */
     fun login(user: User) {
         currentUser = user
         preferences.edit()
@@ -34,13 +34,12 @@ object SessionManager {
             .putString(KEY_USER_NAME, user.name)
             .putString(KEY_USER_PHONE, user.phoneNumber)
             .apply()
-        UserRepository.registerUser(user)
     }
 
     fun logout() {
         currentUser = null
         preferences.edit().clear().apply()
     }
-    
+
     fun isLoggedIn(): Boolean = currentUser != null
 }

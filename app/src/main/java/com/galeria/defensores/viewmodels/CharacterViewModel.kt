@@ -29,19 +29,27 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
     var isAnimationEnabled = true
 
     fun loadCharacter(id: String?, tableId: String? = null) {
-        if (id != null) {
-            val char = CharacterRepository.getCharacter(id)
-            if (char != null) {
-                _character.value = char
-                return
+        viewModelScope.launch {
+            if (id != null) {
+                val char = CharacterRepository.getCharacter(id)
+                if (char != null) {
+                    _character.value = char
+                    return@launch
+                }
             }
+            // Default new character if ID not found or null
+            val currentUser = com.galeria.defensores.data.SessionManager.currentUser
+            _character.value = Character(
+                tableId = tableId ?: "",
+                ownerId = currentUser?.id ?: ""
+            )
         }
-        // Default new character if ID not found or null
-        _character.value = Character(tableId = tableId ?: "")
     }
 
     fun saveCharacter() {
-        _character.value?.let { CharacterRepository.saveCharacter(it) }
+        viewModelScope.launch {
+            _character.value?.let { CharacterRepository.saveCharacter(it) }
+        }
     }
 
     /**
@@ -89,6 +97,13 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
     fun updateName(name: String) {
         val currentChar = _character.value ?: return
         currentChar.name = name
+        _character.value = currentChar
+        saveCharacter()
+    }
+
+    fun updatePrivacy(isPrivate: Boolean) {
+        val currentChar = _character.value ?: return
+        currentChar.isPrivate = isPrivate
         _character.value = currentChar
         saveCharacter()
     }

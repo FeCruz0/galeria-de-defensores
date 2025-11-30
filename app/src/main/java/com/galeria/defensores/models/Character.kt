@@ -6,6 +6,8 @@ data class Character(
     val id: String = UUID.randomUUID().toString(),
     var name: String = "Defensor",
     var tableId: String = "",
+    var ownerId: String = "",
+    var isPrivate: Boolean = false,
     
     // Attributes
     var forca: Int = 0,
@@ -18,7 +20,7 @@ data class Character(
     var currentPv: Int = 1,
     var currentPm: Int = 1,
     
-    // Lists (storing as simple Strings or custom objects if needed, using Strings for simplicity as per React 'SimpleItem')
+    // Lists
     var vantagens: MutableList<AdvantageItem> = mutableListOf(),
     var desvantagens: MutableList<AdvantageItem> = mutableListOf(),
     var pericias: MutableList<SimpleItem> = mutableListOf(),
@@ -34,12 +36,12 @@ data class Character(
 
 data class AdvantageItem(
     val id: String = UUID.randomUUID().toString(),
-    val name: String,
-    val description: String,
+    val name: String = "",
+    val description: String = "",
     val cost: String = ""
 )
 
 data class SimpleItem(
     val id: String = UUID.randomUUID().toString(),
-    val text: String
+    val text: String = ""
 )

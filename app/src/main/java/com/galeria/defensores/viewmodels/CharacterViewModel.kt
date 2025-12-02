@@ -30,25 +30,32 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun loadCharacter(id: String?, tableId: String? = null) {
         viewModelScope.launch {
+            android.util.Log.d("CharacterDebug", "Loading character: id=$id, tableId=$tableId")
             if (id != null) {
                 val char = CharacterRepository.getCharacter(id)
                 if (char != null) {
+                    android.util.Log.d("CharacterDebug", "Character found: ${char.id}, owner=${char.ownerId}")
                     _character.value = char
                     return@launch
+                } else {
+                    android.util.Log.e("CharacterDebug", "Character NOT found for id=$id")
                 }
             }
             // Default new character if ID not found or null
+            android.util.Log.d("CharacterDebug", "Creating default character fallback")
             val currentUser = com.galeria.defensores.data.SessionManager.currentUser
             _character.value = Character(
                 tableId = tableId ?: "",
-                ownerId = currentUser?.id ?: ""
+                ownerId = currentUser?.id ?: "" // Try to set owner if falling back
             )
         }
     }
 
     fun saveCharacter() {
-        viewModelScope.launch {
-            _character.value?.let { CharacterRepository.saveCharacter(it) }
+        _character.value?.let { char ->
+            viewModelScope.launch {
+                CharacterRepository.saveCharacter(char)
+            }
         }
     }
 
@@ -101,9 +108,9 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
         saveCharacter()
     }
 
-    fun updatePrivacy(isPrivate: Boolean) {
+    fun updateHidden(isHidden: Boolean) {
         val currentChar = _character.value ?: return
-        currentChar.isPrivate = isPrivate
+        currentChar.isHidden = isHidden
         _character.value = currentChar
         saveCharacter()
     }
@@ -148,7 +155,7 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
             val animationEnabled = prefs.getBoolean("animation_enabled", true)
 
             if (animationEnabled) {
-                val animationDuration = 3000L
+                val animationDuration = 2500L
                 val startTime = System.currentTimeMillis()
                 while (System.currentTimeMillis() - startTime < animationDuration) {
                     val fakeDie = Random.nextInt(6) + 1

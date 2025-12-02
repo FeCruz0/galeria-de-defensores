@@ -4,28 +4,47 @@ import com.galeria.defensores.models.Character
 import kotlinx.coroutines.tasks.await
 
 object CharacterRepository {
-    private val collection = FirebaseConfig.firestore.collection("characters")
+    private val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+    private val charactersCollection = db.collection("characters")
 
     suspend fun getCharacters(tableId: String? = null): List<Character> {
-        return if (tableId != null) {
-            val snapshot = collection.whereEqualTo("tableId", tableId).get().await()
+        return try {
+            val query = if (tableId != null) {
+                charactersCollection.whereEqualTo("tableId", tableId)
+            } else {
+                charactersCollection
+            }
+            val snapshot = query.get().await()
             snapshot.toObjects(Character::class.java)
-        } else {
-            val snapshot = collection.get().await()
-            snapshot.toObjects(Character::class.java)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
         }
     }
 
     suspend fun getCharacter(id: String): Character? {
-        val snapshot = collection.document(id).get().await()
-        return snapshot.toObject(Character::class.java)
+        return try {
+            val doc = charactersCollection.document(id).get().await()
+            doc.toObject(Character::class.java)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 
     suspend fun saveCharacter(character: Character) {
-        collection.document(character.id).set(character).await()
+        try {
+            charactersCollection.document(character.id).set(character).await()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun deleteCharacter(id: String) {
-        collection.document(id).delete().await()
+        try {
+            charactersCollection.document(id).delete().await()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

@@ -4,22 +4,18 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.galeria.defensores.R
 import com.galeria.defensores.data.CharacterRepository
-import com.galeria.defensores.data.TableRepository
-import com.galeria.defensores.data.UserRepository
 import com.galeria.defensores.models.Character
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import com.galeria.defensores.ui.CharacterSheetFragment
 
 class CharacterListFragment : Fragment() {
 
@@ -29,6 +25,7 @@ class CharacterListFragment : Fragment() {
 
     companion object {
         private const val ARG_TABLE_ID = "table_id"
+
         fun newInstance(tableId: String): CharacterListFragment {
             val fragment = CharacterListFragment()
             val args = Bundle()
@@ -40,7 +37,9 @@ class CharacterListFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        arguments?.let { tableId = it.getString(ARG_TABLE_ID) }
+        arguments?.let {
+            tableId = it.getString(ARG_TABLE_ID)
+        }
     }
 
     override fun onCreateView(
@@ -52,50 +51,66 @@ class CharacterListFragment : Fragment() {
         characterRecyclerView = view.findViewById(R.id.character_recycler_view)
         characterRecyclerView.layoutManager = LinearLayoutManager(context)
         
-        view.findViewById<FloatingActionButton>(R.id.fab_add_character).setOnClickListener {
-            openCharacterSheet(null)
+        val fabAddCharacter = view.findViewById<FloatingActionButton>(R.id.fab_add_character)
+        fabAddCharacter.setOnClickListener {
+            viewLifecycleOwner.lifecycleScope.launch {
+                val currentUser = com.galeria.defensores.data.SessionManager.currentUser
+                if (currentUser != null && tableId != null) {
+                    val newCharacter = Character(
+                        tableId = tableId!!,
+                        ownerId = currentUser.id,
+                        name = "Novo Defensor",
+                        forca = 0,
+                        habilidade = 0,
+                        resistencia = 0,
+                        armadura = 0,
+                        poderFogo = 0
+                    )
+                    CharacterRepository.saveCharacter(newCharacter)
+                    openCharacterSheet(newCharacter.id)
+                } else {
+                    Toast.makeText(context, "Erro ao criar ficha. Verifique se está logado.", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
-        view.findViewById<ImageButton>(R.id.btn_add_player).setOnClickListener {
-            showAddPlayerDialog()
-        }
-        
-        loadCharacters()
+
         return view
     }
 
+    override fun onResume() {
+        super.onResume()
+        loadCharacters()
+    }
+
     private fun loadCharacters() {
-        if (tableId == null) return
-        lifecycleScope.launch {
-            val table = TableRepository.getTable(tableId!!)
-            val characters = CharacterRepository.getCharacters(tableId)
-            val currentUser = com.galeria.defensores.data.SessionManager.currentUser
-            if (table != null && currentUser != null) {
-                val filtered = characters.filter { char ->
-                    !char.isPrivate || char.ownerId == currentUser.id || table.masterId == currentUser.id
-                }.sortedWith(
-                    compareByDescending<Character> { it.ownerId == currentUser.id }
-                        .thenBy { it.name.lowercase() }
-                )
-                adapter = CharacterAdapter(filtered) { character ->
+        viewLifecycleOwner.lifecycleScope.launch {
+            android.util.Log.d("CharacterListDebug", "Loading characters for tableId=$tableId")
+            if (tableId != null) {
+                val currentUserId = com.galeria.defensores.data.SessionManager.currentUser?.id
+                val table = com.galeria.defensores.data.TableRepository.getTable(tableId!!)
+                val isMaster = table?.masterId == currentUserId || table?.masterId == "mock-master-id"
+                
+                val allCharacters = CharacterRepository.getCharacters(tableId)
+                android.util.Log.d("CharacterListDebug", "Fetched ${allCharacters.size} characters. CurrentUser=$currentUserId, isMaster=$isMaster")
+                
+                val filteredCharacters = if (isMaster) {
+                    allCharacters
+                } else {
+                    allCharacters.filter { !it.isHidden || it.ownerId == currentUserId }
+                }
+                android.util.Log.d("CharacterListDebug", "Showing ${filteredCharacters.size} characters after filter")
+                
+                adapter = CharacterAdapter(filteredCharacters, isMaster) { character ->
                     openCharacterSheet(character.id)
                 }
                 characterRecyclerView.adapter = adapter
-                
-                // Permission Check for Add Buttons
-                val isMaster = table.masterId == currentUser.id
-                val isPlayer = table.players.contains(currentUser.id)
-                val canEdit = isMaster || isPlayer
-                
-                val fabAdd = view?.findViewById<FloatingActionButton>(R.id.fab_add_character)
-                val btnInvite = view?.findViewById<ImageButton>(R.id.btn_add_player)
-                
-                if (canEdit) {
-                    fabAdd?.visibility = View.VISIBLE
-                    btnInvite?.visibility = View.VISIBLE
-                } else {
-                    fabAdd?.visibility = View.GONE
-                    btnInvite?.visibility = View.GONE
+            } else {
+                android.util.Log.d("CharacterListDebug", "Loading global character list (no tableId)")
+                val characters = CharacterRepository.getCharacters(null)
+                adapter = CharacterAdapter(characters, true) { character ->
+                    openCharacterSheet(character.id)
                 }
+                characterRecyclerView.adapter = adapter
             }
         }
     }
@@ -108,34 +123,9 @@ class CharacterListFragment : Fragment() {
             .commit()
     }
 
-    private fun showAddPlayerDialog() {
-        val input = EditText(requireContext())
-        input.hint = "Telefone do Convidado"
-        input.inputType = android.text.InputType.TYPE_CLASS_PHONE
-        AlertDialog.Builder(requireContext())
-            .setTitle("Convidar Jogador")
-            .setView(input)
-            .setPositiveButton("Convidar") { _, _ ->
-                val phone = input.text.toString()
-                if (phone.isNotBlank() && tableId != null) {
-                    lifecycleScope.launch {
-                        val user = UserRepository.findUserByPhone(phone)
-                        if (user != null) {
-                            TableRepository.addPlayerToTable(tableId!!, user.id)
-                            Toast.makeText(requireContext(), "${user.name} adicionado à mesa!", Toast.LENGTH_SHORT).show()
-                        } else {
-                            val code = java.util.UUID.randomUUID().toString().substring(0, 6).uppercase()
-                            Toast.makeText(requireContext(), "Usuário não encontrado. Código de convite: $code", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
     private inner class CharacterAdapter(
         private val characters: List<Character>,
+        private val isMaster: Boolean,
         private val onItemClick: (Character) -> Unit
     ) : RecyclerView.Adapter<CharacterAdapter.CharacterViewHolder>() {
 
@@ -146,7 +136,8 @@ class CharacterListFragment : Fragment() {
         }
 
         override fun onBindViewHolder(holder: CharacterViewHolder, position: Int) {
-            holder.bind(characters[position])
+            val character = characters[position]
+            holder.bind(character, isMaster)
         }
 
         override fun getItemCount(): Int = characters.size
@@ -154,55 +145,20 @@ class CharacterListFragment : Fragment() {
         inner class CharacterViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
             private val nameText: TextView = itemView.findViewById(R.id.character_name)
             private val descText: TextView = itemView.findViewById(R.id.character_description)
-            private val creatorText: TextView = itemView.findViewById(R.id.character_creator)
-            private val privacyText: TextView = itemView.findViewById(R.id.character_privacy)
-            private val deleteButton: ImageButton = itemView.findViewById(R.id.btn_delete_character)
 
-            fun bind(character: Character) {
+            fun bind(character: Character, isMaster: Boolean) {
                 nameText.text = character.name
                 descText.text = "F:${character.forca} H:${character.habilidade} R:${character.resistencia} A:${character.armadura} PdF:${character.poderFogo}"
-                if (character.isPrivate) {
-                    privacyText.visibility = View.VISIBLE
-                    privacyText.text = "Privativa"
+                
+                if (character.isHidden) {
+                    itemView.alpha = 0.5f
+                    nameText.text = "${character.name} (Oculto)"
                 } else {
-                    privacyText.visibility = View.GONE
+                    itemView.alpha = 1.0f
                 }
-                if (!character.ownerId.isNullOrBlank()) {
-                    lifecycleScope.launch {
-                        val user = UserRepository.getUser(character.ownerId)
-                        creatorText.text = "Criado por: ${user?.name ?: "Desconhecido"}"
-                    }
-                } else {
-                    creatorText.text = "Criado por: Desconhecido"
-                }
-                lifecycleScope.launch {
-                    val currentUser = com.galeria.defensores.data.SessionManager.currentUser
-                    val table = if (tableId != null) TableRepository.getTable(tableId!!) else null
-                    val isOwner = character.ownerId == currentUser?.id
-                    val isMaster = table?.masterId == currentUser?.id
-                    if (isOwner || isMaster) {
-                        deleteButton.visibility = View.VISIBLE
-                        deleteButton.setOnClickListener { showDeleteCharacterDialog(character) }
-                    } else {
-                        deleteButton.visibility = View.GONE
-                    }
-                }
+                
                 itemView.setOnClickListener { onItemClick(character) }
             }
         }
-    }
-
-    private fun showDeleteCharacterDialog(character: Character) {
-        AlertDialog.Builder(requireContext())
-            .setTitle("Excluir Ficha")
-            .setMessage("Tem certeza que deseja excluir a ficha '${character.name}'? Esta ação não pode ser desfeita.")
-            .setPositiveButton("Excluir") { _, _ ->
-                lifecycleScope.launch {
-                    CharacterRepository.deleteCharacter(character.id)
-                    loadCharacters()
-                }
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
     }
 }

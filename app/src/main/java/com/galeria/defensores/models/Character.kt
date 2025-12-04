@@ -7,6 +7,7 @@ data class Character(
     var name: String = "Defensor", // nome_personagem
     var tableId: String = "", // mesa_id
     var ownerId: String = "", // proprietario_id
+    var ownerName: String = "", // nome_do_proprietario
     
     // Attributes
     var forca: Int = 0,

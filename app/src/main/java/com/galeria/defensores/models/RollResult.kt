@@ -1,15 +1,15 @@
 package com.galeria.defensores.models
 
 data class RollResult(
-    val total: Int,
-    val die: Int,
-    val attributeUsed: String,
-    val attributeValue: Int,
-    val skillValue: Int,
-    val bonus: Int,
-    val isCritical: Boolean,
-    val timestamp: Long,
-    val name: String
+    val total: Int = 0,
+    val die: Int = 0,
+    val attributeUsed: String = "",
+    val attributeValue: Int = 0,
+    val skillValue: Int = 0,
+    val bonus: Int = 0,
+    val isCritical: Boolean = false,
+    val timestamp: Long = 0L,
+    val name: String = ""
 )
 
 enum class RollType(val displayName: String) {

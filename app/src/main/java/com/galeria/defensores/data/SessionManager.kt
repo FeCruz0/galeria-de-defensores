@@ -21,8 +21,10 @@ object SessionManager {
 
     suspend fun refreshUser() {
         val firebaseUser = FirebaseAuthManager.getCurrentUser()
+        android.util.Log.d("SessionDebug", "Refreshing user. FirebaseUser: ${firebaseUser?.id}")
         if (firebaseUser != null) {
             _currentUser = UserRepository.getUser(firebaseUser.id)
+            android.util.Log.d("SessionDebug", "Fetched user from Firestore: ${_currentUser?.name}, ID: ${_currentUser?.id}")
             // If user not found in Firestore (e.g. new auth), create basic profile
             if (_currentUser == null) {
                 val newUser = User(
@@ -31,6 +33,7 @@ object SessionManager {
                     email = firebaseUser.email,
                     phoneNumber = firebaseUser.phoneNumber
                 )
+                android.util.Log.d("SessionDebug", "User not found in Firestore. Registering new user: ${newUser.name}")
                 UserRepository.registerUser(newUser)
                 _currentUser = newUser
             }

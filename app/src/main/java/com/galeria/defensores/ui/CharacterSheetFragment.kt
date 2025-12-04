@@ -13,6 +13,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.cardview.widget.CardView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
@@ -71,9 +72,18 @@ class CharacterSheetFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         // Bind UI
-        // Bind UI
         nameEdit = view.findViewById(R.id.edit_char_name)
+        rollResultCard = view.findViewById(R.id.card_roll_result)
+        rollTotalText = view.findViewById(R.id.text_roll_total)
+        rollDetailText = view.findViewById(R.id.text_roll_detail)
+        rollNameText = view.findViewById(R.id.text_roll_name)
+        
         val hiddenCheck = view.findViewById<android.widget.CheckBox>(R.id.check_hidden)
+        val btnBack = view.findViewById<android.widget.ImageButton>(R.id.btn_reset)
+
+        btnBack.setOnClickListener {
+            parentFragmentManager.popBackStack()
+        }
         
         nameEdit.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
@@ -93,8 +103,8 @@ class CharacterSheetFragment : Fragment() {
         setupAttributeInput(view.findViewById(R.id.attr_pdf), "Poder de Fogo", 0, "#8B5CF6", "poderFogo") // Purple
 
         // Setup Status Labels
-        setupStatusManager(view.findViewById(R.id.status_pv), "Pontos de Vida", 0, "#EF4444", "currentPv")
-        setupStatusManager(view.findViewById(R.id.status_pm), "Pontos de Magia", 0, "#3B82F6", "currentPm")
+        setupStatusManager(view.findViewById(R.id.status_pv), "Pontos de Vida", 0, "#EF4444", "pv")
+        setupStatusManager(view.findViewById(R.id.status_pm), "Pontos de Magia", 0, "#3B82F6", "pm")
 
         // Observe Data
         viewModel.loadCharacter(characterId, tableId)
@@ -104,8 +114,6 @@ class CharacterSheetFragment : Fragment() {
                 nameEdit.setText(char.name)
             }
             
-            // Handle Hidden Checkbox
-            // Handle Hidden Checkbox
             // Handle Permissions
             viewLifecycleOwner.lifecycleScope.launch {
                 // Ensure user is loaded
@@ -121,9 +129,6 @@ class CharacterSheetFragment : Fragment() {
                 val isMaster = table?.masterId == currentUserId || table?.masterId == "mock-master-id"
                 val isOwner = char.ownerId == currentUserId
                 val canEdit = isMaster || isOwner
-                
-                android.util.Log.d("CharacterDebug", "Permissions: userId=$currentUserId, ownerId=${char.ownerId}, masterId=${table?.masterId}")
-                android.util.Log.d("CharacterDebug", "Result: isMaster=$isMaster, isOwner=$isOwner, canEdit=$canEdit")
                 
                 // Enable/Disable Editing based on permissions
                 nameEdit.isEnabled = canEdit
@@ -252,6 +257,47 @@ class CharacterSheetFragment : Fragment() {
             }
             dialog.show(parentFragmentManager, "SelectDisadvantageDialog")
         }
+
+        // Roll Listeners
+        view.findViewById<Button>(R.id.btn_attack_f).setOnClickListener {
+            checkPermissionAndRoll(RollType.ATTACK_F)
+        }
+        view.findViewById<Button>(R.id.btn_attack_pdf).setOnClickListener {
+            checkPermissionAndRoll(RollType.ATTACK_PDF)
+        }
+        view.findViewById<Button>(R.id.btn_defense).setOnClickListener {
+            checkPermissionAndRoll(RollType.DEFENSE)
+        }
+    }
+
+    private fun checkPermissionAndRoll(type: RollType) {
+        // Re-check permission on click to be safe, or store it in a member variable
+        // For simplicity and safety, let's fetch current state
+        val currentUserId = com.galeria.defensores.data.SessionManager.currentUser?.id
+        val char = viewModel.character.value
+        
+        if (char != null && currentUserId != null) {
+            // We need to fetch table to know if isMaster. 
+            // Since this is async, we might want to store 'isMaster' in ViewModel or Fragment scope.
+            // However, we already did this check in onViewCreated. Let's promote 'canEdit' to a class property?
+            // Or better: just check ownerId for now, and if not owner, check table master async or assume false if not loaded.
+            
+            // A safer quick fix: rely on the UI state. If buttons are enabled/visible, user can click.
+            // But we added a Toast for disabled state.
+            
+            // Let's implement a proper check
+            viewLifecycleOwner.lifecycleScope.launch {
+                val table = if (char.tableId.isNotEmpty()) com.galeria.defensores.data.TableRepository.getTable(char.tableId) else null
+                val isMaster = table?.masterId == currentUserId || table?.masterId == "mock-master-id"
+                val isOwner = char.ownerId == currentUserId
+                
+                if (isMaster || isOwner) {
+                    viewModel.rollDice(type)
+                } else {
+                    Toast.makeText(context, "Apenas o dono ou mestre pode rolar dados.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun setupAttributeInput(view: View, label: String, iconRes: Int, colorHex: String, attrKey: String) {
@@ -303,6 +349,7 @@ class CharacterSheetFragment : Fragment() {
         val labelView = view.findViewById<TextView>(R.id.status_label)
         val iconView = view.findViewById<ImageView>(R.id.status_icon)
         val barView = view.findViewById<ProgressBar>(R.id.status_bar)
+        val valueView = view.findViewById<TextView>(R.id.status_value)
         
         labelView.text = label
         // iconView.setImageResource(iconRes)
@@ -315,6 +362,26 @@ class CharacterSheetFragment : Fragment() {
         view.findViewById<Button>(R.id.btn_minus_1).setOnClickListener { viewModel.updateStatus(typeKey, -1) }
         view.findViewById<Button>(R.id.btn_plus_1).setOnClickListener { viewModel.updateStatus(typeKey, 1) }
         view.findViewById<Button>(R.id.btn_plus_5).setOnClickListener { viewModel.updateStatus(typeKey, 5) }
+
+        // Direct Edit Listener
+        valueView.setOnClickListener {
+            val context = view.context
+            val input = EditText(context)
+            input.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            input.setText(valueView.text.toString().split(" / ")[0]) // Get current value
+
+            androidx.appcompat.app.AlertDialog.Builder(context)
+                .setTitle("Editar $label")
+                .setView(input)
+                .setPositiveButton("OK") { _, _ ->
+                    val newValue = input.text.toString().toIntOrNull()
+                    if (newValue != null) {
+                        viewModel.setStatus(typeKey, newValue)
+                    }
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
     }
 
     private fun updateStatusValue(view: View, current: Int, max: Int) {

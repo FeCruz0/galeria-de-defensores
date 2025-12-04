@@ -101,6 +101,22 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
         saveCharacter()
     }
 
+    fun setStatus(type: String, value: Int) {
+        val currentChar = _character.value ?: return
+        when (type) {
+            "pv" -> {
+                val maxPv = currentChar.getMaxPv()
+                currentChar.currentPv = value.coerceIn(0, maxPv)
+            }
+            "pm" -> {
+                val maxPm = currentChar.getMaxPm()
+                currentChar.currentPm = value.coerceIn(0, maxPm)
+            }
+        }
+        _character.value = currentChar
+        saveCharacter()
+    }
+
     fun updateName(name: String) {
         val currentChar = _character.value ?: return
         currentChar.name = name
@@ -189,10 +205,15 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
                 bonus = bonus,
                 isCritical = isCritical,
                 timestamp = System.currentTimeMillis(),
-                name = type.displayName
+                name = if (isSpecial) type.displayName else "${char.name} - ${type.displayName}"
             )
             _lastRoll.value = result
             _isRolling.value = false
+
+            // Save to Table History
+            if (char.tableId.isNotEmpty()) {
+                com.galeria.defensores.data.TableRepository.addRollToHistory(char.tableId, result)
+            }
         }
     }
 

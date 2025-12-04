@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <!-- Header with title and Add Player button -->
+    <!-- Header with title and buttons -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -19,16 +19,19 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/character_list_title"
-            android:textSize="24sp" />
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary" />
 
         <ImageButton
-            android:id="@+id/btn_add_player"
+            android:id="@+id/btn_logs"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@android:drawable/ic_input_add"
+            android:src="@android:drawable/ic_menu_sort_by_size"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Add Player"
-            android:layout_marginStart="8dp" />
+            android:contentDescription="Logs"
+            android:layout_marginStart="8dp"
+            app:tint="@color/text_primary" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

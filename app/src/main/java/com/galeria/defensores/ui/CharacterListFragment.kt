@@ -16,6 +16,8 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.galeria.defensores.ui.CharacterSheetFragment
+import androidx.appcompat.app.AlertDialog
+import android.widget.ImageButton
 
 class CharacterListFragment : Fragment() {
 
@@ -59,6 +61,7 @@ class CharacterListFragment : Fragment() {
                     val newCharacter = Character(
                         tableId = tableId!!,
                         ownerId = currentUser.id,
+                        ownerName = currentUser.name,
                         name = "Novo Defensor",
                         forca = 0,
                         habilidade = 0,
@@ -71,6 +74,16 @@ class CharacterListFragment : Fragment() {
                 } else {
                     Toast.makeText(context, "Erro ao criar ficha. Verifique se está logado.", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+
+        val btnLogs = view.findViewById<ImageButton>(R.id.btn_logs)
+        btnLogs.setOnClickListener {
+            if (tableId != null) {
+                val bottomSheet = RollHistoryBottomSheet(tableId!!)
+                bottomSheet.show(parentFragmentManager, "RollHistoryBottomSheet")
+            } else {
+                Toast.makeText(context, "Histórico disponível apenas dentro de uma mesa.", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -98,16 +111,22 @@ class CharacterListFragment : Fragment() {
                 } else {
                     allCharacters.filter { !it.isHidden || it.ownerId == currentUserId }
                 }
-                android.util.Log.d("CharacterListDebug", "Showing ${filteredCharacters.size} characters after filter")
+
+                val sortedCharacters = filteredCharacters.sortedWith(
+                    compareByDescending<Character> { it.ownerId == currentUserId }
+                        .thenBy { it.name }
+                )
+                android.util.Log.d("CharacterListDebug", "Showing ${sortedCharacters.size} characters after filter and sort")
                 
-                adapter = CharacterAdapter(filteredCharacters, isMaster) { character ->
+                adapter = CharacterAdapter(sortedCharacters, isMaster, currentUserId) { character ->
                     openCharacterSheet(character.id)
                 }
                 characterRecyclerView.adapter = adapter
             } else {
                 android.util.Log.d("CharacterListDebug", "Loading global character list (no tableId)")
                 val characters = CharacterRepository.getCharacters(null)
-                adapter = CharacterAdapter(characters, true) { character ->
+                val currentUserId = com.galeria.defensores.data.SessionManager.currentUser?.id
+                adapter = CharacterAdapter(characters, true, currentUserId) { character ->
                     openCharacterSheet(character.id)
                 }
                 characterRecyclerView.adapter = adapter
@@ -123,9 +142,25 @@ class CharacterListFragment : Fragment() {
             .commit()
     }
 
+    private fun showDeleteConfirmation(character: Character) {
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Excluir Personagem")
+            .setMessage("Tem certeza que deseja excluir '${character.name}'?")
+            .setPositiveButton("Excluir") { _, _ ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    CharacterRepository.deleteCharacter(character.id)
+                    Toast.makeText(context, "Personagem excluído.", Toast.LENGTH_SHORT).show()
+                    loadCharacters() // Refresh list
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     private inner class CharacterAdapter(
         private val characters: List<Character>,
         private val isMaster: Boolean,
+        private val currentUserId: String?,
         private val onItemClick: (Character) -> Unit
     ) : RecyclerView.Adapter<CharacterAdapter.CharacterViewHolder>() {
 
@@ -137,7 +172,7 @@ class CharacterListFragment : Fragment() {
 
         override fun onBindViewHolder(holder: CharacterViewHolder, position: Int) {
             val character = characters[position]
-            holder.bind(character, isMaster)
+            holder.bind(character, isMaster, currentUserId)
         }
 
         override fun getItemCount(): Int = characters.size
@@ -145,16 +180,49 @@ class CharacterListFragment : Fragment() {
         inner class CharacterViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
             private val nameText: TextView = itemView.findViewById(R.id.character_name)
             private val descText: TextView = itemView.findViewById(R.id.character_description)
+            private val creatorText: TextView = itemView.findViewById(R.id.character_creator)
+            private val deleteBtn: android.widget.ImageButton = itemView.findViewById(R.id.btn_delete_character)
 
-            fun bind(character: Character, isMaster: Boolean) {
+            fun bind(character: Character, isMaster: Boolean, currentUserId: String?) {
                 nameText.text = character.name
                 descText.text = "F:${character.forca} H:${character.habilidade} R:${character.resistencia} A:${character.armadura} PdF:${character.poderFogo}"
                 
+                if (character.ownerName.isNotEmpty()) {
+                    creatorText.text = "Criado por: ${character.ownerName}"
+                } else if (character.ownerId.isNotEmpty()) {
+                    creatorText.text = "Criado por: ..."
+                    // Async fetch for existing characters
+                    itemView.post {
+                        val lifecycleOwner = itemView.context as? androidx.lifecycle.LifecycleOwner
+                        lifecycleOwner?.lifecycleScope?.launch {
+                            val user = com.galeria.defensores.data.UserRepository.getUser(character.ownerId)
+                            if (user != null) {
+                                character.ownerName = user.name
+                                // Update text only if this ViewHolder is still bound to the same character (simple check)
+                                if (nameText.text == character.name) {
+                                    creatorText.text = "Criado por: ${user.name}"
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    creatorText.text = "Criado por: Desconhecido"
+                }
+
                 if (character.isHidden) {
                     itemView.alpha = 0.5f
                     nameText.text = "${character.name} (Oculto)"
                 } else {
                     itemView.alpha = 1.0f
+                }
+                
+                // Delete Logic
+                val isOwner = character.ownerId == currentUserId
+                if (isMaster || isOwner) {
+                    deleteBtn.visibility = View.VISIBLE
+                    deleteBtn.setOnClickListener { showDeleteConfirmation(character) }
+                } else {
+                    deleteBtn.visibility = View.GONE
                 }
                 
                 itemView.setOnClickListener { onItemClick(character) }

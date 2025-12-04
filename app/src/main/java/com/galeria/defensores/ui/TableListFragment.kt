@@ -4,7 +4,9 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.text.InputType
 import android.widget.EditText
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -41,16 +43,60 @@ class TableListFragment : Fragment() {
                 }
                 
                 val currentUser = SessionManager.currentUser
+                val tables = TableRepository.getTables()
+                val sortedTables = tables.sortedWith(
+                    compareByDescending<Table> { it.masterId == currentUser?.id }
+                        .thenBy { it.name }
+                )
+
                 val adapter = TablesAdapter(
-                    tables = TableRepository.getTables(),
+                    tables = sortedTables,
                     currentUserId = currentUser?.id,
                     scope = viewLifecycleOwner.lifecycleScope,
                     onTableClick = { table ->
-                        val fragment = CharacterListFragment.newInstance(table.id)
-                        parentFragmentManager.beginTransaction()
-                            .replace(R.id.fragment_container, fragment)
-                            .addToBackStack(null)
-                            .commit()
+                        val currentUser = SessionManager.currentUser
+                        val isMaster = table.masterId == currentUser?.id
+                        val isPlayer = table.players.contains(currentUser?.id)
+
+                        if (!table.isPrivate || isMaster || isPlayer) {
+                            // Access Granted
+                            val fragment = CharacterListFragment.newInstance(table.id)
+                            parentFragmentManager.beginTransaction()
+                                .replace(R.id.fragment_container, fragment)
+                                .addToBackStack(null)
+                                .commit()
+                        } else {
+                            // Access Denied - Show Password Dialog
+                            val input = EditText(context)
+                            input.hint = "Senha da Mesa"
+                            input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                            
+                            AlertDialog.Builder(requireContext())
+                                .setTitle("Mesa Privada")
+                                .setMessage("Digite a senha para entrar:")
+                                .setView(input)
+                                .setPositiveButton("Entrar") { _, _ ->
+                                    val password = input.text.toString()
+                                    if (password == table.password) {
+                                        // Password Correct - Add user to table and enter
+                                        viewLifecycleOwner.lifecycleScope.launch {
+                                            if (currentUser != null) {
+                                                TableRepository.addPlayerToTable(table.id, currentUser.id)
+                                                
+                                                val fragment = CharacterListFragment.newInstance(table.id)
+                                                parentFragmentManager.beginTransaction()
+                                                    .replace(R.id.fragment_container, fragment)
+                                                    .addToBackStack(null)
+                                                    .commit()
+                                            }
+                                        }
+                                    } else {
+                                        Toast.makeText(context, "Senha incorreta!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                .setNegativeButton("Cancelar", null)
+                                .show()
+                        }
                     },
                     onInviteClick = { table ->
                         showInviteDialog(table)

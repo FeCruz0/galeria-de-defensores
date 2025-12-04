@@ -53,8 +53,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Configurações"
-                android:textColor="@android:color/white"
-                android:background="#80000000"
+                android:textColor="@color/text_primary"
+                android:background="@color/card_background"
                 android:padding="4dp"
                 android:layout_marginEnd="8dp" />
 
@@ -82,8 +82,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Nova Mesa"
-                android:textColor="@android:color/white"
-                android:background="#80000000"
+                android:textColor="@color/text_primary"
+                android:background="@color/card_background"
                 android:padding="4dp"
                 android:layout_marginEnd="8dp" />
 

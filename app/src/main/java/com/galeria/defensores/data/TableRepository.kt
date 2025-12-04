@@ -72,4 +72,17 @@ object TableRepository {
             e.printStackTrace()
         }
     }
+
+    suspend fun addRollToHistory(tableId: String, roll: com.galeria.defensores.models.RollResult) {
+        try {
+            android.util.Log.d("TableRepoDebug", "Adding roll to history: tableId=$tableId, roll=${roll.total}")
+            tablesCollection.document(tableId)
+                .update("rollHistory", com.google.firebase.firestore.FieldValue.arrayUnion(roll))
+                .await()
+            android.util.Log.d("TableRepoDebug", "Roll added successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("TableRepoDebug", "Error adding roll", e)
+            e.printStackTrace()
+        }
+    }
 }

@@ -2,7 +2,7 @@
 # Script substituto para o gradlew quebrado
 # Baixa e roda o Gradle automaticamente
 
-GRADLE_VERSION=7.5
+GRADLE_VERSION=8.7
 GRADLE_DIST=gradle-${GRADLE_VERSION}-bin.zip
 GRADLE_URL=https://services.gradle.org/distributions/${GRADLE_DIST}
 # Instala o binário em /tmp para garantir permissões de execução (evita problemas com mounts do Windows)

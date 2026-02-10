@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.galeria.defensores.R
 import com.galeria.defensores.data.CharacterRepository
 import com.galeria.defensores.models.Character
 import com.galeria.defensores.models.RollResult
@@ -319,27 +320,27 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
             when (type) {
                 RollType.ATTACK_F, RollType.SPECIAL_F -> {
                     attrVal = char.forca
-                    displayAttr = "Força"
+                    displayAttr = getApplication<Application>().getString(R.string.attr_forca)
                     reqType = com.galeria.defensores.models.RollRequestType.ATTACK_F
                 }
                 RollType.ATTACK_PDF, RollType.SPECIAL_PDF -> {
                     attrVal = char.poderFogo
-                    displayAttr = "Poder de Fogo"
+                    displayAttr = getApplication<Application>().getString(R.string.attr_poder_fogo)
                     reqType = com.galeria.defensores.models.RollRequestType.ATTACK_PDF
                 }
                 RollType.DEFENSE -> {
                     attrVal = char.armadura
-                    displayAttr = "Armadura"
+                    displayAttr = getApplication<Application>().getString(R.string.attr_armadura)
                     reqType = com.galeria.defensores.models.RollRequestType.DEFENSE
                 }
                 RollType.INITIATIVE -> {
                     attrVal = 0
-                    displayAttr = "Iniciativa"
+                    displayAttr = getApplication<Application>().getString(R.string.attr_iniciativa)
                     reqType = com.galeria.defensores.models.RollRequestType.INITIATIVE
                 }
                 RollType.ATTRIBUTE -> {
                      attrVal = 0
-                     displayAttr = "Atributo"
+                     displayAttr = getApplication<Application>().getString(R.string.attr_atributo)
                      reqType = com.galeria.defensores.models.RollRequestType.ATTRIBUTE
                 }
             }
@@ -407,7 +408,7 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
                         bonus = bonus,
                         isCritical = fakeDie == 6,
                         timestamp = System.currentTimeMillis(),
-                        name = "Rolando...",
+                        name = getApplication<Application>().getString(R.string.rolling_placeholder),
                         isHidden = char.isHidden,
                         characterId = char.id
                     )
@@ -870,11 +871,11 @@ class CharacterViewModel(application: Application) : AndroidViewModel(applicatio
         val total = effectiveAttr + skillVal + die + bonus
         
         val displayAttr = when(type) {
-             RollType.ATTACK_F -> "Força"
-             RollType.ATTACK_PDF -> "PdF"
-             RollType.DEFENSE -> "Armadura"
-             RollType.INITIATIVE -> "Iniciativa"
-             else -> "Atributo"
+             RollType.ATTACK_F -> getApplication<Application>().getString(R.string.attr_forca)
+             RollType.ATTACK_PDF -> getApplication<Application>().getString(R.string.attr_pdf)
+             RollType.DEFENSE -> getApplication<Application>().getString(R.string.attr_armadura)
+             RollType.INITIATIVE -> getApplication<Application>().getString(R.string.attr_iniciativa)
+             else -> getApplication<Application>().getString(R.string.attr_atributo)
         }
 
         val attrDetail = if (isCritical) "$displayAttr [$attrVal x2!]" else "$displayAttr [$attrVal]"

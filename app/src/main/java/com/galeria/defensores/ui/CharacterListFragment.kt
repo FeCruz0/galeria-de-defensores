@@ -28,7 +28,7 @@ class CharacterListFragment : Fragment() {
     private lateinit var characterRecyclerView: RecyclerView
     private lateinit var adapter: CharacterAdapter
     private var tableId: String? = null
-    
+
 
 
     companion object {
@@ -60,9 +60,9 @@ class CharacterListFragment : Fragment() {
         val view = inflater.inflate(R.layout.fragment_character_list, container, false)
         characterRecyclerView = view.findViewById(R.id.character_recycler_view)
         characterRecyclerView.layoutManager = LinearLayoutManager(context)
-        
 
-        
+
+
         // FAB Menu Logic
         val fabMenu = view.findViewById<FloatingActionButton>(R.id.fab_menu)
         val layoutFabNewSheet = view.findViewById<View>(R.id.layout_fab_new_sheet)
@@ -73,7 +73,7 @@ class CharacterListFragment : Fragment() {
         val fabTransferOwnership = view.findViewById<FloatingActionButton>(R.id.fab_transfer_ownership) // Added
         val layoutFabClearHistory = view.findViewById<View>(R.id.layout_fab_clear_history)
         val fabClearHistory = view.findViewById<FloatingActionButton>(R.id.fab_clear_history)
-        
+
         var isMenuOpen = false
 
         fabMenu.setOnClickListener {
@@ -112,7 +112,7 @@ class CharacterListFragment : Fragment() {
                     )
                     CharacterRepository.saveCharacter(newCharacter)
                     openCharacterSheet(newCharacter.id)
-                    
+
                     // Close menu
                     isMenuOpen = false
                     layoutFabNewSheet.visibility = View.GONE
@@ -195,11 +195,11 @@ class CharacterListFragment : Fragment() {
 
     private fun showTransferOwnershipDialog() {
         if (tableId == null) return
-        
+
         viewLifecycleOwner.lifecycleScope.launch {
             val table = com.galeria.defensores.data.TableRepository.getTable(tableId!!) ?: return@launch
             val playerIds = table.players.filter { it != table.masterId }
-            
+
             if (playerIds.isEmpty()) {
                 Toast.makeText(context, "Não há outros jogadores para transferir a titularidade.", Toast.LENGTH_LONG).show()
                 return@launch
@@ -210,9 +210,9 @@ class CharacterListFragment : Fragment() {
                 val user = com.galeria.defensores.data.UserRepository.getUser(id)
                 if (user != null) players.add(user)
             }
-            
+
             val playerNames = players.map { it.name }.toTypedArray()
-            
+
             AlertDialog.Builder(requireContext())
                 .setTitle("Transferir Titularidade")
                 .setItems(playerNames) { _, which ->
@@ -236,7 +236,7 @@ class CharacterListFragment : Fragment() {
                     if (!updatedTable.players.contains(com.galeria.defensores.data.SessionManager.currentUser?.id)) {
                         updatedTable.players.add(com.galeria.defensores.data.SessionManager.currentUser?.id ?: "")
                     }
-                    
+
                     val success = com.galeria.defensores.data.TableRepository.updateTable(updatedTable)
                     if (success) {
                         Toast.makeText(context, "Titularidade transferida com sucesso.", Toast.LENGTH_SHORT).show()
@@ -249,7 +249,7 @@ class CharacterListFragment : Fragment() {
             .setNegativeButton("Cancelar", null)
             .show()
     }
-    
+
     // ... loadCharacters ...
 
     override fun onResume() {
@@ -269,12 +269,12 @@ class CharacterListFragment : Fragment() {
 
                 val fabMenu = view?.findViewById<FloatingActionButton>(R.id.fab_menu)
                 val btnLogs = view?.findViewById<ImageButton>(R.id.btn_logs)
-                
+
             // Hide Transfer Option initially (will be shown if menu opens + isMaster)
             val layoutFabTransferOwnership = view?.findViewById<View>(R.id.layout_fab_transfer_ownership)
             layoutFabTransferOwnership?.visibility = View.GONE
             view?.findViewById<View>(R.id.layout_fab_clear_history)?.visibility = View.GONE
-            
+
             if (!isMember && table != null) {
                 // Visitor - Hide Interaction Buttons
                 fabMenu?.visibility = View.GONE
@@ -284,10 +284,10 @@ class CharacterListFragment : Fragment() {
                 fabMenu?.visibility = View.VISIBLE
                 btnLogs?.visibility = View.VISIBLE
             }
-                
+
                 val allCharacters = CharacterRepository.getCharacters(tableId)
                 android.util.Log.d("CharacterListDebug", "Fetched ${allCharacters.size} characters. CurrentUser=$currentUserId, isMaster=$isMaster")
-                
+
                 val filteredCharacters = if (isMaster) {
                     allCharacters
                 } else {
@@ -299,7 +299,7 @@ class CharacterListFragment : Fragment() {
                         .thenBy { it.name }
                 )
                 android.util.Log.d("CharacterListDebug", "Showing ${sortedCharacters.size} characters after filter and sort")
-                
+
                 adapter = CharacterAdapter(sortedCharacters, isMaster, currentUserId) { character ->
                     openCharacterSheet(character.id)
                 }
@@ -370,7 +370,7 @@ class CharacterListFragment : Fragment() {
             fun bind(character: Character, isMaster: Boolean, currentUserId: String?) {
                 nameText.text = character.name
                 descText.text = "F:${character.forca} H:${character.habilidade} R:${character.resistencia} A:${character.armadura} PdF:${character.poderFogo}"
-                
+
                 if (character.ownerName.isNotEmpty()) {
                     creatorText.text = "Criado por: ${character.ownerName}"
                 } else if (character.ownerId.isNotEmpty()) {
@@ -399,7 +399,7 @@ class CharacterListFragment : Fragment() {
                 } else {
                     itemView.alpha = 1.0f
                 }
-                
+
                 // Delete Logic
                 val isOwner = character.ownerId == currentUserId
                 if (isMaster || isOwner) {
@@ -408,7 +408,7 @@ class CharacterListFragment : Fragment() {
                 } else {
                     deleteBtn.visibility = View.GONE
                 }
-                
+
                 itemView.setOnClickListener { onItemClick(character) }
             }
         }

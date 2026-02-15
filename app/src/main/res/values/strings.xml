@@ -18,4 +18,43 @@
         <item>Armadura</item>
         <item>Poder de Fogo</item>
     </string-array>
+
+    <!-- Character List Strings -->
+    <string name="error_create_character">Erro ao criar ficha. Verifique se está logado.</string>
+    <string name="clear_history_title">Limpar Histórico</string>
+    <string name="clear_history_message">Tem certeza que deseja apagar todo o histórico de rolagens desta mesa? Essa ação não pode ser desfeita.</string>
+    <string name="clear_history_confirm">Limpar</string>
+    <string name="clear_history_success">Histórico limpo com sucesso.</string>
+    <string name="clear_history_error">Erro ao limpar histórico.</string>
+    <string name="history_not_available">Histórico disponível apenas dentro de uma mesa.</string>
+    <string name="no_players_transfer">Não há outros jogadores para transferir a titularidade.</string>
+    <string name="transfer_ownership_title">Transferir Titularidade</string>
+    <string name="confirm_transfer_title">Confirmar Transferência</string>
+    <string name="confirm_transfer_message">Tem certeza que deseja transferir a mesa \'%1$s\' para %2$s? Você deixará de ser o Mestre.</string>
+    <string name="transfer_confirm">Transferir</string>
+    <string name="transfer_success">Titularidade transferida com sucesso.</string>
+    <string name="transfer_error">Erro ao transferir titularidade.</string>
+    <string name="delete_character_title">Excluir Personagem</string>
+    <string name="delete_character_message">Tem certeza que deseja excluir \'%1$s\'?</string>
+    <string name="delete_confirm">Excluir</string>
+    <string name="delete_success">Personagem excluído.</string>
+    <string name="created_by">Criado por: %1$s</string>
+    <string name="created_by_loading">Criado por: …</string>
+    <string name="created_by_unknown">Criado por: Desconhecido</string>
+    <string name="character_hidden_suffix">(Oculto)</string>
+    <string name="cancel">Cancelar</string>
+
+    <!-- Attributes -->
+    <string name="attr_forca">Força</string>
+    <string name="attr_habilidade">Habilidade</string>
+    <string name="attr_resistencia">Resistência</string>
+    <string name="attr_armadura">Armadura</string>
+    <string name="attr_poder_fogo">Poder de Fogo</string>
+    <string name="attr_pdf">PdF</string>
+    <string name="attr_iniciativa">Iniciativa</string>
+    <string name="attr_atributo">Atributo</string>
+
+    <!-- General -->
+    <string name="rolling_placeholder">Rolando…</string>
+    <string name="error_delete_generic">Erro ao excluir. Verifique sua conexão.</string>
 </resources>

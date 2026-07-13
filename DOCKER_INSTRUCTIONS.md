@@ -1,79 +1,64 @@
 # Guia de Uso com Docker
 
-Este projeto já está configurado para rodar com Docker. Abaixo estão os passos para construir e gerar o APK.
+Este projeto está configurado para rodar a aplicação web Next.js usando o Docker e o Docker Compose. Abaixo estão as instruções detalhadas de como configurar e subir o projeto.
 
 ## Pré-requisitos
 
-- Docker e Docker Compose instalados.
+Certifique-se de ter instalado em sua máquina:
+1. **Docker**
+2. **Docker Compose**
 
-## Passos
+---
 
-1.  **Construir a imagem Docker:**
-    Abra o terminal na pasta do projeto e execute:
-    ```bash
-    docker-compose build
-    ```
+## Passo a Passo
 
-2.  **Iniciar o container:**
-    Para entrar no ambiente de desenvolvimento dentro do container:
-    ```bash
-    docker-compose run --rm android-build bash
-    ```
+### 1. Configurar o Banco de Dados (Supabase)
+Como este projeto utiliza o Supabase para autenticação, banco de dados PostgreSQL e sincronização em tempo real (Realtime):
+1. Crie um projeto gratuito no [Supabase](https://supabase.com/).
+2. Vá em **SQL Editor** no painel do Supabase, crie uma nova query, copie o conteúdo do arquivo [supabase/schema.sql](supabase/schema.sql) e execute-o. Isso criará todas as tabelas, funções, triggers e políticas de segurança necessárias.
 
-3.  **Gerar o APK (dentro do container):**
-    Uma vez dentro do terminal do container, execute o comando do Gradle para montar o APK de debug:
-    ```bash
-    sed -i 's/\r$//' gradlew
-    chmod +x gradlew
-    ./gradlew clean assembleDebug -i
-    ```
-    
-    *Nota: Na primeira execução, o Gradle irá baixar todas as dependências. Isso pode levar de 5 a 10 minutos e o terminal pode parecer "travado" sem mostrar nada. Tenha paciência.*
+### 2. Configurar as Variáveis de Ambiente
+Na raiz do projeto, edite o arquivo `.env.local` (ou crie-o se não existir) e adicione suas credenciais do Supabase:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon-publica-do-supabase
+```
+> [!IMPORTANT]
+> A aplicação Next.js precisa dessas chaves válidas para se conectar ao banco de dados e realizar a autenticação. Se você usar placeholders inválidos (como `your-supabase-url-here`), as chamadas de API falharão e a autenticação não funcionará.
 
-    *Nota:
-    "sed -i 's/\r$//' gradlew" corrige quebras de linhas do windows para linux.
-    "chmod +x gradlew" adiciona permissão de execução ao arquivo gradlew.
-    "./gradlew assembleDebug" executa o gradle para montar o apk.
-    
-    *Dica: Se quiser ver o que está acontecendo, use o comando com `-i`:*
-    ```bash
-    ./gradlew assembleDebug -i
-    ```
-    
-4.  **Localizar o APK:**
-    Após o término do build, o APK gerado estará disponível na sua máquina local (fora do docker) em:
-    `app/build/outputs/apk/debug/app-debug.apk`
+### 3. Construir e Iniciar o Container
+Para baixar as imagens base, instalar as dependências e iniciar o servidor de desenvolvimento, execute o seguinte comando na raiz do projeto:
+```bash
+docker compose up --build
+```
 
-## Comandos Úteis
+### 4. Acessar a Aplicação
+Uma vez que o terminal indicar que o Next.js está rodando, abra o seu navegador e acesse:
+* **[http://localhost:3000](http://localhost:3000)**
 
-- **Limpar o projeto:**
+Qualquer alteração feita no código local será refletida automaticamente dentro do container graças aos volumes mapeados.
+
+---
+
+## Comandos Úteis do Docker
+
+- **Parar os containers:**
   ```bash
-  ./gradlew clean
+  docker compose down
   ```
 
-- **Verificar tarefas disponíveis:**
+- **Rodar os Testes Unitários dentro do Container:**
+  Você pode rodar os testes do Vitest usando o container ativo:
   ```bash
-  ./gradlew tasks
+  docker compose exec web npx vitest run
   ```
 
-## Solução de Problemas
-
-- **Permissão Negada no gradlew:**
-  Se ao tentar rodar `./gradlew` você receber um erro de permissão, execute:
+- **Acessar o terminal do container:**
   ```bash
-  chmod +x gradlew
+  docker compose exec web sh
   ```
 
-- **Erro de conexão (error during connect):**
-  Se aparecer um erro como `open //./pipe/dockerDesktopLinuxEngine: O sistema não pode encontrar o arquivo especificado`, significa que o **Docker Desktop não está rodando**.
-  1. Abra o "Docker Desktop" no Windows.
-  2. Aguarde o ícone da baleia ficar verde (ou parar de animar).
-  3. Tente o comando novamente.
-
-- **Erro `sh\r`: No such file or directory:**
-  Isso acontece porque o arquivo `gradlew` está com quebras de linha do Windows (CRLF) em vez de Linux (LF).
-  Para corrigir, rode este comando **dentro do container**:
+- **Visualizar os logs:**
   ```bash
-  sed -i 's/\r$//' gradlew
+  docker compose logs -f web
   ```
-  E tente rodar o `./gradlew assembleDebug` novamente.

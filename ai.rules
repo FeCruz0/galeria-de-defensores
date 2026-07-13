@@ -1,0 +1,49 @@
+# ==============================================================================
+# AI AGENT RULES (.ai-rules / .cursorrules / .claudecode)
+# Focus: Maximum Token Economy (Input/Output) & Strict Type/Execution Security
+# Philosophy: Superpowers (TDD/MD Planning) + Matt Pocock (Atomic & Pure Code)
+# ==============================================================================
+
+# 1. RESPONSE POLICY: ZERO-CHAT (Output Token Saving)
+# ------------------------------------------------------------------------------
+- NO greetings, introductions, transitions, or conversational filler (e.g., "Sure!", "Here is the code...", "Hope this helps").
+- NO explanations of what the code does or why it was written unless explicitly asked.
+- Respond ONLY with raw file diffs, command block executions, or telegraphic answers (max 10 words).
+- If code needs to be displayed, output ONLY the affected lines.
+
+# 2. TWO-PHASE WORKFLOW: SUPERPOWERS GOVERNANCE (Security & Input Token Saving)
+# ------------------------------------------------------------------------------
+- PHASE 1: PLANNING
+ - Before modifying any source code, create or update a local markdown file at `.ai/todo.md`.
+ - The plan must be a checklist of atomic micro-tasks (TDD-first).
+ - DO NOT read the entire repository. Limit your reading only to files directly referenced in the current instruction.
+ - STOP execution and wait for user approval after writing the plan.
+ - PHASE 2: EXECUTION & TDD
+ - Modify only ONE file per step.
+ - Write or modify the test file first. Run the test suite. Ensure it fails.
+ - Implement the absolute minimum code required to make the test pass.
+ - Run the test suite again. Ensure it passes.
+ - Propose a git commit message summary in a single short line at the end.
+
+# 3. ATOMIC CODE: MATT POCOCK'S SKILLS
+# ------------------------------------------------------------------------------
+- Write pure, modular, utility-first functions. Use strict typing (Zod/TypeScript) where applicable.
+- DO NOT rewrite entire files. Always use line-specific search-and-replace tools or diffs.
+- Avoid duplicate utility logic. Check if a modular function already exists in helper directories before building a new one.
+
+# 4. CONTEXT RESTRICTION (Input Token Saving)
+# ------------------------------------------------------------------------------
+- Prohibited: Running global project searches (`grep`, `find`, or indexing commands) unless explicitly commanded by the user.
+- Focus exclusively on the workspace path and active files described in `.ai/todo.md`.
+- Keep terminal command output verbose logging to a minimum (use silent or summary flags when running tests/builds).
+
+# 5. GIT & COMMITS
+# ------------------------------------------------------------------------------
+- Git commands must be executed only by the user.
+- The AI must supply a concise commit message proposal at the end of execution using the conventional commits standard:
+  Format: `type(scope): message` (e.g. `feat(roles): add inertia edit component`)
+
+# 6. UX & DESIGN AESTHETICS
+# ------------------------------------------------------------------------------
+- DO NOT use native browser alert(), confirm(), or prompt() dialogs.
+- Implement inline interactive confirmations, beautiful glassmorphic toasts, or custom UI modals/drawers to preserve design aesthetics and premium user experience.

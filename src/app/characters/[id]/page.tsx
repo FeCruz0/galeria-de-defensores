@@ -1159,7 +1159,13 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
           <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
             <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">Recursos</h2>
             
-            {Object.keys(systemDef.resources || {}).map((key) => {
+            {Object.keys(systemDef.resources || {})
+              .sort((a, b) => {
+                if (a === 'PV' && b === 'PM') return -1;
+                if (a === 'PM' && b === 'PV') return 1;
+                return a.localeCompare(b);
+              })
+              .map((key) => {
               const res = systemDef.resources[key];
               const maxVal = evaluateResourceFormula(res.formula, res.baseAttributeKey, character.attributes_values, key, character.advantages);
               const currentVal = character.resources_current[key] ?? maxVal;

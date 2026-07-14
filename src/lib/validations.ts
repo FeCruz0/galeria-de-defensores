@@ -115,3 +115,30 @@ export function validateFormula(formula: string, attributeKeys: string[]): { val
 
   return { valid: true };
 }
+
+/**
+ * Verifica se um atributo pode ser alterado com base nos pontos guardados (savedPoints).
+ * Incrementar (delta > 0) custa 1 ponto.
+ * Decrementar (delta < 0) só é possível se o valor atual for maior que 0.
+ */
+export function canAlterAttribute(currentValue: number, delta: number, savedPoints: number): boolean {
+  if (delta > 0) {
+    return savedPoints >= 1;
+  }
+  if (delta < 0) {
+    return currentValue > 0;
+  }
+  return true;
+}
+
+/**
+ * Verifica se o personagem pode pagar o custo em pontos de uma vantagem ou modificador.
+ * Custos positivos exigem que savedPoints seja maior ou igual ao custo.
+ * Custos negativos (desvantagens) são sempre aceitos (pois devolvem/adicionam pontos).
+ */
+export function canAffordCost(costPt: number, savedPoints: number): boolean {
+  if (costPt > 0) {
+    return savedPoints >= costPt;
+  }
+  return true;
+}

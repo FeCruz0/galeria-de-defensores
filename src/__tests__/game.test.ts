@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll } from '../lib/rules';
-import { validateUniqueNameAndKey, validateFormula } from '../lib/validations';
+import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost } from '../lib/validations';
 import { Character } from '../types/game';
 
 describe('Motor de Regras 3D&T Alpha', () => {
@@ -198,5 +198,27 @@ describe('Validação de Fórmulas de Recursos', () => {
     expect(validateFormula('H + F * 2', ['H', 'F']).valid).toBe(true);
     expect(validateFormula('X * 5', ['R']).valid).toBe(false); // X não existe
     expect(validateFormula('R * / 5', ['R']).valid).toBe(false); // sintaxe errada
+  });
+});
+
+describe('Validação de Distribuição de Pontos e Pontos Guardados', () => {
+  it('deve permitir alteração de atributos se houver pontos guardados suficientes', () => {
+    // se delta > 0 e saved_points > 0, deve retornar true
+    expect(canAlterAttribute(2, 1, 1)).toBe(true);
+    // se delta > 0 e saved_points == 0, deve retornar false
+    expect(canAlterAttribute(2, 1, 0)).toBe(false);
+    // se delta < 0 e valor atual > 0, deve retornar true (devolve ponto)
+    expect(canAlterAttribute(2, -1, 0)).toBe(true);
+    // se delta < 0 e valor atual == 0, deve retornar false
+    expect(canAlterAttribute(0, -1, 5)).toBe(false);
+  });
+
+  it('deve validar custo para adicionar/editar vantagens', () => {
+    // vantagem custa 2, tem 5 pontos guardados -> true
+    expect(canAffordCost(2, 5)).toBe(true);
+    // vantagem custa 2, tem 1 ponto guardado -> false
+    expect(canAffordCost(2, 1)).toBe(false);
+    // desvantagem custa -2, tem 0 pontos guardados -> true (desvantagem dá pontos/devolve)
+    expect(canAffordCost(-2, 0)).toBe(true);
   });
 });

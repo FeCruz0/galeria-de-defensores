@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Character, RuleSystem, AdvantageItem, Spell, InventoryItem, ModifierOption } from '@/types/game';
 import { calculateScore, getMaxPv, getMaxPm, computedCostPt, executeCustomRoll } from '@/lib/rules';
+import { canAlterAttribute, canAffordCost } from '@/lib/validations';
 import { alphaAdvantages, alphaDisadvantages, alphaSkills, alphaRaces, alphaSpecializations } from '@/lib/catalogs/alpha-catalog';
 import { gaidenAdvantages, gaidenDisadvantages, gaidenSkills, gaidenRaces } from '@/lib/catalogs/gaiden-catalog';
 import { 
@@ -321,6 +322,19 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     unique_advantage: 'text-amber-400 bg-amber-950/40 border-amber-800/20'
   };
 
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Exibir um toast estético temporário
+  function showToast(msg: string) {
+    setToastMessage(msg);
+  }
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
   // Input states for adding items
   const [newAdvName, setNewAdvName] = useState('');
   const [newAdvCost, setNewAdvCost] = useState('1');
@@ -499,10 +513,20 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   function handleAttributeChange(key: string, delta: number) {
     if (!character) return;
     const currentValue = character.attributes_values[key] || 0;
+
+    if (!canAlterAttribute(currentValue, delta, character.saved_points || 0)) {
+      if (delta > 0) {
+        showToast("Saldo de Pontos Guardados insuficiente.");
+      }
+      return;
+    }
+
     const newValue = Math.max(currentValue + delta, 0);
+    const newSavedPoints = (character.saved_points || 0) - delta;
 
     setCharacter({
       ...character,
+      saved_points: newSavedPoints,
       attributes_values: {
         ...character.attributes_values,
         [key]: newValue
@@ -541,6 +565,22 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     });
   }
 
+  // Alterar pontos totais de forma reativa, ajustando proporcionalmente os pontos guardados
+  function handlePointsTotalChange(delta: number) {
+    if (!character) return;
+    const currentTotal = character.points_total || 0;
+    const currentSaved = character.saved_points || 0;
+    if (delta < 0 && currentSaved + delta < 0) {
+      showToast("Saldo de Pontos Guardados insuficiente para reduzir o total.");
+      return;
+    }
+    setCharacter({
+      ...character,
+      points_total: Math.max(currentTotal + delta, 0),
+      saved_points: Math.max(currentSaved + delta, 0)
+    });
+  }
+
   // Alterar pontos guardados de forma reativa
   function handleSavedPointsChange(delta: number) {
     if (!character) return;
@@ -556,13 +596,21 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     setSearchQuery('');
     
     if (item.type === 'unique_advantage') {
+      const oldCost = character.unique_advantage?.cost || 0;
+      const newCost = parseInt(item.cost) || 0;
+      const diff = newCost - oldCost;
+      if (!canAffordCost(diff, character.saved_points || 0)) {
+        showToast("Saldo de Pontos Guardados insuficiente para esta Vantagem Única.");
+        return;
+      }
       setCharacter({
         ...character,
+        saved_points: (character.saved_points || 0) - diff,
         unique_advantage: {
           id: crypto.randomUUID(),
           name: item.name,
           description: item.description,
-          cost: parseInt(item.cost) || 0
+          cost: newCost
         }
       });
       return;
@@ -596,11 +644,17 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     };
 
     const costPt = computedCostPt(newItem);
+    if (!canAffordCost(costPt, character.saved_points || 0)) {
+      showToast("Saldo de Pontos Guardados insuficiente.");
+      return;
+    }
+
     newItem.cost = `${costPt} ponto${Math.abs(costPt) !== 1 ? 's' : ''}`;
 
     const targetList = character[advType] || [];
     setCharacter({
       ...character,
+      saved_points: (character.saved_points || 0) - costPt,
       [advType]: [...targetList, newItem]
     });
 
@@ -704,10 +758,17 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
       description: newAdvDesc.trim()
     };
 
+    const costPt = computedCostPt(newItem);
+    if (!canAffordCost(costPt, character.saved_points || 0)) {
+      showToast("Saldo de Pontos Guardados insuficiente.");
+      return;
+    }
+
     const targetList = character[advType] || [];
 
     setCharacter({
       ...character,
+      saved_points: (character.saved_points || 0) - costPt,
       [advType]: [...targetList, newItem]
     });
 
@@ -719,8 +780,18 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   function handleDeleteAdvantage(type: 'advantages' | 'disadvantages' | 'skills' | 'specializations', itemId: string) {
     if (!character) return;
     const targetList = character[type] || [];
+    const itemToDelete = targetList.find(item => item.id === itemId);
+    if (!itemToDelete) return;
+
+    const costPt = computedCostPt(itemToDelete);
+    if (costPt < 0 && (character.saved_points || 0) + costPt < 0) {
+      showToast("Saldo de Pontos Guardados insuficiente para remover esta desvantagem.");
+      return;
+    }
+
     setCharacter({
       ...character,
+      saved_points: (character.saved_points || 0) + costPt,
       [type]: targetList.filter(item => item.id !== itemId)
     });
   }
@@ -739,12 +810,22 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     if (!character || !editingAbilityItem) return;
     const type = editingAbilityItem.type;
     const list = character[type] || [];
-    
+    const oldItem = list.find(item => item.id === updatedItem.id);
+    if (!oldItem) return;
 
+    const oldCostPt = computedCostPt(oldItem);
+    const newCostPt = computedCostPt(updatedItem);
+    const diff = newCostPt - oldCostPt;
+
+    if (!canAffordCost(diff, character.saved_points || 0)) {
+      showToast("Saldo de Pontos Guardados insuficiente para esta alteração.");
+      return;
+    }
 
     const updatedList = list.map(item => item.id === updatedItem.id ? updatedItem : item);
     setCharacter({
       ...character,
+      saved_points: (character.saved_points || 0) - diff,
       [type]: updatedList
     });
     setEditingAbilityItem(null);
@@ -991,7 +1072,12 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                   </button>
                   <button
                     onClick={() => {
-                      setCharacter({ ...character, unique_advantage: undefined });
+                      const cost = character.unique_advantage?.cost || 0;
+                      setCharacter({
+                        ...character,
+                        saved_points: (character.saved_points || 0) + cost,
+                        unique_advantage: undefined
+                      });
                       setShowRaceDetails(false);
                     }}
                     className="text-rose-500 hover:text-rose-400 ml-0.5 font-bold text-sm"
@@ -1238,26 +1324,37 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                 </div>
               </div>
 
-              {/* Pontos Guardados */}
+              {/* Pontos Totais */}
               <div className="flex justify-between items-center bg-slate-800/20 border border-slate-800/60 rounded-xl p-3">
                 <div>
-                  <span className="font-semibold text-slate-300 text-sm block">Pontos Guardados</span>
-                  <span className="text-[10px] text-slate-500">Adquiridos via XP ou Mestre</span>
+                  <span className="font-semibold text-slate-300 text-sm block">Pontos Totais</span>
+                  <span className="text-[10px] text-slate-500">Pontuação geral do personagem</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={() => handleSavedPointsChange(-1)}
+                    onClick={() => handlePointsTotalChange(-1)}
                     className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm"
                   >
                     -
                   </button>
-                  <span className="w-6 text-center font-bold text-slate-200 text-base">{(character as any).saved_points || 0}</span>
+                  <span className="w-6 text-center font-bold text-slate-200 text-base">{character.points_total || 0}</span>
                   <button
-                    onClick={() => handleSavedPointsChange(1)}
+                    onClick={() => handlePointsTotalChange(1)}
                     className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm"
                   >
                     +
                   </button>
+                </div>
+              </div>
+
+              {/* Pontos Guardados */}
+              <div className="flex justify-between items-center bg-slate-800/20 border border-slate-800/60 rounded-xl p-3">
+                <div>
+                  <span className="font-semibold text-slate-300 text-sm block">Pontos Guardados</span>
+                  <span className="text-[10px] text-slate-500">Saldo disponível para distribuir</span>
+                </div>
+                <div className="flex items-center gap-3 pr-2">
+                  <span className="font-bold text-purple-400 text-lg">{(character as any).saved_points || 0}</span>
                 </div>
               </div>
             </div>
@@ -2304,6 +2401,12 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
           onConfirmClone={handleCloneBaseSystem}
           onClose={() => setShowBaseSystemBlockModal(false)}
         />
+      )}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#0f172a]/95 border border-purple-500/30 text-slate-200 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 backdrop-blur-md animate-fade-in max-w-sm">
+          <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+          <span className="font-semibold text-xs leading-relaxed">{toastMessage}</span>
+        </div>
       )}
     </div>
   );

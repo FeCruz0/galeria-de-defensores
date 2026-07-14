@@ -116,7 +116,7 @@ export default function NewCharacterPage() {
           custom_rolls: [],
           damage_type_forca: defaultDamageType,
           damage_type_pdf: defaultDamageType,
-          saved_points: 0,
+          saved_points: pointsTotal,
           experience: 0,
           annotations: '',
           is_hidden: false,

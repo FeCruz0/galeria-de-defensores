@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Edit2, Save, Info } from 'lucide-react';
+import { computedCostPt } from '@/lib/rules';
 
 interface AbilityItem {
   id: string;
@@ -48,6 +49,14 @@ export default function EditAbilityModal({
   const [description, setDescription] = useState(item.description);
   const [selectedModifiers, setSelectedModifiers] = useState<string[]>(item.selectedModifiers || []);
   const [error, setError] = useState('');
+
+  // Atualizar o custo dinamicamente quando os modificadores são selecionados
+  useEffect(() => {
+    if (item.isModular) {
+      const costPt = computedCostPt({ ...item, selectedModifiers });
+      setCost(`${costPt} ponto${Math.abs(costPt) !== 1 ? 's' : ''}`);
+    }
+  }, [selectedModifiers, item]);
 
   const label = typeLabels[itemType] || 'Item';
   const badgeColor = badgeColors[itemType] || 'text-slate-400 bg-slate-950/40 border-slate-800/30';
@@ -146,19 +155,13 @@ export default function EditAbilityModal({
                 Custo
               </label>
               {isEditing ? (
-                item.isModular ? (
-                  <p className="text-xs font-semibold text-slate-450 bg-slate-900/40 border border-slate-800/50 p-2.5 rounded-xl select-none">
-                    Calculado automaticamente com base nos modificadores
-                  </p>
-                ) : (
-                  <input
-                    type="text"
-                    value={cost}
-                    onChange={(e) => setCost(e.target.value)}
-                    placeholder="Ex: 1 ponto, 2 pontos"
-                    className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
-                  />
-                )
+                <input
+                  type="text"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  placeholder="Ex: 1 ponto, 2 pontos"
+                  className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
+                />
               ) : (
                 <p className="text-sm font-semibold text-slate-200 bg-slate-900/40 border border-slate-800/50 p-2.5 rounded-xl">
                   {cost || 'Grátis'}

@@ -13,6 +13,17 @@ describe('Motor de Regras 3D&T Alpha', () => {
     expect(getMaxPm(3)).toBe(15);
   });
 
+  it('deve calcular PV e PM máximos considerando PV/PM Extras', () => {
+    const advantages = [
+      { id: '1', name: 'Pontos de Vida Extras', cost: '1 ponto (cada)' },
+      { id: '2', name: 'Pontos de Magia Extras', cost: '2 pontos (cada)' }
+    ];
+    // R=2. PV Extra=1 (R+2 para PV -> R=4). PV = 4 * 5 = 20.
+    expect(getMaxPv(2, advantages)).toBe(20);
+    // R=2. PM Extra=2 (R+4 para PM -> R=6). PM = 6 * 5 = 30.
+    expect(getMaxPm(2, advantages)).toBe(30);
+  });
+
   it('deve calcular a pontuação gasta de um personagem corretamente', () => {
     const mockCharacter: Character = {
       id: 'char-id',
@@ -153,10 +164,9 @@ describe('Motor de Regras 3D&T Alpha', () => {
     };
 
     const attrs = { F: 3, H: 2, R: 2, A: 1, PdF: 0 };
-    const result = executeCustomRoll(roll as any, attrs);
-    // 1d6 + globalModifier (2) + F (3) + H (2) = dado (1~6) + 7
-    expect(result.total).toBeGreaterThanOrEqual(8);
-    expect(result.total).toBeLessThanOrEqual(13);
+    const result = executeCustomRoll(roll as any, attrs, [3]);
+    // 3 (dado) + globalModifier (2) + F (3) + H (2) = 10
+    expect(result.total).toBe(10);
     expect(result.modifiers).toBe(7); // global (2) + F (3) + H (2)
   });
 });

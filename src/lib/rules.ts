@@ -3,15 +3,35 @@ import { Character, AdvantageItem, CustomRoll, RollResult } from '../types/game'
 /**
  * Retorna o valor máximo de Pontos de Vida (PV) baseado na Resistência do personagem.
  */
-export function getMaxPv(resistencia: number): number {
-  return Math.max(resistencia * 5, 1);
+export function getMaxPv(resistencia: number, advantages?: AdvantageItem[]): number {
+  let extraR = 0;
+  if (advantages) {
+    const extraPvPoints = advantages
+      .filter(adv => {
+        const n = adv.name.toLowerCase();
+        return n.includes('pontos de vida extra') || n.includes('pv extra') || n.includes('vida extra');
+      })
+      .reduce((sum, adv) => sum + Math.abs(computedCostPt(adv)), 0);
+    extraR = extraPvPoints * 2;
+  }
+  return Math.max((resistencia + extraR) * 5, 1);
 }
 
 /**
  * Retorna o valor máximo de Pontos de Magia (PM) baseado na Resistência do personagem.
  */
-export function getMaxPm(resistencia: number): number {
-  return Math.max(resistencia * 5, 1);
+export function getMaxPm(resistencia: number, advantages?: AdvantageItem[]): number {
+  let extraR = 0;
+  if (advantages) {
+    const extraPmPoints = advantages
+      .filter(adv => {
+        const n = adv.name.toLowerCase();
+        return n.includes('pontos de magia extra') || n.includes('pm extra') || n.includes('magia extra');
+      })
+      .reduce((sum, adv) => sum + Math.abs(computedCostPt(adv)), 0);
+    extraR = extraPmPoints * 2;
+  }
+  return Math.max((resistencia + extraR) * 5, 1);
 }
 
 /**

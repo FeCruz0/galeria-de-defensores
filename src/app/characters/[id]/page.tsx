@@ -44,15 +44,48 @@ const STANDARD_SYSTEMS = {
   damage_types: ['Corte', 'Perfuração', 'Esmagamento', 'Fogo', 'Frio', 'Elétrico', 'Químico', 'Sônico']
 };
 
-function evaluateResourceFormula(formula: string | undefined, baseAttributeKey: string, attributesValues: Record<string, number>): number {
+function evaluateResourceFormula(
+  formula: string | undefined,
+  baseAttributeKey: string,
+  attributesValues: Record<string, number>,
+  resourceKey: string,
+  advantages: AdvantageItem[]
+): number {
   const defaultFormula = `${baseAttributeKey} * 5`;
   const clean = (formula || defaultFormula).replace(/\s+/g, '');
   if (!clean) return 1;
 
+  let extraR = 0;
+  if (resourceKey === 'PV') {
+    const extraPvPoints = (advantages || [])
+      .filter(adv => {
+        const n = adv.name.toLowerCase();
+        return n.includes('pontos de vida extra') || n.includes('pv extra') || n.includes('vida extra');
+      })
+      .reduce((sum, adv) => sum + Math.abs(computedCostPt(adv)), 0);
+    extraR = extraPvPoints * 2;
+  } else if (resourceKey === 'PM') {
+    const extraPmPoints = (advantages || [])
+      .filter(adv => {
+        const n = adv.name.toLowerCase();
+        return n.includes('pontos de magia extra') || n.includes('pm extra') || n.includes('magia extra');
+      })
+      .reduce((sum, adv) => sum + Math.abs(computedCostPt(adv)), 0);
+    extraR = extraPmPoints * 2;
+  }
+
+  const adjustedAttributes = { ...attributesValues };
+  const rKeys = Array.from(new Set(['R', 'Resistência', 'Resistencia', baseAttributeKey].filter(Boolean)));
+  rKeys.forEach(k => {
+    if (adjustedAttributes[k] !== undefined) {
+      adjustedAttributes[k] = adjustedAttributes[k] + extraR;
+    }
+  });
+
   let evalStr = clean;
-  Object.keys(attributesValues).forEach(k => {
+  Object.keys(adjustedAttributes).forEach(k => {
     const regex = new RegExp(`\\b${k}\\b`, 'g');
-    evalStr = evalStr.replace(regex, String(attributesValues[k] || 0));
+    evalStr = evalStr.replace(regex, String(adjustedAttributes[k] || 0));
   });
 
   try {
@@ -66,7 +99,7 @@ function evaluateResourceFormula(formula: string | undefined, baseAttributeKey: 
     console.error('Erro ao avaliar formula do recurso:', err);
   }
 
-  const rVal = attributesValues[baseAttributeKey] || attributesValues['R'] || attributesValues['Resistência'] || 0;
+  const rVal = adjustedAttributes[baseAttributeKey] || adjustedAttributes['R'] || adjustedAttributes['Resistência'] || 0;
   return rVal === 0 ? 1 : rVal * 5;
 }
 
@@ -707,10 +740,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     const type = editingAbilityItem.type;
     const list = character[type] || [];
     
-    if (updatedItem.isModular) {
-      const costPt = computedCostPt(updatedItem);
-      updatedItem.cost = `${costPt} ponto${Math.abs(costPt) !== 1 ? 's' : ''}`;
-    }
+
 
     const updatedList = list.map(item => item.id === updatedItem.id ? updatedItem : item);
     setCharacter({
@@ -1045,7 +1075,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
             
             {Object.keys(systemDef.resources || {}).map((key) => {
               const res = systemDef.resources[key];
-              const maxVal = evaluateResourceFormula(res.formula, res.baseAttributeKey, character.attributes_values);
+              const maxVal = evaluateResourceFormula(res.formula, res.baseAttributeKey, character.attributes_values, key, character.advantages);
               const currentVal = character.resources_current[key] ?? maxVal;
 
               let colorClass = "from-rose-600 to-rose-500";
@@ -2258,7 +2288,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         <EditAbilityModal
           item={getEnrichedItem(editingAbilityItem.item, editingAbilityItem.type)}
           itemType={editingAbilityItem.type}
-          isBaseSystem={systemDef.is_base_system === true}
+          isBaseSystem={false}
           onSave={handleSaveAbilityEdit}
           onClose={() => setEditingAbilityItem(null)}
           onTriggerClone={() => {

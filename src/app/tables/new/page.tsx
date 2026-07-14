@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { ArrowLeft, Users, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, Save, BookOpen } from 'lucide-react';
+import { RuleSystem } from '@/types/game';
 
 export default function NewTablePage() {
   const router = useRouter();
@@ -17,17 +18,38 @@ export default function NewTablePage() {
   const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [password, setPassword] = useState('');
+  const [systems, setSystems] = useState<RuleSystem[]>([]);
+  const [ruleSystemId, setRuleSystemId] = useState<string>('');
 
   useEffect(() => {
-    async function checkUser() {
+    async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push('/login');
         return;
       }
       setUserId(user.id);
+
+      try {
+        const { data } = await supabase
+          .from('rule_systems')
+          .select('*')
+          .or(`user_id.eq.${user.id},is_base_system.eq.true`);
+        if (data) {
+          setSystems(data);
+          // Pré-selecionar o 3D&T Alpha como padrão se houver
+          const defaultSys = data.find(s => s.name === '3D&T Alpha' || s.is_base_system);
+          if (defaultSys) {
+            setRuleSystemId(defaultSys.id);
+          } else if (data.length > 0) {
+            setRuleSystemId(data[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao carregar sistemas:', err);
+      }
     }
-    checkUser();
+    init();
   }, [router, supabase]);
 
   async function handleCreate(e: React.FormEvent) {
@@ -43,6 +65,7 @@ export default function NewTablePage() {
           name: name.trim(),
           description: description.trim(),
           master_id: userId,
+          rule_system_id: ruleSystemId || null,
           is_private: isPrivate,
           password: isPrivate && password ? password : null,
           rules_mod: {},
@@ -121,6 +144,34 @@ export default function NewTablePage() {
                 rows={3}
                 className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-3 px-4 text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
               />
+            </div>
+
+            {/* Sistema de Regras */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                Sistema de Regras da Mesa
+              </label>
+              <div className="relative">
+                <select
+                  required
+                  value={ruleSystemId}
+                  onChange={(e) => setRuleSystemId(e.target.value)}
+                  className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-3 px-4 text-slate-200 focus:outline-none focus:border-purple-500 transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="" disabled className="bg-slate-900">Selecione o sistema</option>
+                  {systems.map((sys) => (
+                    <option key={sys.id} value={sys.id} className="bg-slate-900 text-slate-200">
+                      {sys.name} {sys.is_base_system ? '(Nativo)' : '(Personalizado)'}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-slate-400">
+                  <BookOpen className="w-4 h-4 text-purple-400" />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Apenas fichas criadas com este mesmo sistema poderão ser vinculadas a esta mesa.
+              </p>
             </div>
 
             {/* Configurações de Privacidade */}

@@ -44,6 +44,7 @@ create table public.tables (
   name text not null,
   description text default '' not null,
   master_id uuid references auth.users on delete cascade not null,
+  rule_system_id uuid references public.rule_systems on delete set null,
   is_private boolean default false not null,
   password text,
   rules_mod jsonb default '{}'::jsonb not null,

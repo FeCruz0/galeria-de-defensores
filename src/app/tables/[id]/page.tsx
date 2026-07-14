@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Table, ChatMessage, Profile, Character } from '@/types/game';
 import { executeCustomRoll } from '@/lib/rules';
+import { canLinkCharacterToTable } from '@/lib/validations';
 import { 
   ArrowLeft, 
   Loader2, 
@@ -15,7 +16,8 @@ import {
   Hash, 
   Shield,
   Trash2,
-  MessageSquare
+  MessageSquare,
+  BookOpen
 } from 'lucide-react';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 
@@ -45,6 +47,17 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [inviteUsername, setInviteUsername] = useState('');
   const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; title: string; callback: () => void } | null>(null);
   const [activeTab, setActiveTab] = useState<'mesa' | 'chat'>('mesa');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToastMessage(msg);
+  }
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
 
   // 1. Carregar Mesa, Usuário e Histórico de Chat
   useEffect(() => {
@@ -68,7 +81,7 @@ export default function GameTablePage({ params }: { params: Params }) {
         // Mesa
         const { data: tblData } = await supabase
           .from('tables')
-          .select('*')
+          .select('*, rule_systems(name)')
           .eq('id', id)
           .single();
 
@@ -225,6 +238,14 @@ export default function GameTablePage({ params }: { params: Params }) {
 
   // Vincular personagem à mesa
   async function handleLinkCharacter(charId: string) {
+    const charToLink = myCharacters.find(c => c.id === charId);
+    if (!charToLink) return;
+
+    if (!canLinkCharacterToTable(table?.rule_system_id, charToLink.rule_system_id)) {
+      showToast('Inconsistência de regras: Este personagem pertence a um sistema diferente.');
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('characters')
@@ -238,10 +259,10 @@ export default function GameTablePage({ params }: { params: Params }) {
         .select('*')
         .eq('table_id', id);
       if (linkedChars) setLinkedCharacters(linkedChars as any[]);
-      alert('Personagem vinculado com sucesso!');
+      showToast('Personagem vinculado com sucesso!');
     } catch (err) {
       console.error(err);
-      alert('Erro ao vincular personagem.');
+      showToast('Erro ao vincular personagem.');
     }
   }
 
@@ -259,12 +280,12 @@ export default function GameTablePage({ params }: { params: Params }) {
         .maybeSingle();
 
       if (profileErr || !targetProfile) {
-        alert('Jogador não encontrado. Verifique se o nome de usuário está correto.');
+        showToast('Jogador não encontrado. Verifique se o nome de usuário está correto.');
         return;
       }
 
       if (targetProfile.id === currentUser.id) {
-        alert('Você não pode convidar a si mesmo.');
+        showToast('Você não pode convidar a si mesmo.');
         return;
       }
 
@@ -282,11 +303,11 @@ export default function GameTablePage({ params }: { params: Params }) {
 
       if (inviteErr) throw inviteErr;
 
-      alert(`Convite enviado com sucesso para ${targetProfile.username}!`);
+      showToast(`Convite enviado com sucesso para ${targetProfile.username}!`);
       setInviteUsername('');
     } catch (err) {
       console.error('Erro ao enviar convite:', err);
-      alert('Erro ao enviar o convite.');
+      showToast('Erro ao enviar o convite.');
     }
   }
 
@@ -302,7 +323,7 @@ export default function GameTablePage({ params }: { params: Params }) {
       setLinkedCharacters(prev => prev.filter(c => c.id !== charId));
     } catch (err) {
       console.error(err);
-      alert('Erro ao desvincular personagem.');
+      showToast('Erro ao desvincular personagem.');
     }
   }
 
@@ -412,9 +433,18 @@ export default function GameTablePage({ params }: { params: Params }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/30 border border-slate-800/80 px-3 py-1.5 rounded-full">
-          <Users className="w-3.5 h-3.5 text-cyan-400" />
-          Mesa ID: {table.id.slice(0, 8)}
+        <div className="flex items-center gap-3">
+          {table.rule_systems?.name && (
+            <div className="flex items-center gap-1.5 text-xs text-slate-350 bg-purple-950/20 border border-purple-800/35 px-3 py-1.5 rounded-full">
+              <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+              <span className="font-semibold">{table.rule_systems.name}</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/30 border border-slate-800/80 px-3 py-1.5 rounded-full">
+            <Users className="w-3.5 h-3.5 text-cyan-400" />
+            Mesa ID: {table.id.slice(0, 8)}
+          </div>
         </div>
       </header>
 
@@ -553,7 +583,7 @@ export default function GameTablePage({ params }: { params: Params }) {
                     if (sel && sel.value) {
                       handleLinkCharacter(sel.value);
                     } else {
-                      alert('Selecione um personagem primeiro.');
+                      showToast('Selecione um personagem primeiro.');
                     }
                   }}
                   className="bg-purple-600 hover:bg-purple-500 text-white font-semibold px-4 rounded-xl text-xs transition-colors"
@@ -903,6 +933,13 @@ export default function GameTablePage({ params }: { params: Params }) {
             setVirtualRoll(null);
           }}
         />
+      )}
+
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-50 bg-[#0f172a]/95 border border-purple-500/30 text-slate-200 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 backdrop-blur-md animate-fade-in max-w-sm">
+          <BookOpen className="w-4 h-4 text-purple-400 shrink-0" />
+          <span className="font-semibold text-xs leading-relaxed">{toastMessage}</span>
+        </div>
       )}
     </div>
   );

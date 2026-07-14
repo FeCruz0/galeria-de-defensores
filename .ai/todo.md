@@ -1,14 +1,15 @@
-# 📝 Tasks - Barra de Atalhos Rápidos de Rolagem (Quick Actions Bar)
+# 📝 Tasks - Restrição de Sistema de Regras em Mesas de Jogo
 
-## Fase 1: Testes Automatizados (TDD)
-- [ ] Adicionar testes unitários em `src/__tests__/game.test.ts` para testar os modificadores das ações rápidas (Ataque: F+H, Defesa: A+H, Esquiva/Iniciativa: H).
+## Fase 1: Atualizações Estruturais
+- [ ] Adicionar `rule_system_id` à tabela `tables` no arquivo `supabase/schema.sql`.
+- [ ] Adicionar a propriedade `rule_system_id` e `rule_systems` à interface `Table` em `src/types/game.ts`.
 
 ## Fase 2: Implementação
-- [ ] Criar estado `profileName` e carregar o perfil do usuário em `src/app/characters/[id]/page.tsx`.
-- [ ] Implementar a função `handleQuickRoll` em `src/app/characters/[id]/page.tsx`.
-- [ ] Criar a interface visual da barra de atalhos rápidos flutuante no final da página da ficha.
-- [ ] Integrar a publicação das rolagens no chat da mesa via `chat_messages` caso o personagem esteja vinculado a uma mesa ativa.
+- [ ] Implementar seleção de sistema de regras e inserção na criação de mesas em `src/app/tables/new/page.tsx`.
+- [ ] Modificar o carregamento da mesa para obter o relacionamento `rule_systems(name)` em `src/app/tables/[id]/page.tsx`.
+- [ ] Exibir o nome do sistema de regras no cabeçalho de `src/app/tables/[id]/page.tsx`.
+- [ ] Validar compatibilidade do `rule_system_id` do personagem antes de permitir o vínculo em `handleLinkCharacter`.
 
 ## Fase 3: Validação
-- [ ] Executar suíte de testes (`npx vitest run`) e garantir aprovação.
-- [ ] Rodar build de produção (`npm run build`).
+- [ ] Rodar testes unitários (`npx vitest run`).
+- [ ] Executar o build de produção (`npm run build`).

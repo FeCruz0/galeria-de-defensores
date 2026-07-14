@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers } from '../lib/rules';
-import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost } from '../lib/validations';
+import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost, canLinkCharacterToTable } from '../lib/validations';
 import { Character } from '../types/game';
 
 
@@ -234,5 +234,21 @@ describe('Atalhos Rápidos de Rolagem (Quick Actions)', () => {
     expect(getQuickRollModifiers('Esquiva', attrs)).toBe(3); // H(3)
     expect(getQuickRollModifiers('Iniciativa', attrs)).toBe(3); // H(3)
     expect(getQuickRollModifiers('Outro', attrs)).toBe(0);
+  });
+});
+
+describe('Restrição de Sistema de Regras em Mesas de Jogo', () => {
+  it('deve permitir vincular qualquer personagem se a mesa não tiver sistema vinculado (compatibilidade)', () => {
+    expect(canLinkCharacterToTable(undefined, 'sys-1')).toBe(true);
+    expect(canLinkCharacterToTable(null, 'sys-1')).toBe(true);
+  });
+
+  it('deve permitir vincular se o personagem tiver o mesmo sistema da mesa', () => {
+    expect(canLinkCharacterToTable('sys-1', 'sys-1')).toBe(true);
+  });
+
+  it('deve recusar vínculo se o personagem tiver sistema diferente da mesa', () => {
+    expect(canLinkCharacterToTable('sys-1', 'sys-2')).toBe(false);
+    expect(canLinkCharacterToTable('sys-1', undefined)).toBe(false);
   });
 });

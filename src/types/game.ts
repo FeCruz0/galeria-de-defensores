@@ -36,6 +36,8 @@ export interface Table {
   name: string;
   description: string;
   master_id: string;
+  rule_system_id?: string;
+  rule_systems?: { name: string } | null;
   is_private: boolean;
   password?: string;
   rules_mod: Record<string, any>;

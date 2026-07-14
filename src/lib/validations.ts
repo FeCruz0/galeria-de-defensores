@@ -142,3 +142,16 @@ export function canAffordCost(costPt: number, savedPoints: number): boolean {
   }
   return true;
 }
+
+/**
+ * Verifica se um personagem pode ser vinculado a uma mesa com base no sistema de regras.
+ * Se a mesa não possuir sistema de regras (legado), o vínculo é permitido por compatibilidade.
+ * Se a mesa possuir sistema de regras, o personagem deve ter exatamente o mesmo rule_system_id.
+ */
+export function canLinkCharacterToTable(
+  tableRuleSystemId: string | undefined | null,
+  characterRuleSystemId: string | undefined | null
+): boolean {
+  if (!tableRuleSystemId) return true;
+  return tableRuleSystemId === characterRuleSystemId;
+}

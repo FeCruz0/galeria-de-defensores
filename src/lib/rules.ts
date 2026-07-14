@@ -223,3 +223,23 @@ export function executeCustomRoll(
     componentsText: finalString
   };
 }
+
+/**
+ * Calcula os modificadores aplicados a ações/rolagens rápidas baseadas no sistema 3D&T.
+ */
+export function getQuickRollModifiers(actionName: string, attributesValues: Record<string, number>): number {
+  const fVal = attributesValues['F'] || attributesValues['Força'] || attributesValues['Forca'] || 0;
+  const hVal = attributesValues['H'] || attributesValues['Habilidade'] || 0;
+  const aVal = attributesValues['A'] || attributesValues['Armadura'] || 0;
+
+  if (actionName === 'Ataque') {
+    return fVal + hVal;
+  }
+  if (actionName === 'Defesa') {
+    return aVal + hVal;
+  }
+  if (actionName === 'Esquiva' || actionName === 'Iniciativa') {
+    return hVal;
+  }
+  return 0;
+}

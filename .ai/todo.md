@@ -1,15 +1,14 @@
-# 📝 Tasks - Distribuição de Pontos e Ficha Limitada
+# 📝 Tasks - Barra de Atalhos Rápidos de Rolagem (Quick Actions Bar)
 
 ## Fase 1: Testes Automatizados (TDD)
-- [ ] Criar testes unitários em `src/__tests__/game.test.ts` para as novas regras de distribuição e saldo de pontos.
+- [ ] Adicionar testes unitários em `src/__tests__/game.test.ts` para testar os modificadores das ações rápidas (Ataque: F+H, Defesa: A+H, Esquiva/Iniciativa: H).
 
 ## Fase 2: Implementação
-- [ ] Inicializar `saved_points` com o valor de `points_total` na criação do personagem em `src/app/characters/new/page.tsx`.
-- [ ] Implementar `handlePointsTotalChange` na ficha de personagem (`src/app/characters/[id]/page.tsx`).
-- [ ] Adicionar botões de incremento/decremento para `points_total` na interface da ficha.
-- [ ] Integrar consumo/retorno de `saved_points` no manipulador de atributos `handleAttributeChange`.
-- [ ] Validar saldo de `saved_points` e deduzir/devolver pontos ao adicionar, editar e remover vantagens, desvantagens, perícias, especializações e vantagens únicas.
+- [ ] Criar estado `profileName` e carregar o perfil do usuário em `src/app/characters/[id]/page.tsx`.
+- [ ] Implementar a função `handleQuickRoll` em `src/app/characters/[id]/page.tsx`.
+- [ ] Criar a interface visual da barra de atalhos rápidos flutuante no final da página da ficha.
+- [ ] Integrar a publicação das rolagens no chat da mesa via `chat_messages` caso o personagem esteja vinculado a uma mesa ativa.
 
 ## Fase 3: Validação
-- [ ] Rodar suíte de testes (`npx vitest run`) e garantir aprovação.
-- [ ] Validar compilação (`npm run build`).
+- [ ] Executar suíte de testes (`npx vitest run`) e garantir aprovação.
+- [ ] Rodar build de produção (`npm run build`).

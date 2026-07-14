@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll } from '../lib/rules';
+import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers } from '../lib/rules';
 import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost } from '../lib/validations';
 import { Character } from '../types/game';
+
+
 
 describe('Motor de Regras 3D&T Alpha', () => {
   it('deve calcular PV e PM máximos baseado na Resistência', () => {
@@ -220,5 +222,17 @@ describe('Validação de Distribuição de Pontos e Pontos Guardados', () => {
     expect(canAffordCost(2, 1)).toBe(false);
     // desvantagem custa -2, tem 0 pontos guardados -> true (desvantagem dá pontos/devolve)
     expect(canAffordCost(-2, 0)).toBe(true);
+  });
+});
+
+describe('Atalhos Rápidos de Rolagem (Quick Actions)', () => {
+  const attrs = { F: 2, H: 3, R: 2, A: 1, PdF: 0 };
+
+  it('deve calcular os modificadores de rolagens rápidas corretamente', () => {
+    expect(getQuickRollModifiers('Ataque', attrs)).toBe(5); // F(2) + H(3)
+    expect(getQuickRollModifiers('Defesa', attrs)).toBe(4); // A(1) + H(3)
+    expect(getQuickRollModifiers('Esquiva', attrs)).toBe(3); // H(3)
+    expect(getQuickRollModifiers('Iniciativa', attrs)).toBe(3); // H(3)
+    expect(getQuickRollModifiers('Outro', attrs)).toBe(0);
   });
 });

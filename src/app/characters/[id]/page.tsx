@@ -553,10 +553,12 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   function handleExperienceChange(delta: number) {
     if (!character) return;
     const result = convertXpToPoints(character.experience || 0, delta, character.saved_points || 0);
+    const addedPoints = result.saved_points - (character.saved_points || 0);
     setCharacter({
       ...character,
       experience: result.experience,
-      saved_points: result.saved_points
+      saved_points: result.saved_points,
+      points_total: (character.points_total || 0) + addedPoints
     });
   }
 
@@ -971,8 +973,18 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     });
   }
 
-  const scoreSpent = calculateScore(character);
-  const isOverflow = scoreSpent > character.points_total;
+  const attributesSum = Object.values(character.attributes_values).reduce((sum, val) => sum + (val || 0), 0);
+  const advantagesSum = character.advantages.reduce((sum, item) => sum + computedCostPt(item), 0);
+  const disadvantagesSum = (character.disadvantages || []).reduce((sum, item) => sum + computedCostPt(item), 0);
+  const skillsSum = (character.skills || []).reduce((sum, item) => sum + computedCostPt(item), 0);
+  const specializationsSum = Math.floor((character.specializations?.length || 0) / 3);
+  const uniqueAdvantageCost = character.unique_advantage?.cost || 0;
+
+  const pointsSpent = attributesSum + advantagesSum + disadvantagesSum + skillsSum + specializationsSum + uniqueAdvantageCost;
+  const pointsAvailable = character.saved_points || 0;
+  const pointsTotal = pointsSpent + pointsAvailable; // Dinamicamente igual a calculateScore(character)
+  const scoreSpent = pointsTotal; // Para manter compatibilidade com outras partes do código
+  const isOverflow = pointsAvailable < 0;
 
   return (
     <div className="min-h-screen bg-[#070b19] text-slate-100 pb-16">
@@ -1068,6 +1080,10 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                   <button
                     onClick={() => {
                       const cost = character.unique_advantage?.cost || 0;
+                      if (cost < 0 && (character.saved_points || 0) + cost < 0) {
+                        showToast("Saldo de Pontos Guardados insuficiente para remover esta Vantagem Única.");
+                        return;
+                      }
                       setCharacter({
                         ...character,
                         saved_points: (character.saved_points || 0) + cost,
@@ -1227,6 +1243,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
             })}
           </div>
 
+
           {/* Card de Atributos */}
           <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
             <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Atributos</h2>
@@ -1247,8 +1264,18 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                       </button>
                       <span className="w-6 text-center font-bold text-slate-200 text-base">{value}</span>
                       <button
-                        onClick={() => handleAttributeChange(key, 1)}
-                        className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm"
+                        onClick={() => {
+                          if (pointsAvailable < 1) {
+                            showToast("Saldo de Pontos Guardados insuficiente.");
+                          } else {
+                            handleAttributeChange(key, 1);
+                          }
+                        }}
+                        className={`w-7 h-7 border text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm transition-all ${
+                          pointsAvailable < 1
+                            ? 'opacity-40 bg-slate-800/20 border-slate-850 cursor-not-allowed'
+                            : 'bg-slate-850 hover:bg-slate-700 border-slate-700 cursor-pointer active:scale-95'
+                        }`}
                       >
                         +
                       </button>
@@ -1292,70 +1319,131 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
             </div>
           </div>
 
-          {/* Card de Desenvolvimento (XP / Pontos Guardados) */}
-          <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
-            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Desenvolvimento</h2>
-            
-            <div className="space-y-4">
-              {/* Experiência */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-slate-300 font-medium">Experiência (XP)</span>
-                  <span className="font-bold text-slate-200">{(character as any).experience || 0} / 10</span>
-                </div>
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-300"
-                    style={{ width: `${Math.min(100, ((((character as any).experience || 0) / 10) * 100))}%` }}
-                  />
-                </div>
-                <div className="flex justify-end gap-2 pt-1">
+          {/* Card de Desenvolvimento & Orçamento */}
+          <div className={`bg-[#0f172a]/70 border rounded-2xl p-6 shadow-xl space-y-5 transition-all duration-300 ${
+            isOverflow 
+              ? 'border-rose-500/30 bg-rose-950/5 shadow-rose-500/5 animate-pulse' 
+              : 'border-slate-800'
+          }`}>
+            <div className="flex justify-between items-center">
+              <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <Sparkles className={`w-4 h-4 ${isOverflow ? 'text-rose-400' : 'text-purple-400'}`} />
+                Desenvolvimento & Orçamento
+              </h2>
+              {isOverflow && (
+                <span className="text-[10px] bg-rose-500/20 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-bounce">
+                  Estouro!
+                </span>
+              )}
+            </div>
+
+            {/* Seção 1: Experiência (XP) */}
+            <div className="space-y-2 border-b border-slate-800/60 pb-4">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-semibold text-slate-300 font-medium">Experiência (XP)</span>
+                <span className="font-bold text-slate-200">{(character as any).experience || 0} / 10</span>
+              </div>
+              <div className="h-1.5 bg-slate-800/80 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-300"
+                  style={{ width: `${Math.min(100, ((((character as any).experience || 0) / 10) * 100))}%` }}
+                />
+              </div>
+              <div className="flex justify-between items-center pt-1">
+                <span className="text-[9px] text-slate-500">10 XP = 1 Ponto Guardado</span>
+                <div className="flex gap-1.5">
+                  <button 
+                    onClick={() => handleExperienceChange(-5)}
+                    className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold text-slate-300 cursor-pointer transition-colors"
+                  >
+                    -5
+                  </button>
                   <button 
                     onClick={() => handleExperienceChange(-1)}
-                    className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
+                    className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold text-slate-300 cursor-pointer transition-colors"
                   >
                     -1
                   </button>
                   <button 
                     onClick={() => handleExperienceChange(1)}
-                    className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
+                    className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold text-slate-300 cursor-pointer transition-colors"
                   >
                     +1
                   </button>
+                  <button 
+                    onClick={() => handleExperienceChange(5)}
+                    className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold text-slate-300 cursor-pointer transition-colors"
+                  >
+                    +5
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Seção 2: Progresso de Pontos */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-semibold text-slate-300">Distribuição de Pontos</span>
+                <span className="font-bold text-slate-400 font-mono text-[11px]">{pointsSpent} / {character.points_total} pt</span>
+              </div>
+              <div className="h-2 bg-slate-800/80 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-500 ${
+                    isOverflow 
+                      ? 'bg-gradient-to-r from-rose-600 to-red-500' 
+                      : 'bg-gradient-to-r from-purple-600 to-cyan-500'
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(0, (pointsSpent / (character.points_total || 1)) * 100))}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Seção 3: Controles e Equação */}
+            <div className="bg-slate-950/40 border border-slate-800/50 rounded-xl p-3.5 space-y-3">
+              {/* Equação visual */}
+              <div className="flex items-center justify-between font-mono text-sm border-b border-slate-800/50 pb-3">
+                <div className="text-center">
+                  <span className={`text-base font-black ${isOverflow ? 'text-rose-400' : 'text-purple-400'}`}>
+                    {pointsAvailable}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block uppercase">Disponíveis</span>
+                </div>
+                <span className="text-slate-600 font-bold">=</span>
+                <div className="text-center">
+                  <span className="text-slate-350 font-bold">
+                    {character.points_total}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block uppercase">Totais</span>
+                </div>
+                <span className="text-slate-600 font-bold">-</span>
+                <div className="text-center">
+                  <span className="text-slate-350 font-bold">
+                    {pointsSpent}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block uppercase">Gastos</span>
                 </div>
               </div>
 
-              {/* Pontos Totais */}
-              <div className="flex justify-between items-center bg-slate-800/20 border border-slate-800/60 rounded-xl p-3">
+              {/* Ajustar Pontos Totais */}
+              <div className="flex justify-between items-center text-xs">
                 <div>
-                  <span className="font-semibold text-slate-300 text-sm block">Pontos Totais</span>
-                  <span className="text-[10px] text-slate-500">Pontuação geral do personagem</span>
+                  <span className="font-semibold text-slate-300 block">Pontos Totais</span>
+                  <span className="text-[10px] text-slate-500">Base da pontuação do defensor</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => handlePointsTotalChange(-1)}
-                    className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm"
+                    className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm cursor-pointer transition-colors"
                   >
                     -
                   </button>
-                  <span className="w-6 text-center font-bold text-slate-200 text-base">{character.points_total || 0}</span>
+                  <span className="w-6 text-center font-bold text-slate-200 text-base font-mono">{character.points_total || 0}</span>
                   <button
                     onClick={() => handlePointsTotalChange(1)}
-                    className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm"
+                    className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm cursor-pointer transition-colors"
                   >
                     +
                   </button>
-                </div>
-              </div>
-
-              {/* Pontos Guardados */}
-              <div className="flex justify-between items-center bg-slate-800/20 border border-slate-800/60 rounded-xl p-3">
-                <div>
-                  <span className="font-semibold text-slate-300 text-sm block">Pontos Guardados</span>
-                  <span className="text-[10px] text-slate-500">Saldo disponível para distribuir</span>
-                </div>
-                <div className="flex items-center gap-3 pr-2">
-                  <span className="font-bold text-purple-400 text-lg">{(character as any).saved_points || 0}</span>
                 </div>
               </div>
             </div>
@@ -1398,26 +1486,52 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                     <div className="absolute left-0 right-0 mt-1.5 bg-[#0f172a] border border-slate-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto z-50">
                       {allCatalogItems
                         .filter((item: any) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                        .map((item: any) => (
-                          <button
-                            key={`${item.type}-${item.name}`}
-                            onClick={() => handleSelectCatalogItem(item)}
-                            className="w-full text-left px-4 py-2.5 hover:bg-purple-950/20 border-b border-slate-900/60 last:border-b-0 transition-colors"
-                          >
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-sm text-slate-200">{item.name}</span>
-                                <span className={`text-[9px] border px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${typeBadgeColors[item.type]}`}>
-                                  {typeLabels[item.type]}
+                        .map((item: any) => {
+                          let isCatalogItemTooExpensive = false;
+                          if (item.type === 'unique_advantage') {
+                            const oldCost = character.unique_advantage?.cost || 0;
+                            const newCost = parseInt(item.cost) || 0;
+                            const diff = newCost - oldCost;
+                            isCatalogItemTooExpensive = diff > 0 && pointsAvailable < diff;
+                          } else {
+                            const costVal = parseInt(item.cost) || 0;
+                            isCatalogItemTooExpensive = costVal > 0 && pointsAvailable < costVal;
+                          }
+                          return (
+                            <button
+                              key={`${item.type}-${item.name}`}
+                              onClick={() => {
+                                if (isCatalogItemTooExpensive) {
+                                  showToast("Saldo de Pontos Guardados insuficiente.");
+                                } else {
+                                  handleSelectCatalogItem(item);
+                                }
+                              }}
+                              className={`w-full text-left px-4 py-2.5 border-b border-slate-900/60 last:border-b-0 transition-colors ${
+                                isCatalogItemTooExpensive
+                                  ? 'opacity-40 hover:bg-rose-950/5'
+                                  : 'hover:bg-purple-950/20'
+                              }`}
+                            >
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-semibold text-sm ${isCatalogItemTooExpensive ? 'text-slate-500' : 'text-slate-200'}`}>{item.name}</span>
+                                  <span className={`text-[9px] border px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${typeBadgeColors[item.type]}`}>
+                                    {typeLabels[item.type]}
+                                  </span>
+                                </div>
+                                <span className={`text-xs px-2 py-0.5 rounded-full border font-mono ${
+                                  isCatalogItemTooExpensive
+                                    ? 'text-rose-400 bg-rose-950/30 border-rose-900/20'
+                                    : 'text-purple-400 bg-purple-950/40 border-purple-800/20'
+                                }`}>
+                                  {item.cost}
                                 </span>
                               </div>
-                              <span className="text-xs text-purple-400 bg-purple-950/40 px-2 py-0.5 rounded-full border border-purple-800/20 font-mono">
-                                {item.cost}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-400 truncate mt-0.5">{item.description}</p>
-                          </button>
-                        ))}
+                              <p className="text-xs text-slate-400 truncate mt-0.5">{item.description}</p>
+                            </button>
+                          );
+                        })}
                       {allCatalogItems.filter((item: any) => item.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
                         <div className="p-4 text-xs text-slate-500 italic text-center">Nenhum resultado encontrado no catálogo.</div>
                       )}
@@ -1467,8 +1581,19 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                 />
 
                 <button
-                  onClick={handleAddAdvantage}
-                  className="w-full bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border border-purple-500/20 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1 transition-all active:scale-[0.99]"
+                  onClick={() => {
+                    const parsedCost = parseInt(newAdvCost, 10) || 0;
+                    if (parsedCost > 0 && pointsAvailable < parsedCost) {
+                      showToast("Saldo de Pontos Guardados insuficiente.");
+                    } else {
+                      handleAddAdvantage();
+                    }
+                  }}
+                  className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1 transition-all border ${
+                    (parseInt(newAdvCost, 10) || 0) > 0 && pointsAvailable < (parseInt(newAdvCost, 10) || 0)
+                      ? 'opacity-40 bg-slate-800/20 border-slate-800 text-slate-400 cursor-not-allowed'
+                      : 'bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border-purple-500/20 cursor-pointer active:scale-[0.99]'
+                  }`}
                 >
                   <Plus className="w-4 h-4" />
                   Adicionar ao Personagem
@@ -2226,12 +2351,39 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
               >
                 Cancelar
               </button>
-              <button
-                onClick={handleAddModularItem}
-                className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-xl text-xs font-semibold transition-colors"
-              >
-                Confirmar & Adicionar
-              </button>
+              {(() => {
+                const dummyItem: AdvantageItem = {
+                  id: 'dummy',
+                  name: selectedCatalogItem.name,
+                  description: '',
+                  cost: 'Modular',
+                  isModular: true,
+                  baseCostPt: selectedCatalogItem.baseCostPt || 0,
+                  modifiers: selectedCatalogItem.modifiers || [],
+                  selectedModifiers: selectedModifiers
+                };
+                const computedCost = computedCostPt(dummyItem);
+                const isModularTooExpensive = computedCost > 0 && pointsAvailable < computedCost;
+
+                return (
+                  <button
+                    onClick={() => {
+                      if (isModularTooExpensive) {
+                        showToast("Saldo de Pontos Guardados insuficiente.");
+                      } else {
+                        handleAddModularItem();
+                      }
+                    }}
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors border ${
+                      isModularTooExpensive
+                        ? 'opacity-40 bg-slate-800/20 border-slate-800 text-slate-400 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-500 border-purple-500 text-white cursor-pointer active:scale-95'
+                    }`}
+                  >
+                    Confirmar & Adicionar
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -2282,40 +2434,56 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {((systemDef.unique_advantages || (systemDef.name?.includes('Gaiden') ? gaidenRaces : alphaRaces) || []) as any[]).map((race) => (
-                <button
-                  key={race.name}
-                  onClick={() => {
-                    setCharacter({
-                      ...character,
-                      unique_advantage: {
-                        id: crypto.randomUUID(),
-                        name: race.name,
-                        description: `${race.benefits} | Restrições: ${race.drawbacks}`,
-                        cost: race.cost
+              {((systemDef.unique_advantages || (systemDef.name?.includes('Gaiden') ? gaidenRaces : alphaRaces) || []) as any[]).map((race) => {
+                const oldCost = character.unique_advantage?.cost || 0;
+                const diff = race.cost - oldCost;
+                const isRaceTooExpensive = diff > 0 && pointsAvailable < diff;
+
+                return (
+                  <button
+                    key={race.name}
+                    disabled={isRaceTooExpensive}
+                    onClick={() => {
+                      if (isRaceTooExpensive) {
+                        showToast("Saldo de Pontos Guardados insuficiente.");
+                        return;
                       }
-                    });
-                    setIsSelectingRace(false);
-                  }}
-                  className="w-full text-left p-3 rounded-xl border border-slate-800 bg-slate-800/20 hover:bg-slate-800/40 hover:border-purple-500/30 transition-all flex justify-between items-start"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-200 text-sm">{race.name}</span>
-                      <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full font-bold">
-                        {race.type}
-                      </span>
+                      setCharacter({
+                        ...character,
+                        saved_points: (character.saved_points || 0) - diff,
+                        unique_advantage: {
+                          id: crypto.randomUUID(),
+                          name: race.name,
+                          description: `${race.benefits} | Restrições: ${race.drawbacks}`,
+                          cost: race.cost
+                        }
+                      });
+                      setIsSelectingRace(false);
+                    }}
+                    className={`w-full text-left p-3 rounded-xl border transition-all flex justify-between items-start ${
+                      isRaceTooExpensive
+                        ? 'opacity-40 bg-slate-800/20 border-slate-850 cursor-not-allowed'
+                        : 'bg-slate-800/20 border-slate-800 hover:bg-slate-800/40 hover:border-purple-500/30 cursor-pointer'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-semibold text-sm ${isRaceTooExpensive ? 'text-slate-500' : 'text-slate-200'}`}>{race.name}</span>
+                        <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full font-bold">
+                          {race.type}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300">{race.benefits}</p>
+                      {race.drawbacks && race.drawbacks !== 'Não possui penalidades.' && (
+                        <p className="text-[10px] text-rose-400 italic">Desvantagens: {race.drawbacks}</p>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-300">{race.benefits}</p>
-                    {race.drawbacks && race.drawbacks !== 'Não possui penalidades.' && (
-                      <p className="text-[10px] text-rose-400 italic">Desvantagens: {race.drawbacks}</p>
-                    )}
-                  </div>
-                  <span className="text-xs font-mono font-bold text-purple-400 bg-purple-950/40 px-2.5 py-1 rounded-lg border border-purple-800/20 whitespace-nowrap">
-                    {race.cost} pt{Math.abs(race.cost) !== 1 ? 's' : ''}
-                  </span>
-                </button>
-              ))}
+                    <span className="text-xs font-mono font-bold text-purple-400 bg-purple-950/40 px-2.5 py-1 rounded-lg border border-purple-800/20 whitespace-nowrap">
+                      {race.cost} pt{Math.abs(race.cost) !== 1 ? 's' : ''}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex gap-3">

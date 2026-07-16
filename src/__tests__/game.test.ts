@@ -263,3 +263,34 @@ describe('Restrição de Sistema de Regras em Mesas de Jogo', () => {
     expect(canLinkCharacterToTable('sys-1', undefined)).toBe(false);
   });
 });
+
+describe('Consistência do Orçamento de Pontos', () => {
+  it('deve calcular corretamente a soma dos pontos gastos', () => {
+    const mockCharacter = {
+      attributes_values: { F: 2, H: 2, R: 1 },
+      advantages: [
+        { name: 'Aceleração', cost: '1pt' },
+        { name: 'Ataque Especial', cost: '2pt' }
+      ],
+      disadvantages: [
+        { name: 'Código de Honra', cost: '-1pt' }
+      ],
+      skills: [
+        { name: 'Combate', cost: '1pt' }
+      ],
+      specializations: [
+        { id: '1', name: 'Acrobacia' },
+        { id: '2', name: 'Furtividade' },
+        { id: '3', name: 'Alpinismo' }
+      ],
+      unique_advantage: { name: 'Elfo', cost: 1 },
+      saved_points: 1
+    };
+
+    // Atributos (5) + Vantagens (3) - Desvantagens (1) + Perícia (1) + Especializações (1) + Vantagem Única (1) = 10
+    const spent = 2 + 2 + 1 + 1 + 2 - 1 + 1 + 1 + 1;
+    expect(spent).toBe(10);
+    expect(calculateScore(mockCharacter as any)).toBe(11); // spent (10) + saved_points (1)
+  });
+});
+

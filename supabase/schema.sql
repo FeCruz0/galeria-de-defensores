@@ -321,6 +321,7 @@ begin
     set 
       experience = v_new_xp,
       saved_points = saved_points + v_extra_points,
+      points_total = points_total + v_extra_points,
       updated_at = now()
     where id = v_char.id;
 
@@ -352,3 +353,10 @@ begin
   );
 end;
 $$ language plpgsql security definer;
+
+-- Restrições para garantir integridade física das fichas (não permitir valores negativos)
+alter table public.characters
+  add constraint check_saved_points_nonnegative check (saved_points >= 0),
+  add constraint check_points_total_nonnegative check (points_total >= 0),
+  add constraint check_experience_nonnegative check (experience >= 0);
+

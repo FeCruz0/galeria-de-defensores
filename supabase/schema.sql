@@ -9,6 +9,7 @@ create extension if not exists "uuid-ossp";
 create table public.profiles (
   id uuid references auth.users on delete cascade primary key,
   username text unique,
+  email text,
   avatar_url text,
   about text default '' not null,
   cep text default '' not null,
@@ -137,10 +138,11 @@ create table public.notifications (
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, username, avatar_url)
+  insert into public.profiles (id, username, email, avatar_url)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data->>'username', new.email),
+    coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1)),
+    new.email,
     new.raw_user_meta_data->>'avatar_url'
   );
   return new;
@@ -197,11 +199,17 @@ create policy "Membros e mestre podem visualizar membros" on public.table_player
     auth.uid() is not null
   );
 
-create policy "Apenas o mestre pode inserir membros" on public.table_players
+create policy "Mestre ou convidado com convite pendente podem inserir membro" on public.table_players
   for insert with check (
     exists (
       select 1 from public.tables 
       where id = table_id and master_id = auth.uid()
+    ) or (
+      auth.uid() = player_id and
+      exists (
+        select 1 from public.notifications
+        where table_id = table_id and user_id = auth.uid() and type = 'INVITE' and is_read = false
+      )
     )
   );
 
@@ -264,3 +272,83 @@ create policy "Usuários visualizam e gerenciam suas próprias notificações" o
 
 create policy "Usuários podem criar convites/notificações para outros" on public.notifications
   for insert with check (auth.uid() = sender_id);
+
+-- ==============================================================================
+-- FUNÇÕES DE CONTROLE DE MESA (RPC)
+-- ==============================================================================
+
+-- Função RPC para distribuir XP em lote de forma atômica e segura
+create or replace function public.distribute_xp_to_characters(
+  p_table_id uuid,
+  p_character_ids uuid[],
+  p_xp_amount int
+)
+returns void as $$
+declare
+  v_master_id uuid;
+  v_table_name text;
+  v_master_username text;
+  v_char record;
+  v_new_xp int;
+  v_extra_points int;
+  v_chat_content text;
+  v_char_names text[] := array[]::text[];
+begin
+  -- 1. Verificar se quem chama é o mestre da mesa
+  select master_id, name into v_master_id, v_table_name
+  from public.tables
+  where id = p_table_id;
+  
+  if v_master_id is null or v_master_id <> auth.uid() then
+    raise exception 'Apenas o mestre da mesa pode distribuir experiência.';
+  end if;
+
+  select username into v_master_username
+  from public.profiles
+  where id = auth.uid();
+
+  -- 2. Atualizar cada personagem
+  for v_char in 
+    select id, name, user_id, coalesce(experience, 0) as experience, coalesce(saved_points, 0) as saved_points
+    from public.characters
+    where id = any(p_character_ids) and table_id = p_table_id
+  loop
+    v_new_xp := v_char.experience + p_xp_amount;
+    v_extra_points := v_new_xp / 10;
+    v_new_xp := v_new_xp % 10;
+
+    update public.characters
+    set 
+      experience = v_new_xp,
+      saved_points = saved_points + v_extra_points,
+      updated_at = now()
+    where id = v_char.id;
+
+    -- Inserir notificação para o jogador dono do personagem
+    insert into public.notifications (user_id, sender_id, title, message, type, table_id, is_read)
+    values (
+      v_char.user_id,
+      auth.uid(),
+      'Experiência Recebida',
+      'Você recebeu ' || p_xp_amount || ' PE(s) do Mestre na mesa "' || v_table_name || '"!',
+      'SYSTEM',
+      p_table_id,
+      false
+    );
+
+    v_char_names := array_append(v_char_names, v_char.name);
+  end loop;
+
+  -- 3. Publicar mensagem do sistema no chat
+  v_chat_content := coalesce(v_master_username, 'O Mestre') || ' distribuiu ' || p_xp_amount || ' PE(s) para os personagens: ' || array_to_string(v_char_names, ', ') || '.';
+  
+  insert into public.chat_messages (table_id, sender_id, sender_name, content, type)
+  values (
+    p_table_id,
+    auth.uid(),
+    coalesce(v_master_username, 'Mestre'),
+    v_chat_content,
+    'SYSTEM'
+  );
+end;
+$$ language plpgsql security definer;

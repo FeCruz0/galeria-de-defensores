@@ -131,9 +131,9 @@ Reconstruir a experiência de criação e edição de sistemas de regras do apli
 ## 🌐 Fase 7: Sistemas Multiplayer e Tempo Real (Atualizado)
 Aproveitando as funcionalidades da pasta `legacy` e integrando as fichas ativas com a mesa.
 
-- [/] **Painel de Gerenciamento de Mesas (`/tables`)**
+- [x] **Painel de Gerenciamento de Mesas (`/tables`)**
   - [x] Tela para criar mesa (Mestre define nome, descrição, se é privada e senha).
-  - [ ] Sistema para mestre convidar jogadores por email/username, gerando `notifications` do tipo `INVITE`.
+  - [x] Sistema para mestre convidar jogadores por email/username, gerando `notifications` do tipo `INVITE`.
 - [x] **Chat da Mesa em Tempo Real**
   - [x] Chat persistente baseado em `chat_messages` conectado ao canal Realtime do Supabase.
   - [x] Suporte a mensagens de texto simples, mensagens do sistema (ex: entrada de jogador), imagens e rolagens de dados.

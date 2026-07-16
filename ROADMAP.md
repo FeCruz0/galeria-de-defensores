@@ -21,17 +21,17 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### ⚡ 1. Atalhos Rápidos de Rolagem (Quick Actions Bar) — Easiest
 * **Descrição**: Uma barra de atalhos flutuante no topo ou lateral da ficha do personagem para rolagens de dados frequentes com um único clique.
 * **Checklist**:
-  - [ ] Implementar um componente de barra horizontal flutuante na ficha (`[id]/page.tsx`).
-  - [ ] Adicionar botões pré-configurados para rolagens base: **Ataque Padrão** (`1d6 + F + H`), **Defesa Padrão** (`1d6 + A + H`), **Esquiva** (`1d6 + H`) e **Iniciativa** (`1d6 + H`).
-  - [ ] Vincular as rolagens ao rolo 3D dinâmico da tela e à publicação no chat da mesa ativa.
+  - [x] Implementar um componente de barra horizontal flutuante na ficha (`[id]/page.tsx`).
+  - [x] Adicionar botões pré-configurados para rolagens base: **Ataque Padrão** (`1d6 + F + H`), **Defesa Padrão** (`1d6 + A + H`), **Esquiva** (`1d6 + H`) e **Iniciativa** (`1d6 + H`).
+  - [x] Vincular as rolagens ao rolo 3D dinâmico da tela e à publicação no chat da mesa ativa.
 
 ### 🎁 2. Distribuição de Experiência (PEs) — Easy
 * **Descrição**: Painel exclusivo do Mestre na mesa de jogo para distribuir Pontos de Experiência (PEs) para um ou mais jogadores de forma simultânea.
 * **Checklist**:
-  - [ ] Criar modal de controle do Mestre na tela da mesa (`tables/[id]/page.tsx`).
-  - [ ] Permitir selecionar múltiplos personagens ativos na mesa através de checkboxes.
-  - [ ] Adicionar campo de entrada numérica para a quantidade de PEs a serem distribuídos.
-  - [ ] Implementar trigger de notificação em tempo real para os jogadores informando: *"Você recebeu X PEs do Mestre!"*.
+  - [x] Criar modal de controle do Mestre na tela da mesa (`tables/[id]/page.tsx`).
+  - [x] Permitir selecionar múltiplos personagens ativos na mesa através de checkboxes.
+  - [x] Adicionar campo de entrada numérica para a quantidade de PEs a serem distribuídos.
+  - [x] Implementar trigger de notificação em tempo real para os jogadores informando: *"Você recebeu X PEs do Mestre!"*.
 
 ### 📔 3. Diário de Campanha Compartilhado — Medium
 * **Descrição**: Um espaço dinâmico de anotações na mesa para documentar a história, pistas, NPCs e registrar notas públicas e confidenciais.

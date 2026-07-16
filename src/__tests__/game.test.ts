@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers } from '../lib/rules';
+import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers, convertXpToPoints } from '../lib/rules';
 import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost, canLinkCharacterToTable } from '../lib/validations';
 import { Character } from '../types/game';
 
@@ -222,6 +222,17 @@ describe('Validação de Distribuição de Pontos e Pontos Guardados', () => {
     expect(canAffordCost(2, 1)).toBe(false);
     // desvantagem custa -2, tem 0 pontos guardados -> true (desvantagem dá pontos/devolve)
     expect(canAffordCost(-2, 0)).toBe(true);
+  });
+
+  it('deve converter PEs em Pontos Guardados corretamente (10 XP = 1 Ponto Guardado)', () => {
+    // 0 XP + 5 PEs = 5 XP e 0 pontos extras
+    expect(convertXpToPoints(0, 5, 0)).toEqual({ experience: 5, saved_points: 0 });
+    // 8 XP + 4 PEs = 2 XP e +1 ponto guardado
+    expect(convertXpToPoints(8, 4, 2)).toEqual({ experience: 2, saved_points: 3 });
+    // 9 XP + 15 PEs = 4 XP e +2 pontos guardados
+    expect(convertXpToPoints(9, 15, 0)).toEqual({ experience: 4, saved_points: 2 });
+    // 5 XP + (-2) PEs = 3 XP e 0 pontos guardados (sem redução abaixo de zero)
+    expect(convertXpToPoints(5, -2, 1)).toEqual({ experience: 3, saved_points: 1 });
   });
 });
 

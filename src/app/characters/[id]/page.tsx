@@ -4,7 +4,7 @@ import React, { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Character, RuleSystem, AdvantageItem, Spell, InventoryItem, ModifierOption } from '@/types/game';
-import { calculateScore, getMaxPv, getMaxPm, computedCostPt, executeCustomRoll } from '@/lib/rules';
+import { calculateScore, getMaxPv, getMaxPm, computedCostPt, executeCustomRoll, convertXpToPoints } from '@/lib/rules';
 import { canAlterAttribute, canAffordCost } from '@/lib/validations';
 import { alphaAdvantages, alphaDisadvantages, alphaSkills, alphaRaces, alphaSpecializations } from '@/lib/catalogs/alpha-catalog';
 import { gaidenAdvantages, gaidenDisadvantages, gaidenSkills, gaidenRaces } from '@/lib/catalogs/gaiden-catalog';
@@ -552,16 +552,11 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   // Alterar experiência de forma reativa com conversão (10 XP = 1 Ponto Guardado)
   function handleExperienceChange(delta: number) {
     if (!character) return;
-    let newXp = Math.max((character.experience || 0) + delta, 0);
-    let newSaved = character.saved_points || 0;
-    if (newXp >= 10) {
-      newSaved += Math.floor(newXp / 10);
-      newXp = newXp % 10;
-    }
+    const result = convertXpToPoints(character.experience || 0, delta, character.saved_points || 0);
     setCharacter({
       ...character,
-      experience: newXp,
-      saved_points: newSaved
+      experience: result.experience,
+      saved_points: result.saved_points
     });
   }
 

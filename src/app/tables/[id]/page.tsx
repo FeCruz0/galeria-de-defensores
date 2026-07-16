@@ -4,7 +4,7 @@ import React, { use, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Table, ChatMessage, Profile, Character } from '@/types/game';
-import { executeCustomRoll } from '@/lib/rules';
+import { executeCustomRoll, getMaxPv, getMaxPm } from '@/lib/rules';
 import { canLinkCharacterToTable } from '@/lib/validations';
 import { 
   ArrowLeft, 
@@ -48,6 +48,9 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; title: string; callback: () => void } | null>(null);
   const [activeTab, setActiveTab] = useState<'mesa' | 'chat'>('mesa');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isDistributingXp, setIsDistributingXp] = useState(false);
+  const [xpAmount, setXpAmount] = useState(1);
+  const [selectedXpCharIds, setSelectedXpCharIds] = useState<string[]>([]);
 
   function showToast(msg: string) {
     setToastMessage(msg);
@@ -133,12 +136,12 @@ export default function GameTablePage({ params }: { params: Params }) {
     loadTableData();
   }, [id, router, supabase]);
 
-  // 2. Ouvinte de Realtime para Novas Mensagens
+  // 2. Ouvinte de Realtime para Chat e Personagens
   useEffect(() => {
     if (!id || loading) return;
 
     const channel = supabase
-      .channel(`table-chat-${id}`)
+      .channel(`table-realtime-${id}`)
       .on(
         'postgres_changes',
         {
@@ -154,6 +157,42 @@ export default function GameTablePage({ params }: { params: Params }) {
             if (prev.some(m => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'characters',
+          filter: `table_id=eq.${id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setLinkedCharacters((prev) => {
+              if (prev.some(c => c.id === payload.new.id)) return prev;
+              return [...prev, payload.new as Character];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setLinkedCharacters((prev) =>
+              prev.map((c) => (c.id === payload.new.id ? (payload.new as Character) : c))
+            );
+            // Atualiza a ficha de personagem ativa localmente se for a mesma modificada
+            setSelectedCharacterSheet((current) => {
+              if (current && current.id === payload.new.id) {
+                return payload.new as Character;
+              }
+              return current;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            setLinkedCharacters((prev) => prev.filter((c) => c.id !== payload.old.id));
+            setSelectedCharacterSheet((current) => {
+              if (current && current.id === payload.old.id) {
+                return null;
+              }
+              return current;
+            });
+          }
         }
       )
       .subscribe();
@@ -275,8 +314,8 @@ export default function GameTablePage({ params }: { params: Params }) {
       
       const { data: targetProfile, error: profileErr } = await supabase
         .from('profiles')
-        .select('id, username')
-        .eq('username', normUsername)
+        .select('id, username, email')
+        .or(`username.eq.${normUsername},email.eq.${normUsername}`)
         .maybeSingle();
 
       if (profileErr || !targetProfile) {
@@ -308,6 +347,29 @@ export default function GameTablePage({ params }: { params: Params }) {
     } catch (err) {
       console.error('Erro ao enviar convite:', err);
       showToast('Erro ao enviar o convite.');
+    }
+  }
+
+  // Distribuir XP para os personagens selecionados via RPC
+  async function handleDistributeXp() {
+    if (!currentUser || !table || selectedXpCharIds.length === 0 || xpAmount <= 0) return;
+
+    try {
+      const { error } = await supabase.rpc('distribute_xp_to_characters', {
+        p_table_id: table.id,
+        p_character_ids: selectedXpCharIds,
+        p_xp_amount: xpAmount
+      });
+
+      if (error) throw error;
+
+      showToast(`PEs distribuídos com sucesso para ${selectedXpCharIds.length} personagem(ns)!`);
+      setIsDistributingXp(false);
+      setSelectedXpCharIds([]);
+      setXpAmount(1);
+    } catch (err) {
+      console.error('Erro ao distribuir XP:', err);
+      showToast('Erro ao distribuir experiência.');
     }
   }
 
@@ -595,9 +657,23 @@ export default function GameTablePage({ params }: { params: Params }) {
 
             {/* Fichas Ativas na Mesa */}
             <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-              <h2 className="text-sm font-bold text-slate-355 uppercase tracking-wider">
-                Fichas na Mesa
-              </h2>
+              <div className="flex justify-between items-center">
+                <h2 className="text-sm font-bold text-slate-355 uppercase tracking-wider">
+                  Fichas na Mesa
+                </h2>
+                {table.master_id === currentUser?.id && linkedCharacters.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setSelectedXpCharIds(linkedCharacters.map(c => c.id));
+                      setXpAmount(1);
+                      setIsDistributingXp(true);
+                    }}
+                    className="bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border border-purple-500/20 px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer"
+                  >
+                    Distribuir PEs
+                  </button>
+                )}
+              </div>
 
               <div className="space-y-3">
                 {linkedCharacters.map((char) => {
@@ -809,24 +885,31 @@ export default function GameTablePage({ params }: { params: Params }) {
             </div>
 
             {/* Recursos Secundários */}
-            <div className="bg-slate-900/50 border border-slate-800/60 p-4 rounded-xl space-y-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Recursos Atuais</span>
-              
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <span className="text-[10px] text-rose-400 block font-semibold">Pontos de Vida (PV)</span>
-                  <span className="text-sm font-bold text-slate-200 font-mono">
-                    {selectedCharacterSheet.resources_current?.['PV'] ?? 10} / {selectedCharacterSheet.resources_current?.['PV'] ?? 10}
-                  </span>
+            {(() => {
+              const charR = selectedCharacterSheet.attributes_values?.['R'] ?? 0;
+              const maxPv = getMaxPv(charR, selectedCharacterSheet.advantages);
+              const maxPm = getMaxPm(charR, selectedCharacterSheet.advantages);
+              return (
+                <div className="bg-slate-900/50 border border-slate-800/60 p-4 rounded-xl space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Recursos Atuais</span>
+                  
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <span className="text-[10px] text-rose-400 block font-semibold">Pontos de Vida (PV)</span>
+                      <span className="text-sm font-bold text-slate-200 font-mono">
+                        {selectedCharacterSheet.resources_current?.['PV'] ?? maxPv} / {maxPv}
+                      </span>
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-[10px] text-cyan-400 block font-semibold">Pontos de Magia (PM)</span>
+                      <span className="text-sm font-bold text-slate-200 font-mono">
+                        {selectedCharacterSheet.resources_current?.['PM'] ?? maxPm} / {maxPm}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <span className="text-[10px] text-cyan-400 block font-semibold">Pontos de Magia (PM)</span>
-                  <span className="text-sm font-bold text-slate-200 font-mono">
-                    {selectedCharacterSheet.resources_current?.['PM'] ?? 10} / {selectedCharacterSheet.resources_current?.['PM'] ?? 10}
-                  </span>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Rolagens Customizadas */}
             <div className="space-y-3">
@@ -921,6 +1004,111 @@ export default function GameTablePage({ params }: { params: Params }) {
             </button>
           </div>
 
+        </div>
+      )}
+
+      {/* Modal de Distribuição de PE (Mestre) */}
+      {isDistributingXp && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-6 animate-fade-in">
+            <div className="flex justify-between items-start border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-white">Distribuir Experiência (PEs)</h3>
+                <p className="text-xs text-slate-400 mt-1">Conceda pontos de experiência para os personagens da mesa.</p>
+              </div>
+              <button
+                onClick={() => setIsDistributingXp(false)}
+                className="text-slate-400 hover:text-white text-xs font-semibold uppercase tracking-wider bg-slate-800/40 border border-slate-700/30 px-2 py-1 rounded-lg cursor-pointer"
+              >
+                Fechar ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Seleção de Personagens */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Selecionar Personagens
+                  </label>
+                  <button
+                    onClick={() => {
+                      if (selectedXpCharIds.length === linkedCharacters.length) {
+                        setSelectedXpCharIds([]);
+                      } else {
+                        setSelectedXpCharIds(linkedCharacters.map(c => c.id));
+                      }
+                    }}
+                    className="text-[10px] text-purple-400 hover:underline cursor-pointer"
+                  >
+                    {selectedXpCharIds.length === linkedCharacters.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto border border-slate-800 bg-[#070b19]/40 p-3 rounded-xl">
+                  {linkedCharacters.map((char) => {
+                    const isSelected = selectedXpCharIds.includes(char.id);
+                    return (
+                      <label
+                        key={char.id}
+                        className="flex items-center gap-3 p-2 hover:bg-slate-800/20 rounded-lg cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            if (isSelected) {
+                              setSelectedXpCharIds(prev => prev.filter(id => id !== char.id));
+                            } else {
+                              setSelectedXpCharIds(prev => [...prev, char.id]);
+                            }
+                          }}
+                          className="rounded border-slate-700 text-purple-650 focus:ring-purple-500/20 bg-slate-850 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-bold text-slate-200 block truncate">{char.name}</span>
+                          <span className="text-[10px] text-slate-500 block truncate">{char.concept || 'Guerreiro'} • XP: {char.experience}/10</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quantidade de PEs */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                  Quantidade de PEs (XP)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={xpAmount}
+                  onChange={(e) => setXpAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
+                />
+                <p className="text-[10px] text-slate-500 leading-normal">
+                  Cada 10 PEs concedidos serão automaticamente convertidos em 1 Ponto Guardado na ficha do personagem.
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-800 pt-4 flex gap-3">
+              <button
+                onClick={() => setIsDistributingXp(false)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-350 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDistributeXp}
+                disabled={selectedXpCharIds.length === 0}
+                className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-xs font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/10 cursor-pointer"
+              >
+                Distribuir
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -243,3 +243,21 @@ export function getQuickRollModifiers(actionName: string, attributesValues: Reco
   }
   return 0;
 }
+
+/**
+ * Realiza a conversão de PEs acumulados para Pontos Guardados (10 XP = 1 Ponto Guardado).
+ */
+export function convertXpToPoints(
+  experience: number,
+  addedXp: number,
+  savedPoints: number
+): { experience: number; saved_points: number } {
+  const newXp = Math.max((experience || 0) + addedXp, 0);
+  const extraPoints = Math.floor(newXp / 10);
+  const finalXp = newXp % 10;
+  const finalSavedPoints = (savedPoints || 0) + extraPoints;
+  return {
+    experience: finalXp,
+    saved_points: finalSavedPoints
+  };
+}

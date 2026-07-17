@@ -17,8 +17,8 @@ describe('Motor de Regras 3D&T Alpha', () => {
 
   it('deve calcular PV e PM máximos considerando PV/PM Extras', () => {
     const advantages = [
-      { id: '1', name: 'Pontos de Vida Extras', cost: '1 ponto (cada)' },
-      { id: '2', name: 'Pontos de Magia Extras', cost: '2 pontos (cada)' }
+      { id: '1', name: 'Pontos de Vida Extras', description: '', cost: '1 ponto (cada)' },
+      { id: '2', name: 'Pontos de Magia Extras', description: '', cost: '2 pontos (cada)' }
     ];
     // R=2. PV Extra=1 (R+2 para PV -> R=4). PV = 4 * 5 = 20.
     expect(getMaxPv(2, advantages)).toBe(20);
@@ -31,6 +31,7 @@ describe('Motor de Regras 3D&T Alpha', () => {
       id: 'char-id',
       user_id: 'user-id',
       name: 'Guerreiro de Exemplo',
+      scale: 0,
       points_total: 10,
       points_spent: 0,
       concept: 'Guerreiro',
@@ -82,6 +83,7 @@ describe('Motor de Regras 3D&T Alpha', () => {
       id: 'char-id',
       user_id: 'user-id',
       name: 'Defensor Teste',
+      scale: 0,
       points_total: 10,
       points_spent: 0,
       concept: 'Mago',

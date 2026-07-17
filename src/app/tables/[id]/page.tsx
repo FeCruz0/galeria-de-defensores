@@ -46,11 +46,22 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [diceModifier, setDiceModifier] = useState(0);
   const [inviteUsername, setInviteUsername] = useState('');
   const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; title: string; callback: () => void } | null>(null);
-  const [activeTab, setActiveTab] = useState<'mesa' | 'chat'>('mesa');
+  const [activeTab, setActiveTab] = useState<'mesa' | 'chat' | 'journal'>('mesa');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDistributingXp, setIsDistributingXp] = useState(false);
   const [xpAmount, setXpAmount] = useState(1);
   const [selectedXpCharIds, setSelectedXpCharIds] = useState<string[]>([]);
+
+  // States do Diário de Campanha
+  const [publicJournal, setPublicJournal] = useState<string>('');
+  const [privateJournal, setPrivateJournal] = useState<string>('');
+  const [savingPublic, setSavingPublic] = useState(false);
+  const [savingPrivate, setSavingPrivate] = useState(false);
+  const [publicJournalId, setPublicJournalId] = useState<string | null>(null);
+  const [privateJournalId, setPrivateJournalId] = useState<string | null>(null);
+
+  const lastSavedPublic = useRef('');
+  const lastSavedPrivate = useRef('');
 
   function showToast(msg: string) {
     setToastMessage(msg);
@@ -126,6 +137,35 @@ export default function GameTablePage({ params }: { params: Params }) {
           .select('*')
           .eq('user_id', user.id);
         if (myChars) setMyCharacters(myChars as any[]);
+
+        // Carregar Diário Público
+        const { data: pubJourn } = await supabase
+          .from('campaign_journals')
+          .select('*')
+          .eq('table_id', id)
+          .eq('is_public', true)
+          .maybeSingle();
+
+        if (pubJourn) {
+          lastSavedPublic.current = pubJourn.content;
+          setPublicJournal(pubJourn.content);
+          setPublicJournalId(pubJourn.id);
+        }
+
+        // Carregar Diário Privado
+        const { data: privJourn } = await supabase
+          .from('campaign_journals')
+          .select('*')
+          .eq('table_id', id)
+          .eq('user_id', user.id)
+          .eq('is_public', false)
+          .maybeSingle();
+
+        if (privJourn) {
+          lastSavedPrivate.current = privJourn.content;
+          setPrivateJournal(privJourn.content);
+          setPrivateJournalId(privJourn.id);
+        }
       } catch (err) {
         console.error('Erro ao carregar dados da mesa:', err);
       } finally {
@@ -195,17 +235,116 @@ export default function GameTablePage({ params }: { params: Params }) {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'campaign_journals',
+          filter: `table_id=eq.${id}`,
+        },
+        (payload) => {
+          if (payload.new && (payload.new as any).is_public) {
+            if ((payload.new as any).user_id !== currentUser?.id) {
+              lastSavedPublic.current = (payload.new as any).content;
+              setPublicJournal((payload.new as any).content);
+              setPublicJournalId((payload.new as any).id);
+            }
+          }
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id, loading, supabase]);
+  }, [id, loading, supabase, currentUser]);
 
   // 3. Scroll Automático no Chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // 4. Debounced Save para Diário Público
+  useEffect(() => {
+    if (!currentUser || !table) return;
+    if (table.master_id !== currentUser.id) return; // Apenas o mestre edita o diário público
+    if (publicJournal === lastSavedPublic.current) return;
+
+    setSavingPublic(true);
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        if (publicJournalId) {
+          await supabase
+            .from('campaign_journals')
+            .update({ content: publicJournal, updated_at: new Date().toISOString() })
+            .eq('id', publicJournalId);
+          lastSavedPublic.current = publicJournal;
+        } else {
+          const { data, error } = await supabase
+            .from('campaign_journals')
+            .insert({
+              table_id: id,
+              user_id: currentUser.id,
+              is_public: true,
+              content: publicJournal
+            })
+            .select()
+            .single();
+          if (data) {
+            setPublicJournalId(data.id);
+            lastSavedPublic.current = publicJournal;
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao salvar diário público:', err);
+      } finally {
+        setSavingPublic(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [publicJournal, publicJournalId, id, currentUser, table, supabase]);
+
+  // 5. Debounced Save para Diário Privado
+  useEffect(() => {
+    if (!currentUser || !table) return;
+    if (privateJournal === lastSavedPrivate.current) return;
+
+    setSavingPrivate(true);
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        if (privateJournalId) {
+          await supabase
+            .from('campaign_journals')
+            .update({ content: privateJournal, updated_at: new Date().toISOString() })
+            .eq('id', privateJournalId);
+          lastSavedPrivate.current = privateJournal;
+        } else {
+          const { data, error } = await supabase
+            .from('campaign_journals')
+            .insert({
+              table_id: id,
+              user_id: currentUser.id,
+              is_public: false,
+              content: privateJournal
+            })
+            .select()
+            .single();
+          if (data) {
+            setPrivateJournalId(data.id);
+            lastSavedPrivate.current = privateJournal;
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao salvar diário privado:', err);
+      } finally {
+        setSavingPrivate(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [privateJournal, privateJournalId, id, currentUser, table, supabase]);
 
   // Enviar Mensagem de Texto
   async function handleSendMessage(e: React.FormEvent) {
@@ -719,76 +858,173 @@ export default function GameTablePage({ params }: { params: Params }) {
 
         {/* Right Side: Chat Sidebar */}
         <div className={`w-full lg:w-96 border-l border-slate-800 bg-[#0c1224]/80 flex flex-col justify-between flex-shrink-0 h-full ${
-          activeTab === 'chat' ? 'flex' : 'hidden lg:flex'
+          activeTab === 'chat' || activeTab === 'journal' ? 'flex' : 'hidden lg:flex'
         }`}>
           
-          {/* Feed de Mensagens */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg) => {
-              const isMe = msg.sender_id === currentUser?.id;
-              
-              if (msg.type === 'ROLL') {
-                return (
-                  <div key={msg.id} className="p-3 bg-purple-950/20 border border-purple-800/30 rounded-xl space-y-2">
-                    <div className="flex justify-between items-center text-xs text-purple-400">
-                      <span className="font-bold">{msg.sender_name}</span>
-                      <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    <p className="text-xs text-slate-300">{msg.content}</p>
-                    {msg.roll_result && (
-                      <div className="bg-slate-900/60 p-2.5 rounded-lg flex items-center justify-between border border-slate-800">
-                        <span className="text-xs font-mono text-slate-400">{msg.roll_result.componentsText}</span>
-                        <div className="text-right">
-                          <span className={`text-lg font-black ${msg.roll_result.isCrit ? 'text-amber-400 animate-pulse' : 'text-white'}`}>
-                            {msg.roll_result.total}
-                          </span>
-                          {msg.roll_result.isCrit && (
-                            <span className="text-[10px] text-amber-400 block font-bold">CRÍTICO!</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              return (
-                <div key={msg.id} className={`flex flex-col max-w-[85%] ${isMe ? 'self-end ml-auto' : 'mr-auto'}`}>
-                  <div className="flex items-center justify-between gap-2 mb-1 px-1">
-                    <span className="text-[11px] font-bold text-slate-400 truncate">{msg.sender_name}</span>
-                    <span className="text-[9px] text-slate-500">
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  <div className={`p-3 rounded-2xl text-sm ${
-                    isMe 
-                      ? 'bg-purple-600 text-white rounded-tr-none' 
-                      : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-800/60'
-                  }`}>
-                    <p className="leading-relaxed break-words">{msg.content}</p>
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={chatEndRef} />
+          {/* Cabeçalho de Abas da Sidebar */}
+          <div className="border-b border-slate-800 bg-[#0c1224] p-3 flex gap-2 flex-shrink-0">
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                activeTab !== 'journal'
+                  ? 'bg-purple-600/10 text-purple-400 border border-purple-500/20'
+                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              Chat
+            </button>
+            <button
+              onClick={() => setActiveTab('journal')}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'journal'
+                  ? 'bg-purple-600/10 text-purple-400 border border-purple-500/20'
+                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              Diário
+            </button>
           </div>
 
-          {/* Input Form */}
-          <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-800 bg-[#0c1224] flex gap-2 flex-shrink-0">
-            <input
-              type="text"
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Digite sua mensagem..."
-              className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
-            />
-            <button
-              type="submit"
-              className="bg-purple-600 hover:bg-purple-500 text-white p-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-95"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+          {activeTab === 'journal' ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Conteúdo do Diário */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                
+                {/* Seção 1: Diário do Mestre (Público) */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-350 uppercase tracking-wider flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-purple-400" />
+                      Diário do Mestre (Público)
+                    </span>
+                    {savingPublic && (
+                      <span className="text-[10px] text-purple-400 flex items-center gap-1 font-mono">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Salvando...
+                      </span>
+                    )}
+                    {!savingPublic && publicJournal.trim() !== '' && (
+                      <span className="text-[10px] text-slate-500 font-mono">Salvo</span>
+                    )}
+                  </div>
+
+                  {currentUser?.id === table?.master_id ? (
+                    <textarea
+                      value={publicJournal}
+                      onChange={(e) => setPublicJournal(e.target.value)}
+                      placeholder="Escreva as notas públicas da campanha aqui (NPCs, história, rumores)... Todos os jogadores verão em tempo real."
+                      className="w-full h-44 bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 text-xs focus:outline-none focus:border-purple-500/50 text-slate-200 resize-none font-sans leading-relaxed animate-fade-in"
+                    />
+                  ) : (
+                    <div className="w-full min-h-24 max-h-56 overflow-y-auto bg-slate-900/40 border border-slate-850 rounded-xl p-4 text-xs text-slate-300 leading-relaxed font-sans whitespace-pre-wrap">
+                      {publicJournal.trim() !== '' 
+                        ? publicJournal 
+                        : <span className="text-slate-550 italic">Nenhuma anotação pública registrada pelo Mestre até o momento.</span>
+                      }
+                    </div>
+                  )}
+                </div>
+
+                {/* Seção 2: Minhas Notas (Privado) */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-350 uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-purple-400" />
+                      Minhas Notas (Privado)
+                    </span>
+                    {savingPrivate && (
+                      <span className="text-[10px] text-purple-400 flex items-center gap-1 font-mono">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Salvando...
+                      </span>
+                    )}
+                    {!savingPrivate && privateJournal.trim() !== '' && (
+                      <span className="text-[10px] text-slate-500 font-mono">Salvo</span>
+                    )}
+                  </div>
+                  <textarea
+                    value={privateJournal}
+                    onChange={(e) => setPrivateJournal(e.target.value)}
+                    placeholder="Escreva suas anotações secretas e lembretes aqui... Apenas você tem acesso a estas notas."
+                    className="w-full h-56 bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 text-xs focus:outline-none focus:border-purple-500/50 text-slate-200 resize-none font-sans leading-relaxed animate-fade-in"
+                  />
+                </div>
+
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Feed de Mensagens */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {messages.map((msg) => {
+                  const isMe = msg.sender_id === currentUser?.id;
+                  
+                  if (msg.type === 'ROLL') {
+                    return (
+                      <div key={msg.id} className="p-3 bg-purple-950/20 border border-purple-800/30 rounded-xl space-y-2">
+                        <div className="flex justify-between items-center text-xs text-purple-400">
+                          <span className="font-bold">{msg.sender_name}</span>
+                          <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <p className="text-xs text-slate-300">{msg.content}</p>
+                        {msg.roll_result && (
+                          <div className="bg-slate-900/60 p-2.5 rounded-lg flex items-center justify-between border border-slate-800">
+                            <span className="text-xs font-mono text-slate-400">{msg.roll_result.componentsText}</span>
+                            <div className="text-right">
+                              <span className={`text-lg font-black ${msg.roll_result.isCrit ? 'text-amber-400 animate-pulse' : 'text-white'}`}>
+                                {msg.roll_result.total}
+                              </span>
+                              {msg.roll_result.isCrit && (
+                                <span className="text-[10px] text-amber-400 block font-bold">CRÍTICO!</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={msg.id} className={`flex flex-col max-w-[85%] ${isMe ? 'self-end ml-auto' : 'mr-auto'}`}>
+                      <div className="flex items-center justify-between gap-2 mb-1 px-1">
+                        <span className="text-[11px] font-bold text-slate-400 truncate">{msg.sender_name}</span>
+                        <span className="text-[9px] text-slate-500">
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className={`p-3 rounded-2xl text-sm ${
+                        isMe 
+                          ? 'bg-purple-600 text-white rounded-tr-none' 
+                          : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-800/60'
+                      }`}>
+                        <p className="leading-relaxed break-words">{msg.content}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input Form */}
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-800 bg-[#0c1224] flex gap-2 flex-shrink-0">
+                <input
+                  type="text"
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  placeholder="Digite sua mensagem..."
+                  className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
+                />
+                <button
+                  type="submit"
+                  className="bg-purple-600 hover:bg-purple-500 text-white p-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-95"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </>
+          )}
 
         </div>
 
@@ -813,6 +1049,15 @@ export default function GameTablePage({ params }: { params: Params }) {
         >
           <MessageSquare className="w-5 h-5" />
           <span>Chat da Mesa</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('journal')}
+          className={`flex flex-col items-center gap-1 py-1 text-xs font-bold transition-all ${
+            activeTab === 'journal' ? 'text-purple-400' : 'text-slate-400 hover:text-slate-350'
+          }`}
+        >
+          <BookOpen className="w-5 h-5" />
+          <span>Diário</span>
         </button>
       </div>
 

@@ -360,3 +360,60 @@ alter table public.characters
   add constraint check_points_total_nonnegative check (points_total >= 0),
   add constraint check_experience_nonnegative check (experience >= 0);
 
+-- 8. Tabela de Diário de Campanha (campaign_journals)
+create table public.campaign_journals (
+  id uuid default uuid_generate_v4() primary key,
+  table_id uuid references public.tables on delete cascade not null,
+  user_id uuid references auth.users on delete cascade not null,
+  is_public boolean default false not null,
+  content text default '' not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  constraint unique_table_journal unique (table_id, user_id, is_public)
+);
+
+-- Ativar RLS
+alter table public.campaign_journals enable row level security;
+
+-- Políticas de Segurança RLS
+create policy "Jogadores/mestre podem ler diários públicos e seus próprios diários privados" on public.campaign_journals
+  for select using (
+    (is_public = true and (
+      exists (
+        select 1 from public.tables 
+        where id = table_id and master_id = auth.uid()
+      ) or
+      exists (
+        select 1 from public.table_players 
+        where table_id = table_id and player_id = auth.uid()
+      )
+    )) or
+    (is_public = false and auth.uid() = user_id)
+  );
+
+create policy "Jogadores/mestre podem criar diários" on public.campaign_journals
+  for insert with check (
+    auth.uid() = user_id and (
+      (is_public = true and exists (
+        select 1 from public.tables
+        where id = table_id and master_id = auth.uid()
+      )) or
+      (is_public = false and (
+        exists (
+          select 1 from public.tables 
+          where id = table_id and master_id = auth.uid()
+        ) or
+        exists (
+          select 1 from public.table_players 
+          where table_id = table_id and player_id = auth.uid()
+        )
+      ))
+    )
+  );
+
+create policy "Apenas o próprio autor pode editar/excluir seus diários" on public.campaign_journals
+  for all using (
+    auth.uid() = user_id
+  );
+
+

@@ -9,10 +9,10 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 📊 Limitação de Distribuição por Pontos Disponíveis
 * **Regra**: A ficha do personagem deve respeitar estritamente a pontuação total do personagem (`points_total`). O jogador deve primeiro definir os pontos totais da ficha (ou ganhar pontos de experiência convertidos) para então poder aumentar atributos ou comprar vantagens.
 * **Checklist**:
-  - [ ] Adicionar um validador visual na tela de criação e edição que exiba claramente o saldo de pontos (`Pontos Disponíveis = Pontos Totais - Pontos Gastos`).
-  - [ ] Bloquear o botão de aumento de atributos (`+`) e adição de novas vantagens/perícias caso o saldo de pontos seja zero ou negativo.
-  - [ ] Exibir mensagem de aviso em toast ou modal informando que o saldo de pontos é insuficiente para realizar a ação.
-  - [ ] Adicionar verificação de limite também nas funções de backend/API de atualização para garantir consistência.
+  - [x] Adicionar um validador visual na tela de criação e edição que exiba claramente o saldo de pontos (`Pontos Disponíveis = Pontos Totais - Pontos Gastos`).
+  - [x] Bloquear o botão de aumento de atributos (`+`) e adição de novas vantagens/perícias caso o saldo de pontos seja zero ou negativo.
+  - [x] Exibir mensagem de aviso em toast ou modal informando que o saldo de pontos é insuficiente para realizar a ação.
+  - [x] Adicionar verificação de limite também nas funções de backend/API de atualização para garantir consistência.
 
 ---
 
@@ -36,10 +36,10 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 📔 3. Diário de Campanha Compartilhado — Medium
 * **Descrição**: Um espaço dinâmico de anotações na mesa para documentar a história, pistas, NPCs e registrar notas públicas e confidenciais.
 * **Checklist**:
-  - [ ] Criar aba de "Diário de Campanha" ao lado do Chat na tela da mesa.
-  - [ ] Seção **Diário do Mestre (Público)**: Editável apenas pelo mestre, visível para todos os jogadores em tempo real.
-  - [ ] Seção **Notas Pessoais (Privado)**: Editável e visível apenas para o jogador logado (salvo localmente ou associado ao personagem).
-  - [ ] Sincronização em tempo real das alterações públicas via canal Supabase.
+  - [x] Criar aba de "Diário de Campanha" ao lado do Chat na tela da mesa.
+  - [x] Seção **Diário do Mestre (Público)**: Editável apenas pelo mestre, visível para todos os jogadores em tempo real.
+  - [x] Seção **Notas Pessoais (Privado)**: Editável e visível apenas para o jogador logado (salvo localmente ou associado ao personagem).
+  - [x] Sincronização em tempo real das alterações públicas via canal Supabase.
 
 ### 🩺 4. Marcadores de Status & Efeitos Temporários — Medium
 * **Descrição**: Sistema de seleção de condições físicas ou mágicas na ficha de personagem que alteram atributos e rolagens automaticamente enquanto ativos.

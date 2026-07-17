@@ -7,10 +7,11 @@ Aplicação Web Fullstack (Next.js, React, TypeScript, Supabase) para gerenciame
 1. **Arquitetura**: Next.js App Router estruturado diretamente na raiz do repositório.
 2. **Autenticação**: Integrado Supabase Auth com proteção de rotas privadas via middleware Next.js.
 3. **Persistência**: Tabelas PostgreSQL (perfis, personagens, mesas, mensagens e notificações) com RLS ativado no Supabase.
-4. **Ficha de Personagem**: Visualização responsiva com botões de mutação direta de atributos e recursos com autosave debounced.
-5. **Multiplayer**: Chat em tempo real e rolador de dados integrados via Supabase Postgres Realtime.
-6. **Testes e Build**: Vitest configurado e executando com sucesso (100% de cobertura de testes unitários para regras e validações), e build do Next.js compilando sem erros.
-7. **Docker**: Adicionados `Dockerfile` e `docker-compose.yml` para facilitar a inicialização e testes locais do ambiente.
+4. **Ficha de Personagem**: Visualização responsiva com botões de mutação direta de atributos, recursos com autosave debounced, e suporte a inventário equipável com bônus de atributos reais.
+5. **Multiplayer**: Chat em tempo real, rolador de dados 3D, diário de campanha compartilhado (público/privado), distribuição de experiência (PEs) pelo mestre, e CRUD de status personalizados da mesa.
+6. **Ficha Impressa (PDF)**: Layout A4 em preto e branco otimizado para economia de tinta e diagramação clássica do 3D&T Alpha ativado nativamente na impressão.
+7. **Testes e Build**: Vitest configurado e executando com sucesso (28 testes cobrindo motor de regras, validações de sandbox e modificadores de status/equipamentos), e build de produção Next.js compilando com sucesso.
+8. **Docker**: Adicionados `Dockerfile` e `docker-compose.yml` para facilitar a inicialização e testes locais do ambiente.
 
 ## Regras de Ouro (AI-Rules)
 - **TDD Incremental**: Escrever teste -> Parar -> Aguardar OK -> Implementar.

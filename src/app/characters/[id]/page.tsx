@@ -21,7 +21,8 @@ import {
   Trash2, 
   Plus,
   Info,
-  Pencil
+  Pencil,
+  Printer
 } from 'lucide-react';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 import EditAbilityModal from '@/components/EditAbilityModal';
@@ -1010,7 +1011,8 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   const isOverflow = pointsAvailable < 0;
 
   return (
-    <div className="min-h-screen bg-[#070b19] text-slate-100 pb-16">
+    <>
+      <div className="min-h-screen bg-[#070b19] text-slate-100 pb-16 print:hidden">
       {/* Header */}
       <header className="border-b border-slate-800 bg-[#0f172a]/40 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 lg:py-0 lg:h-16 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -1032,6 +1034,14 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
             {/* Mobile-only Saving & Points */}
             <div className="flex lg:hidden items-center gap-2">
+              <button
+                onClick={() => window.print()}
+                className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                title="Imprimir Ficha"
+              >
+                <Printer className="w-4 h-4" />
+              </button>
+              
               {/* Autosave Status */}
               <span className="text-[10px] sm:text-xs flex items-center gap-1">
                 {savingStatus === 'salvando' && (
@@ -1148,6 +1158,15 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
             {/* Desktop-only Saving & Points */}
             <div className="hidden lg:flex items-center gap-4 ml-2 shrink-0">
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/50 hover:border-slate-600 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition-all cursor-pointer"
+                title="Imprimir Ficha / Exportar PDF"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>PDF / Imprimir</span>
+              </button>
+
               <span className="text-xs flex items-center gap-1.5">
                 {savingStatus === 'salvando' && (
                   <>
@@ -2663,6 +2682,233 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
           <span className="font-semibold text-xs leading-relaxed">{toastMessage}</span>
         </div>
       )}
-    </div>
+      </div>
+
+      {/* Printable Sheet Version (A4 High Contrast) */}
+      <div className="hidden print:block bg-white text-black p-8 font-sans min-h-screen text-xs leading-relaxed">
+        {/* Print Header */}
+        <div className="border-b-2 border-black pb-4 mb-6 flex justify-between items-end">
+          <div>
+            <h1 className="text-2xl font-black uppercase tracking-tight">{character.name}</h1>
+            <p className="text-sm font-semibold text-slate-600 mt-1">
+              {character.concept || 'Sem Classe'} • {systemDef.name}
+            </p>
+          </div>
+          <div className="text-right">
+            <span className="text-xl font-mono font-black">{scoreSpent} / {character.points_total} PTs</span>
+            <p className="text-[9px] uppercase font-bold text-slate-500 mt-1">Escala: {
+              character.scale === 1 ? 'Sugoi (x10)' :
+              character.scale === 2 ? 'Kiodai (x100)' :
+              character.scale === 3 ? 'Kami (x1000)' : 'Ningen (x1)'
+            }</p>
+          </div>
+        </div>
+
+        {/* Print Body: Grid */}
+        <div className="grid grid-cols-3 gap-6">
+          {/* Column 1: Attributes & Resources */}
+          <div className="col-span-1 space-y-6 border-r border-slate-300 pr-6">
+            {/* Attributes Box */}
+            <div className="space-y-3">
+              <h2 className="text-xs font-black uppercase tracking-wider border-b border-black pb-1">Atributos</h2>
+              <div className="space-y-2 font-mono">
+                {Object.keys(systemDef.attributes).map((attrKey) => {
+                  const baseVal = character.attributes_values?.[attrKey] ?? 0;
+                  const bonusVal = equippedModifiers[attrKey] || 0;
+                  const finalVal = modifiedAttrs[attrKey] ?? baseVal;
+                  return (
+                    <div key={attrKey} className="flex justify-between items-center border-b border-slate-200 pb-1">
+                      <span className="font-bold text-slate-700">{systemDef.attributes[attrKey].name} ({attrKey})</span>
+                      <span className="font-bold text-sm">
+                        {finalVal}
+                        {bonusVal !== 0 && (
+                          <span className="text-slate-500 text-xs font-normal"> ({baseVal}{bonusVal >= 0 ? '+' : ''}{bonusVal})</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Resources Box */}
+            <div className="space-y-3">
+              <h2 className="text-xs font-black uppercase tracking-wider border-b border-black pb-1">Recursos</h2>
+              <div className="space-y-2 font-mono">
+                {Object.keys(systemDef.resources || {}).map((key) => {
+                  const res = systemDef.resources[key];
+                  const maxVal = evaluateResourceFormula(res.formula, res.baseAttributeKey, modifiedAttrs, key, character.advantages);
+                  const currentVal = character.resources_current[key] ?? maxVal;
+                  return (
+                    <div key={key} className="flex justify-between items-center border-b border-slate-200 pb-1">
+                      <span className="font-bold text-slate-700">{res.name} ({key})</span>
+                      <span className="font-bold text-sm">{currentVal} / {maxVal}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Damage Types */}
+            <div className="space-y-2">
+              <h2 className="text-xs font-black uppercase tracking-wider border-b border-black pb-1">Tipos de Dano</h2>
+              <div className="text-[10px] space-y-1 font-mono">
+                <div>
+                  <span className="font-bold text-slate-700">Força (F):</span>{' '}
+                  <span className="font-medium">{character.damage_type_forca || 'Corte'}</span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-700">Poder de Fogo (PdF):</span>{' '}
+                  <span className="font-medium">{character.damage_type_pdf || 'Corte'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Advantages & Disadvantages */}
+          <div className="col-span-1 space-y-6 border-r border-slate-300 pr-6">
+            {/* Vantagem Única */}
+            {character.unique_advantage && (
+              <div className="space-y-2">
+                <h2 className="text-xs font-black uppercase tracking-wider border-b border-black pb-1">Vantagem Única</h2>
+                <div className="p-2 border border-slate-200 bg-slate-50 rounded">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold">{character.unique_advantage.name}</span>
+                    <span className="font-mono text-[10px] font-bold">{character.unique_advantage.cost} pt{Number(character.unique_advantage.cost) !== 1 ? 's' : ''}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-600 mt-1 leading-relaxed whitespace-pre-wrap">{character.unique_advantage.description}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Advantages */}
+            <div className="space-y-2">
+              <h2 className="text-xs font-black uppercase tracking-wider border-b border-black pb-1">Vantagens</h2>
+              <div className="space-y-2">
+                {character.advantages.map((adv) => (
+                  <div key={adv.id || adv.name} className="p-2 border border-slate-200 bg-slate-50 rounded">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold">{adv.name}</span>
+                      <span className="font-mono text-[10px] font-bold">{adv.cost} pt{Number(adv.cost) !== 1 ? 's' : ''}</span>
+                    </div>
+                    {adv.isModular && adv.selectedModifiers && adv.selectedModifiers.length > 0 && (
+                      <p className="text-[9px] text-purple-600 font-bold mt-0.5">
+                        Modificadores: {adv.modifiers
+                          ?.filter((m: any) => adv.selectedModifiers?.includes(m.id))
+                          .map((m: any) => m.name)
+                          .join(', ')}
+                      </p>
+                    )}
+                    {adv.description && (
+                      <p className="text-[9px] text-slate-600 mt-0.5 leading-normal whitespace-pre-wrap">{adv.description}</p>
+                    )}
+                  </div>
+                ))}
+                {character.advantages.length === 0 && (
+                  <p className="text-[10px] text-slate-400 italic">Nenhuma vantagem adquirida.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Disadvantages */}
+            <div className="space-y-2">
+              <h2 className="text-xs font-black uppercase tracking-wider border-b border-black pb-1">Desvantagens</h2>
+              <div className="space-y-2">
+                {character.disadvantages.map((dis) => (
+                  <div key={dis.id || dis.name} className="p-2 border border-slate-200 bg-slate-50 rounded">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold">{dis.name}</span>
+                      <span className="font-mono text-[10px] font-bold">{dis.cost} pt{Number(dis.cost) !== 1 ? 's' : ''}</span>
+                    </div>
+                    {dis.isModular && dis.selectedModifiers && dis.selectedModifiers.length > 0 && (
+                      <p className="text-[9px] text-purple-600 font-bold mt-0.5">
+                        Modificadores: {dis.modifiers
+                          ?.filter((m: any) => dis.selectedModifiers?.includes(m.id))
+                          .map((m: any) => m.name)
+                          .join(', ')}
+                      </p>
+                    )}
+                    {dis.description && (
+                      <p className="text-[9px] text-slate-600 mt-0.5 leading-normal whitespace-pre-wrap">{dis.description}</p>
+                    )}
+                  </div>
+                ))}
+                {character.disadvantages.length === 0 && (
+                  <p className="text-[10px] text-slate-400 italic">Nenhuma desvantagem adquirida.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Column 3: Skills, Spells, Inventory */}
+          <div className="col-span-1 space-y-6">
+            {/* Perícias & Especializações */}
+            <div className="space-y-2">
+              <h2 className="text-xs font-black uppercase tracking-wider border-b border-black pb-1">Perícias & Especialidades</h2>
+              <div className="space-y-1">
+                {character.skills.map((skill) => (
+                  <div key={skill.name} className="flex justify-between items-center text-[10px] border-b border-slate-100 pb-0.5">
+                    <span className="font-bold">{skill.name}</span>
+                    <span className="font-mono text-[9px] font-bold">{skill.cost} pt</span>
+                  </div>
+                ))}
+                {character.specializations.map((spec) => (
+                  <div key={spec.name} className="flex justify-between items-center text-[10px] border-b border-slate-100 pb-0.5 text-slate-600 font-sans pl-2">
+                    <span>• {spec.name}</span>
+                    <span className="font-mono text-[9px] font-bold">{spec.cost} pt</span>
+                  </div>
+                ))}
+                {character.skills.length === 0 && character.specializations.length === 0 && (
+                  <p className="text-[10px] text-slate-400 italic">Nenhuma perícia adquirida.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Spells */}
+            {character.spells.length > 0 && (
+              <div className="space-y-2">
+                <h2 className="text-xs font-black uppercase tracking-wider border-b border-black pb-1">Magias</h2>
+                <div className="space-y-2">
+                  {character.spells.map((spell) => (
+                    <div key={spell.name} className="p-2 border border-slate-200 bg-slate-50 rounded">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold">{spell.name}</span>
+                        <span className="font-mono text-[9px] font-bold">{spell.cost}</span>
+                      </div>
+                      <p className="text-[9px] text-slate-600 mt-0.5">{spell.description || 'Sem descrição.'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Inventory / Equipment */}
+            <div className="space-y-2">
+              <h2 className="text-xs font-black uppercase tracking-wider border-b border-black pb-1">Equipamentos & Itens</h2>
+              <div className="space-y-2">
+                {character.inventory.map((item) => (
+                  <div key={item.name} className="p-2 border border-slate-200 bg-slate-50 rounded flex justify-between items-start gap-2">
+                    <div className="min-w-0">
+                      <span className="font-bold text-[10px]">{item.name} {item.is_equipped ? '⚔️' : ''}</span>
+                      {item.description && (
+                        <p className="text-[9px] text-slate-550 leading-normal truncate">{item.description}</p>
+                      )}
+                    </div>
+                    {item.bonus_attribute && item.bonus_value && (
+                      <span className="text-[9px] font-mono font-bold bg-slate-200 px-1.5 py-0.5 rounded whitespace-nowrap">
+                        +{item.bonus_value} {item.bonus_attribute}
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {character.inventory.length === 0 && (
+                  <p className="text-[10px] text-slate-400 italic">Inventário vazio.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

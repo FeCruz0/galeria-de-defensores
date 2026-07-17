@@ -53,9 +53,9 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 🎒 5. Inventário Equipável e Modificadores — Hard
 * **Descrição**: Transformação da seção de inventário para suportar o uso prático de armas, armaduras e escudos com mutações de atributos na ficha.
 * **Checklist**:
-  - [ ] Adicionar suporte a atributos dinâmicos no modelo de item (`InventoryItem`): `bonus_attribute`, `bonus_value`, `is_equipped`.
-  - [ ] Adicionar botão de toggle rápido "Equipar/Usar" no item na lista de inventário.
-  - [ ] Modificar o motor de cálculo da ficha para somar os bônus dos itens equipados aos atributos reais do personagem nas rolagens e recursos.
+  - [x] Adicionar suporte a atributos dinâmicos no modelo de item (`InventoryItem`): `bonus_attribute`, `bonus_value`, `is_equipped`.
+  - [x] Adicionar botão de toggle rápido "Equipar/Usar" no item na lista de inventário.
+  - [x] Modificar o motor de cálculo da ficha para somar os bônus dos itens equipados aos atributos reais do personagem nas rolagens e recursos.
 
 ### 📄 6. Exportação para PDF / Ficha Impressa Estilizada — Hard
 * **Descrição**: Exportação completa da ficha do personagem para um arquivo PDF limpo, bem desenhado e otimizado para impressão clássica.

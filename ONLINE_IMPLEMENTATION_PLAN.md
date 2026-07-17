@@ -107,6 +107,10 @@ Substituir a edição livre por seletores ricos baseados nos catálogos do siste
   - [x] Permitir que o jogador clique em qualquer atributo, perícia ou rolagem customizada diretamente da ficha para simular a rolagem física na tela com um feed de resultados local.
 - [x] **Autosave Debounced**
   - [x] Salvamento automático de todas as alterações com debounce e indicador de status na tela de edição.
+- [x] **Inventário Equipável e Modificadores**
+  - [x] Suporte a itens no inventário que concedem bônus a atributos base, recalculando dinamicamente PV/PM máximos.
+- [x] **Ficha Impressa & Exportação para PDF**
+  - [x] Layout A4 clássico preto e branco otimizado para economia de tinta e diagramação do 3D&T Alpha nativo no print do navegador.
 
 ---
 
@@ -142,6 +146,14 @@ Aproveitando as funcionalidades da pasta `legacy` e integrando as fichas ativas 
 - [x] **Integração de Rolagem da Ficha na Mesa**
   - [x] Permitir que o jogador abra sua ficha diretamente no painel da mesa e realize rolagens de atributos ou rolagens customizadas.
   - [x] Os resultados destas rolagens devem ser computados e enviados automaticamente como uma mensagem especial de rolagem (`ROLL`) para o chat da mesa em tempo real, visível para todos os jogadores e para o mestre.
+- [x] **Distribuição de Experiência (PEs)**
+  - [x] Painel do mestre para selecionar personagens ativos e conceder PEs simultaneamente com banners de notificação em tempo real.
+- [x] **Diário de Campanha Compartilhado**
+  - [x] Aba de anotações com diário público do mestre (sincronizado em tempo real) e notas privadas do jogador logado.
+- [x] **Efeitos Temporários e Status Nativos**
+  - [x] Ajustes nos cálculos do motor de regras para aplicar modificadores de status temporários (*Defendendo*, *Indefeso*, *Paralisado*).
+- [x] **CRUD de Status Personalizados**
+  - [x] Interface completa para o Mestre da mesa gerenciar tags de status adicionais com RLS do banco de dados e ouvinte realtime.
 
 ---
 

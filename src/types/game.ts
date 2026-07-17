@@ -89,6 +89,9 @@ export interface InventoryItem {
   name: string;
   description: string;
   quantity: number;
+  is_equipped?: boolean;
+  bonus_attribute?: string; // ex: 'F', 'H', 'R', 'A', 'PdF'
+  bonus_value?: number;     // ex: 1, 2, -1
 }
 
 export interface UniqueAdvantage {

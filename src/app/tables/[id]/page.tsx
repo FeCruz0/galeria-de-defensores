@@ -4,7 +4,7 @@ import React, { use, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Table, ChatMessage, Profile, Character } from '@/types/game';
-import { executeCustomRoll, getMaxPv, getMaxPm, getModifiedAttributes } from '@/lib/rules';
+import { executeCustomRoll, getMaxPv, getMaxPm, getModifiedAttributes, getEquippedItemsModifiers } from '@/lib/rules';
 import { canLinkCharacterToTable } from '@/lib/validations';
 import { 
   ArrowLeft, 
@@ -540,9 +540,10 @@ export default function GameTablePage({ params }: { params: Params }) {
     let diceValuesForAnimation: number[] = [];
 
     const activeEffects = selectedCharacterSheet.status_effects || [];
+    const equippedMods = getEquippedItemsModifiers(selectedCharacterSheet.inventory);
 
     if (isAttribute) {
-      const modifiedAttrs = getModifiedAttributes(selectedCharacterSheet.attributes_values, activeEffects);
+      const modifiedAttrs = getModifiedAttributes(selectedCharacterSheet.attributes_values, activeEffects, equippedMods);
       
       // Mapear nome de volta para chave do atributo
       let attrKey = 'F';
@@ -582,7 +583,8 @@ export default function GameTablePage({ params }: { params: Params }) {
         rollObj,
         selectedCharacterSheet.attributes_values,
         undefined,
-        activeEffects
+        activeEffects,
+        equippedMods
       );
       content = `realizou rolagem customizada "${rollObj.name}" 🎲`;
       
@@ -1177,53 +1179,71 @@ export default function GameTablePage({ params }: { params: Params }) {
             </div>
 
             {/* Atributos Básicos com clique para Rolar */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                Atributos (Clique para Rolar d6 + Atributo)
-              </span>
-              
-              <div className="grid grid-cols-2 gap-2.5">
-                {Object.keys(selectedCharacterSheet.attributes_values || {}).map((attrKey) => {
-                  const val = selectedCharacterSheet.attributes_values[attrKey] || 0;
-                  
-                  const attrLabels: Record<string, string> = {
-                    F: 'Força',
-                    H: 'Habilidade',
-                    R: 'Resistência',
-                    A: 'Armadura',
-                    PdF: 'Poder de Fogo'
-                  };
-                  const colors: Record<string, string> = {
-                    F: 'border-purple-500/20 text-purple-400 bg-purple-950/10 hover:bg-purple-950/20',
-                    H: 'border-cyan-500/20 text-cyan-400 bg-cyan-950/10 hover:bg-cyan-950/20',
-                    R: 'border-emerald-500/20 text-emerald-400 bg-emerald-950/10 hover:bg-emerald-950/20',
-                    A: 'border-slate-500/20 text-slate-350 bg-slate-800/20 hover:bg-slate-800/30',
-                    PdF: 'border-rose-500/20 text-rose-400 bg-rose-950/10 hover:bg-rose-950/20'
-                  };
+            {(() => {
+              const activeEffects = selectedCharacterSheet.status_effects || [];
+              const equippedMods = getEquippedItemsModifiers(selectedCharacterSheet.inventory);
+              const modifiedAttrs = getModifiedAttributes(selectedCharacterSheet.attributes_values || {}, activeEffects, equippedMods);
 
-                  return (
-                    <button
-                      key={attrKey}
-                      onClick={() => handleRollFromQuickSheet(attrLabels[attrKey] || attrKey, val, true)}
-                      className={`flex flex-col items-center p-3 rounded-xl border text-center transition-all duration-200 active:scale-95 ${
-                        colors[attrKey] || 'border-slate-700 text-slate-200'
-                      }`}
-                    >
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        {attrLabels[attrKey] || attrKey}
-                      </span>
-                      <span className="text-lg font-black mt-1 font-mono">
-                        {val}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              return (
+                <div className="space-y-3">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                    Atributos (Clique para Rolar d6 + Atributo)
+                  </span>
+                  
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {Object.keys(selectedCharacterSheet.attributes_values || {}).map((attrKey) => {
+                      const baseVal = selectedCharacterSheet.attributes_values[attrKey] || 0;
+                      const modVal = modifiedAttrs[attrKey] ?? baseVal;
+                      const diff = modVal - baseVal;
+                      
+                      const attrLabels: Record<string, string> = {
+                        F: 'Força',
+                        H: 'Habilidade',
+                        R: 'Resistência',
+                        A: 'Armadura',
+                        PdF: 'Poder de Fogo'
+                      };
+                      const colors: Record<string, string> = {
+                        F: 'border-purple-500/20 text-purple-400 bg-purple-950/10 hover:bg-purple-950/20',
+                        H: 'border-cyan-500/20 text-cyan-400 bg-cyan-950/10 hover:bg-cyan-950/20',
+                        R: 'border-emerald-500/20 text-emerald-400 bg-emerald-950/10 hover:bg-emerald-950/20',
+                        A: 'border-slate-500/20 text-slate-350 bg-slate-800/20 hover:bg-slate-800/30',
+                        PdF: 'border-rose-500/20 text-rose-400 bg-rose-950/10 hover:bg-rose-950/20'
+                      };
+
+                      return (
+                        <button
+                          key={attrKey}
+                          onClick={() => handleRollFromQuickSheet(attrLabels[attrKey] || attrKey, baseVal, true)}
+                          className={`flex flex-col items-center p-3 rounded-xl border text-center transition-all duration-200 active:scale-95 cursor-pointer ${
+                            colors[attrKey] || 'border-slate-700 text-slate-200'
+                          }`}
+                        >
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            {attrLabels[attrKey] || attrKey}
+                          </span>
+                          <span className="text-lg font-black mt-1 font-mono flex items-center gap-1 justify-center">
+                            {baseVal}
+                            {diff > 0 && (
+                              <span className="text-[11px] text-emerald-400 font-bold font-sans shrink-0">(+{diff})</span>
+                            )}
+                            {diff < 0 && (
+                              <span className="text-[11px] text-rose-500 font-bold font-sans shrink-0">({diff})</span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Recursos Secundários */}
             {(() => {
-              const charR = selectedCharacterSheet.attributes_values?.['R'] ?? 0;
+              const equippedMods = getEquippedItemsModifiers(selectedCharacterSheet.inventory);
+              const baseR = selectedCharacterSheet.attributes_values?.['R'] ?? 0;
+              const charR = baseR + (equippedMods['R'] || 0);
               const maxPv = getMaxPv(charR, selectedCharacterSheet.advantages);
               const maxPm = getMaxPm(charR, selectedCharacterSheet.advantages);
               return (
@@ -1360,6 +1380,70 @@ export default function GameTablePage({ params }: { params: Params }) {
                     <span className="text-[10px] text-slate-500 font-mono">Perícia</span>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Itens & Equipamentos */}
+            <div className="space-y-3 border-t border-slate-800/85 pt-4">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                Itens & Equipamentos
+              </span>
+              
+              <div className="space-y-2.5 max-h-40 overflow-y-auto pr-1">
+                {(selectedCharacterSheet.inventory || []).map((item: any) => (
+                  <div key={item.id} className="flex justify-between items-center bg-[#1e293b]/20 border border-slate-800/60 p-2.5 rounded-xl text-xs gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-slate-200 truncate">{item.name}</span>
+                        {item.bonus_attribute && item.bonus_value !== undefined && (
+                          <span className="text-[8px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30 px-1 py-0.5 rounded font-bold whitespace-nowrap">
+                            {item.bonus_value >= 0 ? `+${item.bonus_value}` : item.bonus_value} {
+                              item.bonus_attribute === 'F' ? 'Força' :
+                              item.bonus_attribute === 'H' ? 'Habilidade' :
+                              item.bonus_attribute === 'R' ? 'Resistência' :
+                              item.bonus_attribute === 'A' ? 'Armadura' :
+                              item.bonus_attribute === 'PdF' ? 'Poder de Fogo' : item.bonus_attribute
+                            }
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-slate-500 block">Qtd: {item.quantity}</span>
+                    </div>
+
+                    {item.bonus_attribute && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const updatedInventory = selectedCharacterSheet.inventory.map((i: any) => 
+                            i.id === item.id ? { ...i, is_equipped: !i.is_equipped } : i
+                          );
+                          
+                          setSelectedCharacterSheet({
+                            ...selectedCharacterSheet,
+                            inventory: updatedInventory
+                          });
+
+                          await supabase
+                            .from('characters')
+                            .update({ inventory: updatedInventory })
+                            .eq('id', selectedCharacterSheet.id);
+                        }}
+                        className={`text-[9px] px-2 py-1 rounded-lg border transition-all active:scale-95 cursor-pointer font-bold shrink-0 ${
+                          item.is_equipped
+                            ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30'
+                            : 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:bg-slate-700 hover:text-slate-200'
+                        }`}
+                      >
+                        {item.is_equipped ? 'Equipado ⚔️' : 'Equipar'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {(!selectedCharacterSheet.inventory || selectedCharacterSheet.inventory.length === 0) && (
+                  <div className="text-center py-4 text-xs text-slate-500 italic">
+                    Nenhum item no inventário.
+                  </div>
+                )}
               </div>
             </div>
 

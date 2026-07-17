@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers, convertXpToPoints, getModifiedAttributes } from '../lib/rules';
+import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers } from '../lib/rules';
 import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost, canLinkCharacterToTable } from '../lib/validations';
 import { Character } from '../types/game';
 
@@ -350,6 +350,72 @@ describe('Marcadores de Status & Efeitos Temporários', () => {
     const defendingResult = executeCustomRoll(roll as any, attrs, [], ['defending']);
     expect(defendingResult.total).toBe(7);
     expect(defendingResult.componentsText).toContain('A [2 x2]');
+  });
+});
+
+describe('Inventário Equipável e Modificadores de Equipamentos', () => {
+  const baseAttrs = { F: 1, H: 2, R: 2, A: 1, PdF: 0 };
+
+  it('deve retornar modificadores zerados se o inventário for vazio ou indefinido', () => {
+    expect(getEquippedItemsModifiers([])).toEqual({ F: 0, H: 0, R: 0, A: 0, PdF: 0 });
+    expect(getEquippedItemsModifiers(undefined)).toEqual({ F: 0, H: 0, R: 0, A: 0, PdF: 0 });
+  });
+
+  it('deve acumular modificadores de itens marcados como equipados', () => {
+    const inventory = [
+      { id: '1', name: 'Espada Longa', description: '', quantity: 1, is_equipped: true, bonus_attribute: 'F', bonus_value: 1 },
+      { id: '2', name: 'Escudo de Madeira', description: '', quantity: 1, is_equipped: true, bonus_attribute: 'A', bonus_value: 1 },
+      { id: '3', name: 'Armadura Pesada', description: '', quantity: 1, is_equipped: false, bonus_attribute: 'A', bonus_value: 2 }, // não equipado
+      { id: '4', name: 'Anel do Poder', description: '', quantity: 1, is_equipped: true, bonus_attribute: 'F', bonus_value: 2 }
+    ];
+
+    const mods = getEquippedItemsModifiers(inventory);
+    expect(mods.F).toBe(3); // 1 + 2
+    expect(mods.A).toBe(1); // apenas o escudo (1)
+    expect(mods.R).toBe(0);
+  });
+
+  it('deve aplicar modificadores de equipamentos aos atributos modificados', () => {
+    const equippedMods = { F: 2, A: 1, H: 0, R: 0, PdF: 0 };
+    const modified = getModifiedAttributes(baseAttrs, [], equippedMods);
+
+    expect(modified.F).toBe(3); // base(1) + equip(2)
+    expect(modified.A).toBe(2); // base(1) + equip(1)
+    expect(modified.H).toBe(2); // inalterado
+  });
+
+  it('deve aumentar PV e PM máximos baseado na Resistência modificada', () => {
+    const inventory = [
+      { id: '1', name: 'Anel de Vitalidade', description: '', quantity: 1, is_equipped: true, bonus_attribute: 'R', bonus_value: 1 }
+    ];
+
+    const equippedMods = getEquippedItemsModifiers(inventory);
+    const modified = getModifiedAttributes(baseAttrs, [], equippedMods);
+    const charR = modified.R || 0; // 2 + 1 = 3
+
+    const maxPv = getMaxPv(charR); // 3 * 5 = 15
+    const maxPm = getMaxPm(charR); // 3 * 5 = 15
+
+    expect(maxPv).toBe(15);
+    expect(maxPm).toBe(15);
+  });
+
+  it('deve manter calculateScore intacto mesmo com itens equipados', () => {
+    const char = {
+      attributes_values: { F: 2, H: 2, R: 1, A: 0, PdF: 0 },
+      advantages: [],
+      disadvantages: [],
+      skills: [],
+      specializations: [],
+      unique_advantage: null,
+      saved_points: 0,
+      inventory: [
+        { id: '1', name: 'Espada Lendária', description: '', quantity: 1, is_equipped: true, bonus_attribute: 'F', bonus_value: 5 } // +5 F
+      ]
+    };
+
+    // F(2) + H(2) + R(1) = 5
+    expect(calculateScore(char as any)).toBe(5);
   });
 });
 

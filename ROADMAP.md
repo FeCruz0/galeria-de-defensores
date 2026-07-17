@@ -44,11 +44,11 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 🩺 4. Marcadores de Status & Efeitos Temporários — Medium
 * **Descrição**: Sistema de seleção de condições físicas ou mágicas na ficha de personagem que alteram atributos e rolagens automaticamente enquanto ativos.
 * **Checklist**:
-  - [ ] Criar componente de seleção de status no card de atributos (ex: *Defendendo*, *Concentrando*, *Paralisado*, *Indefeso*).
-  - [ ] Aplicar modificadores de status nos cálculos em tempo real:
+  - [x] Criar componente de seleção de status no card de atributos (ex: *Defendendo*, *Concentrando*, *Paralisado*, *Indefeso*).
+  - [x] Aplicar modificadores de status nos cálculos em tempo real:
     - *Defendendo*: Dobra a Armadura (`A`) nos cálculos de FD.
     - *Indefeso*: Reduz Habilidade (`H`) e Armadura (`A`) para 0 nas rolagens de FD.
-  - [ ] Exibir indicadores estéticos ou badges animados de status ao lado do avatar do personagem na mesa para o Mestre e outros jogadores.
+  - [x] Exibir indicadores estéticos ou badges animados de status ao lado do avatar do personagem na mesa para o Mestre e outros jogadores.
 
 ### 🎒 5. Inventário Equipável e Modificadores — Hard
 * **Descrição**: Transformação da seção de inventário para suportar o uso prático de armas, armaduras e escudos com mutações de atributos na ficha.

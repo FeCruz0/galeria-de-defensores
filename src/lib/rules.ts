@@ -1,4 +1,4 @@
-import { Character, AdvantageItem, CustomRoll, RollResult } from '../types/game';
+import { Character, AdvantageItem, CustomRoll, RollResult, InventoryItem } from '../types/game';
 
 /**
  * Retorna o valor máximo de Pontos de Vida (PV) baseado na Resistência do personagem.
@@ -123,7 +123,8 @@ export function executeCustomRoll(
   roll: CustomRoll,
   attributesValues: Record<string, number>,
   diceOverride?: number[],
-  statusEffects?: string[]
+  statusEffects?: string[],
+  equippedModifiers?: Record<string, number>
 ): RollResult {
   let totalSum = 0;
   const parts: string[] = [];
@@ -182,7 +183,7 @@ export function executeCustomRoll(
 
   // 2. Resolver Atributos & Críticos
   const effects = statusEffects || [];
-  const modifiedAttrs = getModifiedAttributes(attributesValues, effects);
+  const modifiedAttrs = getModifiedAttributes(attributesValues, effects, equippedModifiers);
   const isDefenseRoll = roll.type === 'DEFENSE' || roll.name.toLowerCase().includes('defesa');
 
   const primaryVal = modifiedAttrs[roll.primaryAttribute] || 0;
@@ -238,13 +239,60 @@ export function executeCustomRoll(
 }
 
 /**
- * Calcula os atributos modificados por condições de status ativos.
+ * Calcula os bônus acumulados de equipamentos equipados.
+ */
+export function getEquippedItemsModifiers(inventory?: InventoryItem[]): Record<string, number> {
+  const modifiers: Record<string, number> = { F: 0, H: 0, R: 0, A: 0, PdF: 0 };
+  if (!inventory) return modifiers;
+
+  inventory.forEach(item => {
+    if (item.is_equipped && item.bonus_attribute && item.bonus_value) {
+      const attr = item.bonus_attribute.toUpperCase();
+      let key = attr;
+      if (attr === 'FORÇA' || attr === 'FORCA') key = 'F';
+      else if (attr === 'HABILIDADE') key = 'H';
+      else if (attr === 'RESISTÊNCIA' || attr === 'RESISTENCIA') key = 'R';
+      else if (attr === 'ARMADURA') key = 'A';
+      else if (attr === 'PODER DE FOGO' || attr === 'PDF') key = 'PdF';
+
+      if (key in modifiers) {
+        modifiers[key] += item.bonus_value;
+      }
+    }
+  });
+
+  return modifiers;
+}
+
+/**
+ * Calcula os atributos modificados por equipamentos e condições de status ativos.
  */
 export function getModifiedAttributes(
   attributesValues: Record<string, number>,
-  statusEffects?: string[]
+  statusEffects?: string[],
+  equippedModifiers?: Record<string, number>
 ): Record<string, number> {
   const modified = { ...attributesValues };
+
+  // Somar bônus de equipamentos primeiro
+  if (equippedModifiers) {
+    Object.keys(equippedModifiers).forEach(key => {
+      const abbrev = key.toUpperCase();
+      if (abbrev in modified) {
+        modified[abbrev] = (modified[abbrev] || 0) + equippedModifiers[key];
+      }
+
+      const fullName = abbrev === 'F' ? 'Força' :
+                       abbrev === 'H' ? 'Habilidade' :
+                       abbrev === 'R' ? 'Resistência' :
+                       abbrev === 'A' ? 'Armadura' :
+                       abbrev === 'PdF' ? 'Poder de Fogo' : '';
+      if (fullName && fullName in modified) {
+        modified[fullName] = (modified[fullName] || 0) + equippedModifiers[key];
+      }
+    });
+  }
+
   const effects = statusEffects || [];
 
   if (effects.includes('helpless')) {
@@ -266,10 +314,11 @@ export function getModifiedAttributes(
 export function getQuickRollModifiers(
   actionName: string,
   attributesValues: Record<string, number>,
-  statusEffects?: string[]
+  statusEffects?: string[],
+  equippedModifiers?: Record<string, number>
 ): number {
   const effects = statusEffects || [];
-  const modified = getModifiedAttributes(attributesValues, effects);
+  const modified = getModifiedAttributes(attributesValues, effects, equippedModifiers);
 
   const fVal = modified['F'] || modified['Força'] || modified['Forca'] || 0;
   const hVal = modified['H'] || modified['Habilidade'] || 0;

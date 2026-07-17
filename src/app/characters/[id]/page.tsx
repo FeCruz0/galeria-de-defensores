@@ -4,7 +4,7 @@ import React, { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Character, RuleSystem, AdvantageItem, Spell, InventoryItem, ModifierOption } from '@/types/game';
-import { calculateScore, getMaxPv, getMaxPm, computedCostPt, executeCustomRoll, convertXpToPoints } from '@/lib/rules';
+import { calculateScore, getMaxPv, getMaxPm, computedCostPt, executeCustomRoll, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers } from '@/lib/rules';
 import { canAlterAttribute, canAffordCost } from '@/lib/validations';
 import { alphaAdvantages, alphaDisadvantages, alphaSkills, alphaRaces, alphaSpecializations } from '@/lib/catalogs/alpha-catalog';
 import { gaidenAdvantages, gaidenDisadvantages, gaidenSkills, gaidenRaces } from '@/lib/catalogs/gaiden-catalog';
@@ -347,6 +347,8 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
   const [newInvName, setNewInvName] = useState('');
   const [newInvQty, setNewInvQty] = useState(1);
+  const [newInvBonusAttr, setNewInvBonusAttr] = useState(''); // 'F' | 'H' | 'R' | 'A' | 'PdF' | ''
+  const [newInvBonusVal, setNewInvBonusVal] = useState(1);
 
   // States de Rolagem Customizada
   const [isAddingRoll, setIsAddingRoll] = useState(false);
@@ -943,7 +945,10 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
       id: crypto.randomUUID(),
       name: newInvName.trim(),
       description: '',
-      quantity: newInvQty
+      quantity: newInvQty,
+      is_equipped: false,
+      bonus_attribute: newInvBonusAttr || undefined,
+      bonus_value: newInvBonusAttr ? newInvBonusVal : undefined
     };
 
     setCharacter({
@@ -953,6 +958,21 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
     setNewInvName('');
     setNewInvQty(1);
+    setNewInvBonusAttr('');
+    setNewInvBonusVal(1);
+  }
+
+  // Equipar / Desequipar Item no Inventário
+  function handleToggleEquipInventory(itemId: string) {
+    if (!character) return;
+    setCharacter({
+      ...character,
+      inventory: character.inventory.map(item => 
+        item.id === itemId 
+          ? { ...item, is_equipped: !item.is_equipped } 
+          : item
+      )
+    });
   }
 
   // Deletar Item do Inventário
@@ -972,6 +992,9 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
       inventory: character.inventory.map(i => i.id === itemId ? { ...i, quantity: newQty } : i)
     });
   }
+
+  const equippedModifiers = getEquippedItemsModifiers(character.inventory);
+  const modifiedAttrs = getModifiedAttributes(character.attributes_values, [], equippedModifiers);
 
   const attributesSum = Object.values(character.attributes_values).reduce((sum, val) => sum + (val || 0), 0);
   const advantagesSum = character.advantages.reduce((sum, item) => sum + computedCostPt(item), 0);
@@ -1178,7 +1201,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
               })
               .map((key) => {
               const res = systemDef.resources[key];
-              const maxVal = evaluateResourceFormula(res.formula, res.baseAttributeKey, character.attributes_values, key, character.advantages);
+              const maxVal = evaluateResourceFormula(res.formula, res.baseAttributeKey, modifiedAttrs, key, character.advantages);
               const currentVal = character.resources_current[key] ?? maxVal;
 
               let colorClass = "from-rose-600 to-rose-500";
@@ -1252,6 +1275,8 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
               {sortAttributeKeys(Object.keys(systemDef.attributes), systemDef.attributes).map((key) => {
                 const attr = systemDef.attributes[key];
                 const value = character.attributes_values[key] ?? 0;
+                const modValue = modifiedAttrs[key] ?? value;
+                const bonus = modValue - value;
                 return (
                   <div key={key} className="flex justify-between items-center bg-slate-800/20 border border-slate-800/60 rounded-xl p-3">
                     <span className="font-medium text-slate-300">{attr.name}</span>
@@ -1262,7 +1287,15 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                       >
                         -
                       </button>
-                      <span className="w-6 text-center font-bold text-slate-200 text-base">{value}</span>
+                      <span className="w-16 text-center font-bold text-slate-200 text-base flex justify-center items-center gap-1 font-mono">
+                        {value}
+                        {bonus > 0 && (
+                          <span className="text-[10px] text-emerald-400 font-bold font-sans shrink-0">(+{bonus})</span>
+                        )}
+                        {bonus < 0 && (
+                          <span className="text-[10px] text-rose-500 font-bold font-sans shrink-0">({bonus})</span>
+                        )}
+                      </span>
                       <button
                         onClick={() => {
                           if (pointsAvailable < 1) {
@@ -2165,26 +2198,51 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
               <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
                 <span className="text-sm font-bold text-slate-300 uppercase tracking-wider block">Itens & Equipamentos</span>
                 
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newInvName}
-                    onChange={(e) => setNewInvName(e.target.value)}
-                    placeholder="Nome do item"
-                    className="flex-1 min-w-0 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
-                  />
-                  <input
-                    type="number"
-                    value={newInvQty}
-                    onChange={(e) => setNewInvQty(parseInt(e.target.value, 10) || 1)}
-                    className="w-16 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 shrink-0"
-                  />
-                  <button
-                    onClick={handleAddInventory}
-                    className="bg-cyan-600 hover:bg-cyan-500 text-white p-2 rounded-xl shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newInvName}
+                      onChange={(e) => setNewInvName(e.target.value)}
+                      placeholder="Nome do item"
+                      className="flex-1 min-w-0 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                    />
+                    <input
+                      type="number"
+                      value={newInvQty}
+                      onChange={(e) => setNewInvQty(parseInt(e.target.value, 10) || 1)}
+                      className="w-16 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 shrink-0"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={newInvBonusAttr}
+                      onChange={(e) => setNewInvBonusAttr(e.target.value)}
+                      className="flex-1 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-350"
+                    >
+                      <option value="">Sem bônus de atributo</option>
+                      <option value="F">Força (C/C)</option>
+                      <option value="H">Habilidade</option>
+                      <option value="R">Resistência</option>
+                      <option value="A">Armadura</option>
+                      <option value="PdF">Poder de Fogo</option>
+                    </select>
+                    {newInvBonusAttr && (
+                      <input
+                        type="number"
+                        value={newInvBonusVal}
+                        onChange={(e) => setNewInvBonusVal(parseInt(e.target.value, 10) || 0)}
+                        placeholder="Bônus"
+                        className="w-20 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 shrink-0"
+                      />
+                    )}
+                    <button
+                      onClick={handleAddInventory}
+                      className="bg-cyan-600 hover:bg-cyan-500 text-white px-3.5 rounded-xl shrink-0 transition-colors flex items-center justify-center cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -2193,15 +2251,43 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                     return (
                       <div key={item.id} className="p-3 bg-slate-800/20 border border-slate-800/50 rounded-xl flex justify-between items-center gap-4 min-h-[46px]">
                         <div className="flex-1 min-w-0">
-                          <span 
-                            onClick={() => setExpandedItemNameId(expandedItemNameId === item.id ? null : item.id)}
-                            className={`font-semibold text-slate-200 text-sm block cursor-pointer transition-all hover:text-white ${
-                              expandedItemNameId === item.id ? 'break-words whitespace-normal' : 'truncate'
-                            }`}
-                            title="Clique para ver o nome completo"
-                          >
-                            {item.name}
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span 
+                              onClick={() => setExpandedItemNameId(expandedItemNameId === item.id ? null : item.id)}
+                              className={`font-semibold text-slate-200 text-sm block cursor-pointer transition-all hover:text-white ${
+                                expandedItemNameId === item.id ? 'break-words whitespace-normal' : 'truncate'
+                              }`}
+                              title="Clique para ver o nome completo"
+                            >
+                              {item.name}
+                            </span>
+                            
+                            {item.bonus_attribute && item.bonus_value !== undefined && (
+                              <span className="text-[9px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap">
+                                {item.bonus_value >= 0 ? `+${item.bonus_value}` : item.bonus_value} {
+                                  item.bonus_attribute === 'F' ? 'Força' :
+                                  item.bonus_attribute === 'H' ? 'Habilidade' :
+                                  item.bonus_attribute === 'R' ? 'Resistência' :
+                                  item.bonus_attribute === 'A' ? 'Armadura' :
+                                  item.bonus_attribute === 'PdF' ? 'Poder de Fogo' : item.bonus_attribute
+                                }
+                              </span>
+                            )}
+
+                            {item.bonus_attribute && (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleEquipInventory(item.id)}
+                                className={`text-[9px] px-2 py-0.5 rounded-full border transition-all active:scale-95 cursor-pointer font-bold ${
+                                  item.is_equipped
+                                    ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30'
+                                    : 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:bg-slate-700 hover:text-slate-200'
+                                }`}
+                              >
+                                {item.is_equipped ? 'Equipado ⚔️' : 'Equipar'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                         
                         {isConfirmingDelete ? (

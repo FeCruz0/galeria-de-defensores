@@ -318,7 +318,9 @@ export default function GameTablePage({ params }: { params: Params }) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Realtime channel subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -1059,7 +1061,7 @@ export default function GameTablePage({ params }: { params: Params }) {
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-slate-300">{char.name}</span>
                           {/* Badges de Status Ativos */}
-                          <div className="flex gap-1 items-center">
+                          <div className="flex gap-1.5 items-center flex-wrap">
                             {(char.status_effects || []).map((effId) => {
                               const condition = [...STATUS_CONDITIONS, ...customConditions].find(c => c.id === effId);
                               if (!condition) return null;
@@ -1069,9 +1071,10 @@ export default function GameTablePage({ params }: { params: Params }) {
                                 <span
                                   key={effId}
                                   title={`${condition.name}: ${condition.description}`}
-                                  className={`p-1 rounded-full border text-[9px] flex items-center justify-center ${condition.colorClass}`}
+                                  className={`px-1.5 py-0.5 rounded-full border text-[9px] font-bold flex items-center gap-1 shrink-0 select-none ${condition.colorClass}`}
                                 >
                                   <IconComponent className={`w-2.5 h-2.5 ${condition.icon === 'Loader2' ? 'animate-spin' : ''}`} />
+                                  <span className="font-sans leading-none">{condition.name}</span>
                                 </span>
                               );
                             })}

@@ -429,5 +429,17 @@ create policy "Mestre da mesa pode atualizar personagens vinculados" on public.c
     )
   );
 
+-- 10. Habilitar Realtime para tabelas no Supabase (se a publicação existir)
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    alter publication supabase_realtime add table public.chat_messages;
+    alter publication supabase_realtime add table public.characters;
+    alter publication supabase_realtime add table public.campaign_journals;
+  end if;
+exception
+  when others then null;
+end $$;
+
 
 

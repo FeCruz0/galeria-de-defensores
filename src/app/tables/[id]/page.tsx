@@ -358,14 +358,23 @@ export default function GameTablePage({ params }: { params: Params }) {
     setMessageText('');
 
     try {
-      await supabase.from('chat_messages').insert({
+      const { data, error } = await supabase.from('chat_messages').insert({
         table_id: id,
         sender_id: currentUser.id,
         sender_name: profile?.username || 'Jogador',
         content,
         type: 'TEXT',
         is_edited: false
-      });
+      }).select().single();
+
+      if (error) {
+        console.error('Erro ao enviar mensagem:', error);
+      } else if (data) {
+        setMessages((prev) => {
+          if (prev.some(m => m.id === data.id)) return prev;
+          return [...prev, data];
+        });
+      }
     } catch (err) {
       console.error('Erro ao enviar mensagem:', err);
     }
@@ -395,7 +404,7 @@ export default function GameTablePage({ params }: { params: Params }) {
       title: 'Rolando Dados na Mesa',
       callback: async () => {
         try {
-          await supabase.from('chat_messages').insert({
+          const { data, error } = await supabase.from('chat_messages').insert({
             table_id: id,
             sender_id: currentUser.id,
             sender_name: profile?.username || 'Jogador',
@@ -409,7 +418,16 @@ export default function GameTablePage({ params }: { params: Params }) {
               componentsText: `[${diceValues.join(', ')}]`
             },
             is_edited: false
-          });
+          }).select().single();
+
+          if (error) {
+            console.error('Erro ao salvar rolagem:', error);
+          } else if (data) {
+            setMessages((prev) => {
+              if (prev.some(m => m.id === data.id)) return prev;
+              return [...prev, data];
+            });
+          }
         } catch (err) {
           console.error('Erro ao salvar rolagem:', err);
         }
@@ -636,7 +654,7 @@ export default function GameTablePage({ params }: { params: Params }) {
       title: isAttribute ? `Teste de ${name}` : (rollObj?.name || 'Rolagem'),
       callback: async () => {
         try {
-          await supabase.from('chat_messages').insert({
+          const { data, error } = await supabase.from('chat_messages').insert({
             table_id: id,
             sender_id: currentUser.id,
             sender_name: `${profile.username} (Ficha: ${selectedCharacterSheet?.name})`,
@@ -644,7 +662,16 @@ export default function GameTablePage({ params }: { params: Params }) {
             type: 'ROLL',
             roll_result: rollResultPayload,
             is_edited: false
-          });
+          }).select().single();
+
+          if (error) {
+            console.error('Erro ao rolar da ficha rápida:', error);
+          } else if (data) {
+            setMessages((prev) => {
+              if (prev.some(m => m.id === data.id)) return prev;
+              return [...prev, data];
+            });
+          }
         } catch (err) {
           console.error('Erro ao rolar da ficha rápida:', err);
         }

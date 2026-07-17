@@ -146,6 +146,7 @@ export interface Character {
   damage_type_pdf: string;
   saved_points: number;
   experience: number;
+  status_effects: string[];
   annotations: string;
   is_hidden: boolean;
   image_url: string;

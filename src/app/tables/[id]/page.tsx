@@ -4,7 +4,7 @@ import React, { use, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Table, ChatMessage, Profile, Character } from '@/types/game';
-import { executeCustomRoll, getMaxPv, getMaxPm } from '@/lib/rules';
+import { executeCustomRoll, getMaxPv, getMaxPm, getModifiedAttributes } from '@/lib/rules';
 import { canLinkCharacterToTable } from '@/lib/validations';
 import { 
   ArrowLeft, 
@@ -17,8 +17,11 @@ import {
   Shield,
   Trash2,
   MessageSquare,
-  BookOpen
+  BookOpen,
+  ShieldAlert,
+  ZapOff
 } from 'lucide-react';
+import { STATUS_CONDITIONS } from '@/lib/status';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 
 type Params = Promise<{ id: string }>;
@@ -530,37 +533,76 @@ export default function GameTablePage({ params }: { params: Params }) {
 
   // Realizar rolagem a partir da Ficha Rápida
   async function handleRollFromQuickSheet(name: string, value: number, isAttribute: boolean, rollObj?: any) {
-    if (!currentUser || !profile) return;
+    if (!currentUser || !profile || !selectedCharacterSheet) return;
 
     let rollResultPayload: any = null;
     let content = '';
     let diceValuesForAnimation: number[] = [];
 
+    const activeEffects = selectedCharacterSheet.status_effects || [];
+
     if (isAttribute) {
+      const modifiedAttrs = getModifiedAttributes(selectedCharacterSheet.attributes_values, activeEffects);
+      
+      // Mapear nome de volta para chave do atributo
+      let attrKey = 'F';
+      if (name === 'Habilidade') attrKey = 'H';
+      else if (name === 'Resistência') attrKey = 'R';
+      else if (name === 'Armadura') attrKey = 'A';
+      else if (name === 'Poder de Fogo') attrKey = 'PdF';
+      else attrKey = name;
+
+      const modifiedValue = modifiedAttrs[attrKey] ?? value;
+
       const dieVal = Math.floor(Math.random() * 6) + 1;
       const isCrit = dieVal === 6;
-      const total = dieVal + value;
-      content = `rolou teste de ${name} [${value}] 🎲`;
+      const total = dieVal + modifiedValue;
+      
+      let statusSuffix = '';
+      if (activeEffects.length > 0) {
+        const activeNames = STATUS_CONDITIONS
+          .filter(c => activeEffects.includes(c.id))
+          .map(c => c.name)
+          .join(', ');
+        if (activeNames) statusSuffix = ` [Status: ${activeNames}]`;
+      }
+
+      content = `rolou teste de ${name} [${modifiedValue}]${statusSuffix} 🎲`;
       diceValuesForAnimation = [dieVal];
       
       rollResultPayload = {
         total,
         dices: [dieVal],
-        modifiers: value,
+        modifiers: modifiedValue,
         isCrit,
-        componentsText: `1d6 [${dieVal}${isCrit ? '!' : ''}] + ${name} [${value}] = ${total}`
+        componentsText: `1d6 [${dieVal}${isCrit ? '!' : ''}] + ${name} [${modifiedValue}] = ${total}`
       };
     } else if (rollObj) {
-      const result = executeCustomRoll(rollObj, selectedCharacterSheet?.attributes_values || {});
+      const result = executeCustomRoll(
+        rollObj,
+        selectedCharacterSheet.attributes_values,
+        undefined,
+        activeEffects
+      );
       content = `realizou rolagem customizada "${rollObj.name}" 🎲`;
+      
+      let statusSuffix = '';
+      if (activeEffects.length > 0) {
+        const activeNames = STATUS_CONDITIONS
+          .filter(c => activeEffects.includes(c.id))
+          .map(c => c.name)
+          .join(', ');
+        if (activeNames) statusSuffix = ` [Status: ${activeNames}]`;
+      }
+      content += statusSuffix;
+      
       diceValuesForAnimation = result.dices;
       
-      if (rollObj.pmCost && rollObj.pmCost > 0 && selectedCharacterSheet) {
+      if (rollObj.pmCost && rollObj.pmCost > 0) {
         const currentPm = selectedCharacterSheet.resources_current?.['PM'] ?? 0;
         if (currentPm < rollObj.pmCost) {
-          if (!confirm(`Você não tem PM suficiente (Custo: ${rollObj.pmCost} PM, Atual: ${currentPm} PM). Deseja realizar a rolagem mesmo assim?`)) {
-            return;
-          }
+          showToast(`PM insuficiente para "${rollObj.name}" (Custo: ${rollObj.pmCost} PM, Atual: ${currentPm} PM)`);
+          return;
         }
         
         const updatedResources = {
@@ -606,6 +648,33 @@ export default function GameTablePage({ params }: { params: Params }) {
         }
       }
     });
+  }
+
+  // Alternar status do personagem
+  async function handleToggleStatus(statusId: string) {
+    if (!selectedCharacterSheet) return;
+    
+    const currentStatus = selectedCharacterSheet.status_effects || [];
+    let newStatus: string[];
+    if (currentStatus.includes(statusId)) {
+      newStatus = currentStatus.filter(id => id !== statusId);
+    } else {
+      newStatus = [...currentStatus, statusId];
+    }
+    
+    // Atualiza o estado local temporariamente (o realtime sincroniza de volta)
+    setSelectedCharacterSheet(prev => prev ? { ...prev, status_effects: newStatus } : null);
+    
+    try {
+      const { error } = await supabase
+        .from('characters')
+        .update({ status_effects: newStatus })
+        .eq('id', selectedCharacterSheet.id);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Erro ao atualizar status do personagem:', err);
+      showToast('Erro ao atualizar status.');
+    }
   }
 
   if (loading || !table) {
@@ -822,7 +891,30 @@ export default function GameTablePage({ params }: { params: Params }) {
                   return (
                     <div key={char.id} className="flex justify-between items-center bg-[#1e293b]/20 border border-slate-800/60 p-4 rounded-xl">
                       <div>
-                        <span className="text-xs font-bold text-slate-300">{char.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-300">{char.name}</span>
+                          {/* Badges de Status Ativos */}
+                          <div className="flex gap-1 items-center">
+                            {(char.status_effects || []).map((effId) => {
+                              const condition = STATUS_CONDITIONS.find(c => c.id === effId);
+                              if (!condition) return null;
+                              let IconComponent = Shield;
+                              if (condition.icon === 'ShieldAlert') IconComponent = ShieldAlert;
+                              else if (condition.icon === 'Loader2') IconComponent = Loader2;
+                              else if (condition.icon === 'ZapOff') IconComponent = ZapOff;
+                              
+                              return (
+                                <span
+                                  key={effId}
+                                  title={`${condition.name}: ${condition.description}`}
+                                  className={`p-1 rounded-full border text-[9px] flex items-center justify-center ${condition.colorClass}`}
+                                >
+                                  <IconComponent className={`w-2.5 h-2.5 ${condition.icon === 'Loader2' ? 'animate-spin' : ''}`} />
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
                         <span className="text-[10px] text-slate-500 block">{char.concept || 'Guerreiro'} • {char.points_total} pts</span>
                       </div>
                       <div className="flex gap-2">
@@ -1155,6 +1247,39 @@ export default function GameTablePage({ params }: { params: Params }) {
                 </div>
               );
             })()}
+
+            {/* Status & Condições Temporárias */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                Status & Condições
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {STATUS_CONDITIONS.map((status) => {
+                  const isActive = (selectedCharacterSheet.status_effects || []).includes(status.id);
+                  
+                  let IconComponent = Shield;
+                  if (status.icon === 'ShieldAlert') IconComponent = ShieldAlert;
+                  else if (status.icon === 'Loader2') IconComponent = Loader2;
+                  else if (status.icon === 'ZapOff') IconComponent = ZapOff;
+
+                  return (
+                    <button
+                      key={status.id}
+                      onClick={() => handleToggleStatus(status.id)}
+                      title={status.description}
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-left text-xs font-medium transition-all duration-200 active:scale-95 cursor-pointer ${
+                        isActive
+                          ? status.colorClass + ' border-purple-500/50 shadow-md shadow-purple-500/5'
+                          : 'border-slate-800 bg-slate-900/20 text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
+                      }`}
+                    >
+                      <IconComponent className={`w-4 h-4 shrink-0 ${isActive && status.icon === 'Loader2' ? 'animate-spin' : ''}`} />
+                      <span className="truncate">{status.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Rolagens Customizadas */}
             <div className="space-y-3">

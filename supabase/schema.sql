@@ -416,4 +416,18 @@ create policy "Apenas o próprio autor pode editar/excluir seus diários" on pub
     auth.uid() = user_id
   );
 
+-- 9. Coluna status_effects na tabela characters
+alter table public.characters
+  add column status_effects jsonb default '[]'::jsonb not null;
+
+-- Política de RLS para permitir que o mestre da mesa atualize os personagens vinculados a ela
+create policy "Mestre da mesa pode atualizar personagens vinculados" on public.characters
+  for update using (
+    exists (
+      select 1 from public.tables
+      where id = table_id and master_id = auth.uid()
+    )
+  );
+
+
 

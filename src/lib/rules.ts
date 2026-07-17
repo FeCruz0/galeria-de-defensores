@@ -122,7 +122,8 @@ export function calculateScore(character: Character): number {
 export function executeCustomRoll(
   roll: CustomRoll,
   attributesValues: Record<string, number>,
-  diceOverride?: number[]
+  diceOverride?: number[],
+  statusEffects?: string[]
 ): RollResult {
   let totalSum = 0;
   const parts: string[] = [];
@@ -180,8 +181,18 @@ export function executeCustomRoll(
   });
 
   // 2. Resolver Atributos & Críticos
-  const primaryVal = attributesValues[roll.primaryAttribute] || 0;
-  const secondaryVal = attributesValues[roll.secondaryAttribute] || 0;
+  const effects = statusEffects || [];
+  const modifiedAttrs = getModifiedAttributes(attributesValues, effects);
+  const isDefenseRoll = roll.type === 'DEFENSE' || roll.name.toLowerCase().includes('defesa');
+
+  const primaryVal = modifiedAttrs[roll.primaryAttribute] || 0;
+  const secondaryVal = modifiedAttrs[roll.secondaryAttribute] || 0;
+
+  const isArmorPrimary = roll.primaryAttribute === 'A' || roll.primaryAttribute.toLowerCase() === 'armadura';
+  const isArmorSecondary = roll.secondaryAttribute === 'A' || roll.secondaryAttribute.toLowerCase() === 'armadura';
+
+  const displayPrimary = (isArmorPrimary && isDefenseRoll && effects.includes('defending')) ? primaryVal * 2 : primaryVal;
+  const displaySecondary = (isArmorSecondary && isDefenseRoll && effects.includes('defending')) ? secondaryVal * 2 : secondaryVal;
 
   // Calcular Multiplicador de Crítico
   let critMultiplier = 1;
@@ -189,21 +200,23 @@ export function executeCustomRoll(
     critMultiplier = roll.accumulateCrit ? 1 + totalCrits : 2;
   }
 
-  const finalPrimary = primaryVal * critMultiplier;
-  totalSum += finalPrimary + secondaryVal + roll.globalModifier;
+  const finalPrimary = displayPrimary * critMultiplier;
+  totalSum += finalPrimary + displaySecondary + roll.globalModifier;
 
   // 3. Formatar Atributos
   if (roll.primaryAttribute !== 'none' && primaryVal !== 0) {
     const pName = roll.primaryAttribute.slice(0, 3).toUpperCase();
+    const doubledInfo = (isArmorPrimary && isDefenseRoll && effects.includes('defending')) ? ' x2' : '';
     const critInfo = critMultiplier > 1 ? ` x${critMultiplier}!` : '';
     const prefix = parts.length > 0 ? '+ ' : '';
-    parts.push(`${prefix}${pName} [${primaryVal}${critInfo}]`);
+    parts.push(`${prefix}${pName} [${primaryVal}${doubledInfo}${critInfo}]`);
   }
 
   if (roll.secondaryAttribute !== 'none' && secondaryVal !== 0) {
     const sName = roll.secondaryAttribute.slice(0, 3).toUpperCase();
+    const doubledInfo = (isArmorSecondary && isDefenseRoll && effects.includes('defending')) ? ' x2' : '';
     const prefix = parts.length > 0 ? '+ ' : '';
-    parts.push(`${prefix}${sName} [${secondaryVal}]`);
+    parts.push(`${prefix}${sName} [${secondaryVal}${doubledInfo}]`);
   }
 
   // 4. Modificador Global
@@ -218,24 +231,57 @@ export function executeCustomRoll(
   return {
     total: totalSum,
     dices: allDice,
-    modifiers: roll.globalModifier + primaryVal + secondaryVal,
+    modifiers: roll.globalModifier + displayPrimary + displaySecondary,
     isCrit: isCriticalSummary,
     componentsText: finalString
   };
 }
 
 /**
- * Calcula os modificadores aplicados a ações/rolagens rápidas baseadas no sistema 3D&T.
+ * Calcula os atributos modificados por condições de status ativos.
  */
-export function getQuickRollModifiers(actionName: string, attributesValues: Record<string, number>): number {
-  const fVal = attributesValues['F'] || attributesValues['Força'] || attributesValues['Forca'] || 0;
-  const hVal = attributesValues['H'] || attributesValues['Habilidade'] || 0;
-  const aVal = attributesValues['A'] || attributesValues['Armadura'] || 0;
+export function getModifiedAttributes(
+  attributesValues: Record<string, number>,
+  statusEffects?: string[]
+): Record<string, number> {
+  const modified = { ...attributesValues };
+  const effects = statusEffects || [];
+
+  if (effects.includes('helpless')) {
+    modified['H'] = 0;
+    modified['Habilidade'] = 0;
+    modified['A'] = 0;
+    modified['Armadura'] = 0;
+  } else if (effects.includes('paralyzed')) {
+    modified['H'] = 0;
+    modified['Habilidade'] = 0;
+  }
+
+  return modified;
+}
+
+/**
+ * Calcula os modificadores aplicados a ações/rolagens rápidas baseadas no sistema 3D&T, considerando os status.
+ */
+export function getQuickRollModifiers(
+  actionName: string,
+  attributesValues: Record<string, number>,
+  statusEffects?: string[]
+): number {
+  const effects = statusEffects || [];
+  const modified = getModifiedAttributes(attributesValues, effects);
+
+  const fVal = modified['F'] || modified['Força'] || modified['Forca'] || 0;
+  const hVal = modified['H'] || modified['Habilidade'] || 0;
+  const aVal = modified['A'] || modified['Armadura'] || 0;
 
   if (actionName === 'Ataque') {
     return fVal + hVal;
   }
   if (actionName === 'Defesa') {
+    if (effects.includes('defending')) {
+      return (aVal * 2) + hVal;
+    }
     return aVal + hVal;
   }
   if (actionName === 'Esquiva' || actionName === 'Iniciativa') {

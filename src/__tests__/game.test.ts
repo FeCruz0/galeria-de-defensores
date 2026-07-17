@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers, convertXpToPoints } from '../lib/rules';
+import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers, convertXpToPoints, getModifiedAttributes } from '../lib/rules';
 import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost, canLinkCharacterToTable } from '../lib/validations';
 import { Character } from '../types/game';
 
@@ -32,6 +32,7 @@ describe('Motor de Regras 3D&T Alpha', () => {
       user_id: 'user-id',
       name: 'Guerreiro de Exemplo',
       scale: 0,
+      status_effects: [],
       points_total: 10,
       points_spent: 0,
       concept: 'Guerreiro',
@@ -84,6 +85,7 @@ describe('Motor de Regras 3D&T Alpha', () => {
       user_id: 'user-id',
       name: 'Defensor Teste',
       scale: 0,
+      status_effects: [],
       points_total: 10,
       points_spent: 0,
       concept: 'Mago',
@@ -293,6 +295,61 @@ describe('Consistência do Orçamento de Pontos', () => {
     const spent = 2 + 2 + 1 + 1 + 2 - 1 + 1 + 1 + 1;
     expect(spent).toBe(10);
     expect(calculateScore(mockCharacter as any)).toBe(11); // spent (10) + saved_points (1)
+  });
+});
+
+describe('Marcadores de Status & Efeitos Temporários', () => {
+  const attrs = { F: 2, H: 3, R: 2, A: 2, PdF: 1 };
+
+  it('deve manter atributos intocados se nenhum status estiver ativo', () => {
+    const modified = getModifiedAttributes(attrs, []);
+    expect(modified.H).toBe(3);
+    expect(modified.A).toBe(2);
+  });
+
+  it('deve zerar Habilidade e Armadura se o status Indefeso (helpless) estiver ativo', () => {
+    const modified = getModifiedAttributes(attrs, ['helpless']);
+    expect(modified.H).toBe(0);
+    expect(modified.A).toBe(0);
+  });
+
+  it('deve zerar Habilidade se o status Paralisado (paralyzed) estiver ativo', () => {
+    const modified = getModifiedAttributes(attrs, ['paralyzed']);
+    expect(modified.H).toBe(0);
+    expect(modified.A).toBe(2);
+  });
+
+  it('deve dobrar Armadura no cálculo de FD com o status Defendendo (defending)', () => {
+    // getQuickRollModifiers('Defesa', attrs, ['defending']) => A(2)*2 + H(3) = 7
+    expect(getQuickRollModifiers('Defesa', attrs, ['defending'])).toBe(7);
+  });
+
+  it('deve zerar FD com o status Indefeso (helpless)', () => {
+    // getQuickRollModifiers('Defesa', attrs, ['helpless']) => A(0)*2 + H(0) = 0
+    expect(getQuickRollModifiers('Defesa', attrs, ['helpless'])).toBe(0);
+  });
+
+  it('deve dobrar Armadura em rolagens customizadas de Defesa se Defendendo', () => {
+    const roll = {
+      id: 'roll-def',
+      name: 'Esquiva e Defesa',
+      description: '',
+      components: [],
+      globalModifier: 0,
+      primaryAttribute: 'A',
+      secondaryAttribute: 'H',
+      accumulateCrit: false,
+      type: 'DEFENSE'
+    };
+    
+    // Sem status: A(2) + H(3) = 5
+    const normalResult = executeCustomRoll(roll as any, attrs, []);
+    expect(normalResult.total).toBe(5);
+
+    // Com defendendo: A(2)*2 + H(3) = 7
+    const defendingResult = executeCustomRoll(roll as any, attrs, [], ['defending']);
+    expect(defendingResult.total).toBe(7);
+    expect(defendingResult.componentsText).toContain('A [2 x2]');
   });
 });
 

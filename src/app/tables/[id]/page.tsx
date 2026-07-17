@@ -19,9 +19,17 @@ import {
   MessageSquare,
   BookOpen,
   ShieldAlert,
-  ZapOff
+  ZapOff,
+  Flame,
+  Skull,
+  Sword,
+  Sparkles,
+  Heart,
+  Zap,
+  Snowflake,
+  Settings
 } from 'lucide-react';
-import { STATUS_CONDITIONS } from '@/lib/status';
+import { STATUS_CONDITIONS, StatusCondition } from '@/lib/status';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 
 type Params = Promise<{ id: string }>;
@@ -54,12 +62,36 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [isDistributingXp, setIsDistributingXp] = useState(false);
   const [xpAmount, setXpAmount] = useState(1);
   const [selectedXpCharIds, setSelectedXpCharIds] = useState<string[]>([]);
+  const [customConditions, setCustomConditions] = useState<StatusCondition[]>([]);
+  const [isManagingStatus, setIsManagingStatus] = useState(false);
+  const [newStatusName, setNewStatusName] = useState('');
+  const [newStatusDesc, setNewStatusDesc] = useState('');
+  const [newStatusIcon, setNewStatusIcon] = useState('Shield');
+  const [newStatusColor, setNewStatusColor] = useState('text-red-400 bg-red-500/10 border-red-500/20');
 
   // States do Diário de Campanha
   const [publicJournal, setPublicJournal] = useState<string>('');
   const [privateJournal, setPrivateJournal] = useState<string>('');
   const [savingPublic, setSavingPublic] = useState(false);
   const [savingPrivate, setSavingPrivate] = useState(false);
+
+  function getIconComponent(iconName: string) {
+    switch (iconName) {
+      case 'Flame': return Flame;
+      case 'Skull': return Skull;
+      case 'Sword': return Sword;
+      case 'Sparkles': return Sparkles;
+      case 'Heart': return Heart;
+      case 'Zap': return Zap;
+      case 'Snowflake': return Snowflake;
+      case 'ShieldAlert': return ShieldAlert;
+      case 'Loader2': return Loader2;
+      case 'ZapOff': return ZapOff;
+      case 'Shield':
+      default:
+        return Shield;
+    }
+  }
   const [publicJournalId, setPublicJournalId] = useState<string | null>(null);
   const [privateJournalId, setPrivateJournalId] = useState<string | null>(null);
 
@@ -140,6 +172,13 @@ export default function GameTablePage({ params }: { params: Params }) {
           .select('*')
           .eq('user_id', user.id);
         if (myChars) setMyCharacters(myChars as any[]);
+
+        // Carregar condições de status customizadas da mesa
+        const { data: customConds } = await supabase
+          .from('table_status_conditions')
+          .select('*')
+          .eq('table_id', id);
+        if (customConds) setCustomConditions(customConds as any[]);
 
         // Carregar Diário Público
         const { data: pubJourn } = await supabase
@@ -253,6 +292,29 @@ export default function GameTablePage({ params }: { params: Params }) {
               setPublicJournal((payload.new as any).content);
               setPublicJournalId((payload.new as any).id);
             }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'table_status_conditions',
+          filter: `table_id=eq.${id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setCustomConditions((prev) => {
+              if (prev.some(c => c.id === payload.new.id)) return prev;
+              return [...prev, payload.new as StatusCondition];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setCustomConditions((prev) =>
+              prev.map(c => c.id === payload.new.id ? (payload.new as StatusCondition) : c)
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setCustomConditions((prev) => prev.filter(c => c.id !== payload.old.id));
           }
         }
       )
@@ -579,7 +641,7 @@ export default function GameTablePage({ params }: { params: Params }) {
       
       let statusSuffix = '';
       if (activeEffects.length > 0) {
-        const activeNames = STATUS_CONDITIONS
+        const activeNames = [...STATUS_CONDITIONS, ...customConditions]
           .filter(c => activeEffects.includes(c.id))
           .map(c => c.name)
           .join(', ');
@@ -608,7 +670,7 @@ export default function GameTablePage({ params }: { params: Params }) {
       
       let statusSuffix = '';
       if (activeEffects.length > 0) {
-        const activeNames = STATUS_CONDITIONS
+        const activeNames = [...STATUS_CONDITIONS, ...customConditions]
           .filter(c => activeEffects.includes(c.id))
           .map(c => c.name)
           .join(', ');
@@ -703,6 +765,80 @@ export default function GameTablePage({ params }: { params: Params }) {
     } catch (err) {
       console.error('Erro ao atualizar status do personagem:', err);
       showToast('Erro ao atualizar status.');
+    }
+  }
+
+  // Criar nova condição de status customizada (Mestre)
+  async function handleCreateCustomStatus(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newStatusName.trim() || !table || !currentUser) return;
+
+    try {
+      const { data, error } = await supabase.from('table_status_conditions').insert({
+        table_id: id,
+        name: newStatusName.trim(),
+        description: newStatusDesc.trim() || null,
+        color_class: newStatusColor,
+        icon: newStatusIcon
+      }).select().single();
+
+      if (error) {
+        console.error('Erro ao criar status customizado:', error);
+      } else if (data) {
+        setCustomConditions((prev) => {
+          if (prev.some(c => c.id === data.id)) return prev;
+          return [...prev, data as StatusCondition];
+        });
+        setNewStatusName('');
+        setNewStatusDesc('');
+        setNewStatusIcon('Shield');
+        setNewStatusColor('text-red-400 bg-red-500/10 border-red-500/20');
+        showToast('Status criado com sucesso!');
+      }
+    } catch (err) {
+      console.error('Erro ao criar status customizado:', err);
+    }
+  }
+
+  // Excluir condição de status customizada (Mestre)
+  async function handleDeleteCustomStatus(statusId: string) {
+    if (!table || !currentUser) return;
+
+    try {
+      const { error } = await supabase
+        .from('table_status_conditions')
+        .delete()
+        .eq('id', statusId);
+
+      if (error) {
+        console.error('Erro ao deletar status customizado:', error);
+      } else {
+        setCustomConditions((prev) => prev.filter(c => c.id !== statusId));
+        // Remove status de qualquer personagem que o tenha ativo localmente
+        setLinkedCharacters((prev) =>
+          prev.map((char) => {
+            if (char.status_effects?.includes(statusId)) {
+              return {
+                ...char,
+                status_effects: char.status_effects.filter(id => id !== statusId)
+              };
+            }
+            return char;
+          })
+        );
+        setSelectedCharacterSheet((current) => {
+          if (current && current.status_effects?.includes(statusId)) {
+            return {
+              ...current,
+              status_effects: current.status_effects.filter(id => id !== statusId)
+            };
+          }
+          return current;
+        });
+        showToast('Status excluído com sucesso.');
+      }
+    } catch (err) {
+      console.error('Erro ao deletar status customizado:', err);
     }
   }
 
@@ -925,12 +1061,9 @@ export default function GameTablePage({ params }: { params: Params }) {
                           {/* Badges de Status Ativos */}
                           <div className="flex gap-1 items-center">
                             {(char.status_effects || []).map((effId) => {
-                              const condition = STATUS_CONDITIONS.find(c => c.id === effId);
+                              const condition = [...STATUS_CONDITIONS, ...customConditions].find(c => c.id === effId);
                               if (!condition) return null;
-                              let IconComponent = Shield;
-                              if (condition.icon === 'ShieldAlert') IconComponent = ShieldAlert;
-                              else if (condition.icon === 'Loader2') IconComponent = Loader2;
-                              else if (condition.icon === 'ZapOff') IconComponent = ZapOff;
+                              const IconComponent = getIconComponent(condition.icon);
                               
                               return (
                                 <span
@@ -1297,17 +1430,24 @@ export default function GameTablePage({ params }: { params: Params }) {
 
             {/* Status & Condições Temporárias */}
             <div className="space-y-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                Status & Condições
-              </span>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                  Status & Condições
+                </span>
+                {table?.master_id === currentUser?.id && (
+                  <button
+                    onClick={() => setIsManagingStatus(true)}
+                    className="p-1 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded transition-all cursor-pointer"
+                    title="Gerenciar Status Personalizados"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-2">
-                {STATUS_CONDITIONS.map((status) => {
+                {[...STATUS_CONDITIONS, ...customConditions].map((status) => {
                   const isActive = (selectedCharacterSheet.status_effects || []).includes(status.id);
-                  
-                  let IconComponent = Shield;
-                  if (status.icon === 'ShieldAlert') IconComponent = ShieldAlert;
-                  else if (status.icon === 'Loader2') IconComponent = Loader2;
-                  else if (status.icon === 'ZapOff') IconComponent = ZapOff;
+                  const IconComponent = getIconComponent(status.icon);
 
                   return (
                     <button
@@ -1485,6 +1625,136 @@ export default function GameTablePage({ params }: { params: Params }) {
             </button>
           </div>
 
+        </div>
+      )}
+
+      {/* Modal de Gerenciamento de Status Customizados (Mestre) */}
+      {isManagingStatus && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-6 animate-fade-in flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-start border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-white">Status & Condições Personalizados</h3>
+                <p className="text-xs text-slate-400 mt-1">Crie e gerencie tags de status adicionais para esta mesa.</p>
+              </div>
+              <button
+                onClick={() => setIsManagingStatus(false)}
+                className="text-slate-400 hover:text-white text-xs font-semibold uppercase tracking-wider bg-slate-800/40 border border-slate-700/30 px-2 py-1 rounded-lg cursor-pointer"
+              >
+                Fechar ×
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-6 pr-1.5 scrollbar-none">
+              {/* Formulário de Criação */}
+              <form onSubmit={handleCreateCustomStatus} className="space-y-4 bg-[#070b19]/45 border border-slate-850 p-4 rounded-2xl">
+                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider block">Criar Novo Status</span>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold block">Nome</label>
+                    <input
+                      type="text"
+                      required
+                      value={newStatusName}
+                      onChange={(e) => setNewStatusName(e.target.value)}
+                      placeholder="Ex: Sangrando, Envenenado"
+                      className="w-full bg-slate-900/60 border border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-250"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold block">Descrição</label>
+                    <input
+                      type="text"
+                      value={newStatusDesc}
+                      onChange={(e) => setNewStatusDesc(e.target.value)}
+                      placeholder="Ex: Sofre 1 PV de dano por rodada"
+                      className="w-full bg-slate-900/60 border border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-250"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold block">Ícone</label>
+                    <select
+                      value={newStatusIcon}
+                      onChange={(e) => setNewStatusIcon(e.target.value)}
+                      className="w-full bg-slate-900/60 border border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-350"
+                    >
+                      <option value="Shield">Escudo (🛡️)</option>
+                      <option value="Heart">Coração (❤️)</option>
+                      <option value="Zap">Raio (⚡)</option>
+                      <option value="Flame">Fogo (🔥)</option>
+                      <option value="Skull">Caveira (💀)</option>
+                      <option value="Sword">Espada (⚔️)</option>
+                      <option value="Snowflake">Gelo (❄️)</option>
+                      <option value="Sparkles">Magia (✨)</option>
+                      <option value="ShieldAlert">Perigo (⚠️)</option>
+                      <option value="ZapOff">Desativado (🔌)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold block">Cor / Tema</label>
+                    <select
+                      value={newStatusColor}
+                      onChange={(e) => setNewStatusColor(e.target.value)}
+                      className="w-full bg-slate-900/60 border border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-350"
+                    >
+                      <option value="text-red-400 bg-red-500/10 border-red-500/20">Vermelho (Perigo/Dano)</option>
+                      <option value="text-emerald-400 bg-emerald-500/10 border-emerald-500/20">Verde (Cura/Natureza)</option>
+                      <option value="text-cyan-400 bg-cyan-500/10 border-cyan-500/20">Azul (Gelo/Magia)</option>
+                      <option value="text-purple-400 bg-purple-500/10 border-purple-500/20">Roxo (Trevas/Veneno)</option>
+                      <option value="text-orange-400 bg-orange-500/10 border-orange-500/20">Laranja (Fogo/Energia)</option>
+                      <option value="text-amber-400 bg-amber-500/10 border-amber-500/20">Amarelo (Luz/Alerta)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all active:scale-[0.98] cursor-pointer"
+                >
+                  Adicionar à Mesa
+                </button>
+              </form>
+
+              {/* Listagem de Customizados */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Status Existentes</span>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {customConditions.map((status) => {
+                    const IconComponent = getIconComponent(status.icon);
+                    return (
+                      <div key={status.id} className="flex justify-between items-center bg-[#070b19]/30 border border-slate-850 p-3 rounded-xl gap-4 font-sans">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`p-2 rounded-xl border flex items-center justify-center shrink-0 ${status.colorClass}`}>
+                            <IconComponent className="w-4 h-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-slate-200 block truncate">{status.name}</span>
+                            <span className="text-[10px] text-slate-500 block truncate">{status.description || 'Sem descrição.'}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteCustomStatus(status.id)}
+                          className="p-2 hover:bg-rose-950/20 text-slate-500 hover:text-rose-400 rounded-lg transition-colors shrink-0 cursor-pointer"
+                          title="Excluir Status"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {customConditions.length === 0 && (
+                    <p className="text-xs text-slate-500 italic py-2">Nenhum status personalizado criado para esta mesa ainda.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

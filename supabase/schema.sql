@@ -441,5 +441,50 @@ exception
   when others then null;
 end $$;
 
+-- 11. Custom Status Conditions (table_status_conditions)
+create table public.table_status_conditions (
+  id uuid default uuid_generate_v4() primary key,
+  table_id uuid references public.tables on delete cascade not null,
+  name text not null,
+  description text,
+  color_class text default 'border-slate-800 bg-slate-900/20 text-slate-400' not null,
+  icon text default 'Shield' not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.table_status_conditions enable row level security;
+
+-- Política: Membros da mesa (Mestre e Jogadores) podem ler as condições
+create policy "Membros da mesa podem visualizar condições customizadas" on public.table_status_conditions
+  for select using (
+    exists (
+      select 1 from public.tables 
+      where id = table_id and master_id = auth.uid()
+    ) or
+    exists (
+      select 1 from public.table_players 
+      where table_id = table_id and player_id = auth.uid()
+    )
+  );
+
+-- Política: Apenas o mestre pode gerenciar as condições (inserir/deletar/atualizar)
+create policy "Apenas o mestre gerencia condições customizadas" on public.table_status_conditions
+  for all using (
+    exists (
+      select 1 from public.tables
+      where id = table_id and master_id = auth.uid()
+    )
+  );
+
+-- Habilitar Realtime para table_status_conditions se a publicação existir
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    alter publication supabase_realtime add table public.table_status_conditions;
+  end if;
+exception
+  when others then null;
+end $$;
+
 
 

@@ -26,6 +26,8 @@ import {
   Palette
 } from 'lucide-react';
 import PreferencesModal from '@/components/PreferencesModal';
+import PdfImportModal from '@/components/PdfImportModal';
+import { exportRuleSystemToPdf, ExtractedPayload } from '@/lib/pdfPayload';
 import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 
 export default function DashboardPage() {
@@ -42,6 +44,7 @@ export default function DashboardPage() {
 
   // States de Preferências e Exibição
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeId>('dark');
   const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
   const [avatarUrl, setAvatarUrl] = useState<string>('');
@@ -364,6 +367,69 @@ export default function DashboardPage() {
     alert('Configuração do sistema (JSON) copiada para a área de transferência!');
   }
 
+  // 7. Exportar PDF do Livro de Regras do Sistema
+  async function handleExportSystemPdf(system: any) {
+    try {
+      const pdfBytes = await exportRuleSystemToPdf(system);
+      const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${system.name || 'sistema'}_regras.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Erro ao exportar PDF do sistema:', err);
+      alert('Erro ao gerar o Livro de Regras em PDF.');
+    }
+  }
+
+  // 8. Tratar sucesso da importação de PDF
+  async function handleImportPdfSuccess(payload: ExtractedPayload) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    if (payload.type === 'character') {
+      const charData = { ...payload.data };
+      delete charData.id;
+      charData.user_id = user.id;
+      charData.name = `${charData.name || 'Personagem'} (Importado)`;
+      charData.created_at = new Date().toISOString();
+      charData.updated_at = new Date().toISOString();
+
+      const { data: inserted, error } = await supabase
+        .from('characters')
+        .insert([charData])
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (inserted) {
+        setCharacters(prev => [inserted, ...prev]);
+        alert(`Ficha "${inserted.name}" importada com sucesso via PDF!`);
+      }
+    } else if (payload.type === 'rule_system') {
+      const systemData = { ...payload.data };
+      delete systemData.id;
+      systemData.user_id = user.id;
+      systemData.name = `${systemData.name || 'Sistema'} (Importado)`;
+      systemData.is_base_system = false;
+      systemData.created_at = new Date().toISOString();
+
+      const { data: inserted, error } = await supabase
+        .from('rule_systems')
+        .insert([systemData])
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (inserted) {
+        setRuleSystems(prev => [...prev, inserted]);
+        alert(`Sistema de regras "${inserted.name}" instalado com sucesso via PDF!`);
+      }
+    }
+  }
+
   async function handleSavePreferences(newPrefs: { theme: ThemeId; avatar_url: string; section_order: string[] }) {
     setCurrentTheme(newPrefs.theme);
     setSectionOrder(newPrefs.section_order);
@@ -537,20 +603,28 @@ export default function DashboardPage() {
               Gerencie suas fichas e participe de mesas multiplayer de 3D&T.
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button 
               onClick={() => router.push('/characters/new')}
-              className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 shadow-lg shadow-purple-600/15 active:scale-95 transition-all"
+              className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 shadow-lg shadow-purple-600/15 active:scale-95 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Novo Personagem
             </button>
             <button 
               onClick={() => router.push('/tables/new')}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 active:scale-95 transition-all"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 active:scale-95 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Nova Mesa
+            </button>
+            <button 
+              onClick={() => setIsPdfModalOpen(true)}
+              className="bg-purple-950/40 hover:bg-purple-900/40 text-purple-300 border border-purple-800/40 px-4 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 active:scale-95 transition-all cursor-pointer"
+              title="Importar Backup de Ficha ou Sistema via PDF"
+            >
+              <Upload className="w-4 h-4 text-purple-400" />
+              Importar Backup (PDF)
             </button>
           </div>
         </div>
@@ -804,13 +878,22 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    <div className="mt-5 pt-4 border-t border-slate-800/60 flex justify-between gap-2">
+                    <div className="mt-5 pt-4 border-t border-slate-800/60 flex flex-wrap justify-between gap-2">
+                      <button
+                        onClick={() => handleExportSystemPdf(system)}
+                        className="flex-1 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-800/40 text-purple-300 py-1.5 rounded-lg text-[10px] font-semibold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                        title="Exportar Livro de Regras em PDF com dados embutidos"
+                      >
+                        <Download className="w-3 h-3 text-purple-400" />
+                        Livro (PDF)
+                      </button>
+
                       <button
                         onClick={() => handleExportSystem(system)}
-                        className="flex-1 bg-slate-850 hover:bg-slate-800 border border-slate-700/65 text-slate-350 py-1.5 rounded-lg text-[10px] font-semibold transition-all flex items-center justify-center gap-1"
+                        className="flex-1 bg-slate-850 hover:bg-slate-800 border border-slate-700/65 text-slate-350 py-1.5 rounded-lg text-[10px] font-semibold transition-all flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <Copy className="w-3 h-3" />
-                        Copiar JSON
+                        JSON
                       </button>
                       
                       {!isBase && (
@@ -1182,6 +1265,13 @@ export default function DashboardPage() {
         currentAvatarUrl={avatarUrl || profile?.avatar_url}
         currentSectionOrder={sectionOrder}
         onSave={handleSavePreferences}
+      />
+
+      {/* Modal de Importação de PDF */}
+      <PdfImportModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        onImportSuccess={handleImportPdfSuccess}
       />
     </div>
   );

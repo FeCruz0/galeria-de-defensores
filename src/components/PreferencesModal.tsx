@@ -69,6 +69,19 @@ export default function PreferencesModal({
     setSectionOrder(newOrder);
   };
 
+  const handleResetToDefault = () => {
+    setSelectedTheme('dark');
+    setSelectedAvatarUrl('');
+    setCustomAvatarInput('');
+    setSectionOrder(DEFAULT_SECTION_ORDER);
+    onSave({
+      theme: 'dark',
+      avatar_url: '',
+      section_order: DEFAULT_SECTION_ORDER
+    });
+    onClose();
+  };
+
   const handleSave = () => {
     const finalAvatar = customAvatarInput.trim() || selectedAvatarUrl;
     onSave({
@@ -275,23 +288,34 @@ export default function PreferencesModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-800/60">
+        <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-800/60">
           <button
             type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800/40 hover:bg-slate-800 text-slate-300 transition-colors cursor-pointer"
+            onClick={handleResetToDefault}
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800/40 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/40 transition-colors cursor-pointer"
+            title="Restaurar visual, avatar e ordem padrão"
           >
-            Cancelar
+            Restaurar Padrões
           </button>
 
-          <button
-            type="button"
-            onClick={handleSave}
-            className="px-5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/25 transition-all cursor-pointer flex items-center gap-1.5"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Salvar Preferências
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800/40 hover:bg-slate-800 text-slate-300 transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              className="px-5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/25 transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Salvar Preferências
+            </button>
+          </div>
         </div>
 
       </div>

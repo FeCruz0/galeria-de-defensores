@@ -57,16 +57,17 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
   - [x] Adicionar botão de toggle rápido "Equipar/Usar" no item na lista de inventário.
   - [x] Modificar o motor de cálculo da ficha para somar os bônus dos itens equipados aos atributos reais do personagem nas rolagens e recursos.
 
-### 📄 6. Exportação para PDF / Ficha Impressa Estilizada — Hard
-* **Descrição**: Exportação completa da ficha do personagem para um arquivo PDF limpo, bem desenhado e otimizado para impressão clássica.
+### 📄 6. Sistema de Exportação e Importação por PDF (Fichas & Regras de Sistema) — Hard
+* **Descrição**: Substituição do modelo legado de backup via arquivos `.json` por um sistema unificado de exportação/importação de Fichas de Personagem e Sistemas de Regras através de PDFs interativos com payload de dados embutidos.
 * **Checklist**:
-  - [x] Desenhar um layout específico CSS `@media print` otimizado para impressão de folhas A4.
-  - [x] Integrar biblioteca de renderização de PDF (como `jspdf` ou geração server-side via Puppeteer).
-  - [x] Garantir que o PDF gerado mantenha a identidade visual clássica do 3D&T Alpha (com grade de atributos, recursos e caixas de vantagens bem delimitadas).
+  - [x] Desenhar layout específico CSS `@media print` para exportação e impressão de fichas em folha A4.
+  - [x] Integrar biblioteca de geração de PDF (`pdf-lib`) para embutir os dados da ficha e dos sistemas de regras (JSON embutido/anexo) dentro do próprio arquivo PDF.
+  - [x] Criar modal e área de importação Drag-and-Drop de arquivos PDF: extrai automaticamente os metadados embutidos e restaura a Ficha ou instala o Sistema de Regras no app.
+  - [x] Suportar exportação de Livro de Regras em PDF que sirva simultaneamente para leitura humana e como instalador automático de módulo de sistema.
 
-### 🎨 7. Interface de Dashboard Personalizável — Hard
-* **Descrição**: Customização de cores, avatares, temas visuais (Fantasia Clássica, Ficção Científica, Cyberpunk) e posições de cards no painel de controle do usuário.
+### 🎨 7. Interface de Personalização com Drag-and-Drop (Ficha & Dashboard) — Hard
+* **Descrição**: Customização de cores, avatares, temas visuais (Fantasia Clássica, Ficção Científica, Cyberpunk) e reorganização interativa de caixas da ficha por Drag-and-Drop.
 * **Checklist**:
-  - [ ] Criar paletas de temas globais (Dark, Cyberpunk, Retro/3D&T clássico) no Tailwind.
-  - [ ] Desenvolver modal de "Preferências de Exibição" nas configurações da ficha e dashboard.
-  - [ ] Adicionar funcionalidade Drag-and-Drop (utilizando `@dnd-kit` ou similar) para permitir que o usuário reorganize a ordem das seções horizontais da ficha de acordo com sua preferência.
+  - [x] Criar paletas de temas globais (Dark, Cyberpunk, Retro/3D&T clássico) no Tailwind.
+  - [x] Desenvolver modal de "Preferências de Exibição" nas configurações da ficha e dashboard.
+  - [ ] Implementar sistema de Drag-and-Drop interativo nativo (arrastar e soltar) nas caixas da ficha e no modal de personalização, substituindo a navegação atual por setas.

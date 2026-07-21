@@ -1,15 +1,15 @@
-# 📝 Tasks - Restrição de Sistema de Regras em Mesas de Jogo
+# 📝 Tasks - Galeria de Defensores
 
-## Fase 1: Atualizações Estruturais
-- [x] Adicionar `rule_system_id` à tabela `tables` no arquivo `supabase/schema.sql`.
-- [x] Adicionar a propriedade `rule_system_id` e `rule_systems` à interface `Table` em `src/types/game.ts`.
+## ✅ Concluído: Sistema de Exportação e Importação por PDF
+- [x] Instalar dependência `pdf-lib` via npm/pnpm.
+- [x] Criar utilitário `src/lib/pdfPayload.ts` com funções de exportação (embutindo JSON como anexo/metadado) e importação (extraindo JSON de PDF).
+- [x] Criar teste unitário `src/lib/__tests__/pdfPayload.test.ts` e validar ciclo completo via `npx vitest run`.
+- [x] Criar componente `src/components/PdfImportModal.tsx` com suporte a upload Drag-and-Drop de PDF.
+- [x] Integrar botão "Exportar PDF com Dados Embutidos" na página da ficha de personagem (`src/app/characters/[id]/page.tsx`).
+- [x] Integrar botão "Importar (PDF)" e "Exportar Sistema de Regras (PDF)" no Dashboard (`src/app/dashboard/page.tsx`).
+- [x] Ajustar layout de 2 colunas responsivas da ficha de personagem (`lg:grid-cols-12`) e botão "Restaurar Padrões" no modal de preferências.
 
-## Fase 2: Implementação
-- [x] Implementar seleção de sistema de regras e inserção na criação de mesas em `src/app/tables/new/page.tsx`.
-- [x] Modificar o carregamento da mesa para obter o relacionamento `rule_systems(name)` em `src/app/tables/[id]/page.tsx`.
-- [x] Exibir o nome do sistema de regras no cabeçalho de `src/app/tables/[id]/page.tsx`.
-- [x] Validar compatibilidade do `rule_system_id` do personagem antes de permitir o vínculo em `handleLinkCharacter`.
-
-## Fase 3: Validação
-- [x] Rodar testes unitários (`npx vitest run`).
-- [x] Executar o build de produção (`npm run build`).
+## 🎨 Próxima Task: Personalização de Caixas por Drag-and-Drop
+- [ ] Implementar eventos Drag-and-Drop nativos (`draggable`, `onDragStart`, `onDragOver`, `onDrop`) na aba "Ordem da Ficha" do modal de preferências.
+- [ ] Adicionar suporte a arrastar e soltar os cards diretamente na tela da ficha ao ativar o modo de personalização.
+- [ ] Substituir o sistema legado de setas para cima/baixo pela nova experiência interativa de drag/drop.

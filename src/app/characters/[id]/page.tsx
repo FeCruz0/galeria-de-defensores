@@ -23,12 +23,14 @@ import {
   Info,
   Pencil,
   Printer,
-  Palette
+  Palette,
+  Download
 } from 'lucide-react';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 import EditAbilityModal from '@/components/EditAbilityModal';
 import BaseSystemBlockModal from '@/components/BaseSystemBlockModal';
 import PreferencesModal from '@/components/PreferencesModal';
+import { exportCharacterToPdf } from '@/lib/pdfPayload';
 import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 
 type Params = Promise<{ id: string }>;
@@ -1052,6 +1054,25 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     });
   }
 
+  // Exportar Ficha em PDF com Payload Embutido
+  async function handleExportCharacterPdf() {
+    if (!character) return;
+    try {
+      const pdfBytes = await exportCharacterToPdf(character);
+      const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${character.name || 'ficha'}_backup.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("PDF com backup embutido exportado!");
+    } catch (err) {
+      console.error("Erro ao exportar PDF:", err);
+      showToast("Erro ao gerar PDF.");
+    }
+  }
+
   const equippedModifiers = getEquippedItemsModifiers(character.inventory);
   const modifiedAttrs = getModifiedAttributes(character.attributes_values, [], equippedModifiers);
 
@@ -1102,6 +1123,14 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                 <Palette className="w-4 h-4" />
               </button>
               
+              <button
+                onClick={handleExportCharacterPdf}
+                className="p-2 hover:bg-slate-800 rounded-lg text-purple-400 hover:text-purple-300 transition-colors cursor-pointer"
+                title="Baixar Backup em PDF"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+
               <button
                 onClick={() => window.print()}
                 className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
@@ -1236,12 +1265,21 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
               </button>
 
               <button
+                onClick={handleExportCharacterPdf}
+                className="flex items-center gap-1.5 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-800/40 px-3 py-1.5 rounded-xl text-xs font-semibold text-purple-300 hover:text-purple-200 transition-all cursor-pointer"
+                title="Exportar PDF com Backup de Dados Embutido"
+              >
+                <Download className="w-3.5 h-3.5 text-purple-400" />
+                <span>Baixar PDF</span>
+              </button>
+
+              <button
                 onClick={() => window.print()}
                 className="flex items-center gap-1.5 bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/50 hover:border-slate-600 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition-all cursor-pointer"
-                title="Imprimir Ficha / Exportar PDF"
+                title="Imprimir Ficha A4"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>PDF / Imprimir</span>
+                <span>Imprimir</span>
               </button>
 
               <span className="text-xs flex items-center gap-1.5">
@@ -1280,10 +1318,12 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
       </header>
 
       {/* Main Container com Reordenação Flex e Temas */}
-      <main className="max-w-7xl mx-auto px-4 mt-8 flex flex-col gap-6">
+      <main className="max-w-7xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Section: Recursos (PV / PM) */}
-        <div style={{ order: sectionOrder.indexOf('resources') !== -1 ? sectionOrder.indexOf('resources') : 1 }}>
+        {/* Coluna Esquerda: Estatísticas, Atributos & Recursos */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          {/* Section: Recursos (PV / PM) */}
+          <div style={{ order: sectionOrder.indexOf('resources') !== -1 ? sectionOrder.indexOf('resources') : 1 }}>
           <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-6 transition-colors duration-300`}>
             <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">Recursos</h2>
             
@@ -1362,7 +1402,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         </div>
 
         {/* Section: Atributos & Estatísticas */}
-        <div style={{ order: sectionOrder.indexOf('attributes') !== -1 ? sectionOrder.indexOf('attributes') : 0 }}>
+        <div style={{ order: sectionOrder.indexOf('attributes') !== -1 ? sectionOrder.indexOf('attributes') : 0 }} className="flex flex-col gap-6">
           <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-5 transition-colors duration-300`}>
             <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Atributos</h2>
             
@@ -1577,9 +1617,12 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Section: Qualidades (Vantagens, Desvantagens, Perícias) */}
-        <div style={{ order: sectionOrder.indexOf('qualities') !== -1 ? sectionOrder.indexOf('qualities') : 2 }} className="space-y-6">
+        {/* Coluna Direita: Habilidades, Vantagens, Perícias, Magias, Inventário & Rolagens */}
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          {/* Section: Qualidades (Vantagens, Desvantagens, Perícias) */}
+          <div style={{ order: sectionOrder.indexOf('qualities') !== -1 ? sectionOrder.indexOf('qualities') : 2 }} className="flex flex-col gap-6">
           
           {/* Adicionar Vantagem / Perícia */}
           <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl shadow-xl transition-all`}>
@@ -1731,7 +1774,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
           </div>
 
           {/* Listagem de Habilidades */}
-          <div className="space-y-6">
+          <div className="flex flex-col gap-6">
             
             {/* Vantagens & Desvantagens */}
             <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
@@ -2223,7 +2266,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
             </div>
 
             {/* Card de Magias & Inventário */}
-            <div className="space-y-6">
+            <div className="flex flex-col gap-6">
               
               {/* Magias */}
               <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
@@ -2443,9 +2486,9 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
               </div>
 
             </div>
-
           </div>
         </div>
+      </div>
 
       </main>
 

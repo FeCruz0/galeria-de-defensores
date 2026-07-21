@@ -60,9 +60,9 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 📄 6. Exportação para PDF / Ficha Impressa Estilizada — Hard
 * **Descrição**: Exportação completa da ficha do personagem para um arquivo PDF limpo, bem desenhado e otimizado para impressão clássica.
 * **Checklist**:
-  - [ ] Desenhar um layout específico CSS `@media print` otimizado para impressão de folhas A4.
-  - [ ] Integrar biblioteca de renderização de PDF (como `jspdf` ou geração server-side via Puppeteer).
-  - [ ] Garantir que o PDF gerado mantenha a identidade visual clássica do 3D&T Alpha (com grade de atributos, recursos e caixas de vantagens bem delimitadas).
+  - [x] Desenhar um layout específico CSS `@media print` otimizado para impressão de folhas A4.
+  - [x] Integrar biblioteca de renderização de PDF (como `jspdf` ou geração server-side via Puppeteer).
+  - [x] Garantir que o PDF gerado mantenha a identidade visual clássica do 3D&T Alpha (com grade de atributos, recursos e caixas de vantagens bem delimitadas).
 
 ### 🎨 7. Interface de Dashboard Personalizável — Hard
 * **Descrição**: Customização de cores, avatares, temas visuais (Fantasia Clássica, Ficção Científica, Cyberpunk) e posições de cards no painel de controle do usuário.

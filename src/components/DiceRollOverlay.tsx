@@ -16,10 +16,10 @@ export default function DiceRollOverlay({ diceResults, onComplete, title = 'Rola
   const getTargetRotation = (val: number) => {
     switch (val) {
       case 1: return { x: 0, y: 0 };
-      case 2: return { x: -90, y: 0 };
-      case 3: return { x: 0, y: 90 };
-      case 4: return { x: 0, y: -90 };
-      case 5: return { x: 90, y: 0 };
+      case 2: return { x: 90, y: 0 };
+      case 3: return { x: 0, y: -90 };
+      case 4: return { x: 0, y: 90 };
+      case 5: return { x: -90, y: 0 };
       case 6: return { x: 180, y: 0 };
       default: return { x: 0, y: 0 };
     }

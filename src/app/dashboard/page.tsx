@@ -22,8 +22,11 @@ import {
   Edit,
   HelpCircle,
   AlertCircle,
-  Check
+  Check,
+  Palette
 } from 'lucide-react';
+import PreferencesModal from '@/components/PreferencesModal';
+import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -36,6 +39,12 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'characters' | 'tables' | 'rule_systems'>('characters');
   const [ruleSystems, setRuleSystems] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+
+  // States de Preferências e Exibição
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>('dark');
+  const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
 
   // States do Sandbox de Sistemas de Regras
   const [editingSystem, setEditingSystem] = useState<any>(null);
@@ -57,7 +66,19 @@ export default function DashboardPage() {
           .select('*')
           .eq('id', user.id)
           .single();
-        if (profileData) setProfile(profileData);
+        if (profileData) {
+          setProfile(profileData);
+          if (profileData.avatar_url) setAvatarUrl(profileData.avatar_url);
+
+          const prefs = profileData.preferences || {};
+          const themeFromDb = prefs.theme || (localStorage.getItem('gdd_theme') as ThemeId) || 'dark';
+          const orderFromDb = prefs.section_order || JSON.parse(localStorage.getItem('gdd_section_order') || 'null') || DEFAULT_SECTION_ORDER;
+
+          setCurrentTheme(themeFromDb);
+          setSectionOrder(orderFromDb);
+          localStorage.setItem('gdd_theme', themeFromDb);
+          localStorage.setItem('gdd_section_order', JSON.stringify(orderFromDb));
+        }
 
         // 2. Carregar Personagens
         const { data: charData } = await supabase
@@ -343,6 +364,39 @@ export default function DashboardPage() {
     alert('Configuração do sistema (JSON) copiada para a área de transferência!');
   }
 
+  async function handleSavePreferences(newPrefs: { theme: ThemeId; avatar_url: string; section_order: string[] }) {
+    setCurrentTheme(newPrefs.theme);
+    setSectionOrder(newPrefs.section_order);
+    if (newPrefs.avatar_url) setAvatarUrl(newPrefs.avatar_url);
+
+    localStorage.setItem('gdd_theme', newPrefs.theme);
+    localStorage.setItem('gdd_section_order', JSON.stringify(newPrefs.section_order));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const payload: any = {
+        preferences: {
+          theme: newPrefs.theme,
+          section_order: newPrefs.section_order
+        }
+      };
+      if (newPrefs.avatar_url) {
+        payload.avatar_url = newPrefs.avatar_url;
+      }
+
+      await supabase
+        .from('profiles')
+        .update(payload)
+        .eq('id', user.id);
+
+      setProfile(prev => prev ? { ...prev, ...payload } : null);
+    } catch (err) {
+      console.error('Erro ao salvar preferências:', err);
+    }
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push('/login');
@@ -423,10 +477,12 @@ export default function DashboardPage() {
     );
   }
 
+  const themeConfig = getTheme(currentTheme);
+
   return (
-    <div className="min-h-screen bg-[#070b19] text-slate-100 pb-12">
+    <div className={`min-h-screen ${themeConfig.bgClass} ${themeConfig.textPrimaryClass} pb-12 transition-colors duration-300`}>
       {/* Header / Navbar */}
-      <header className="border-b border-slate-800 bg-[#0f172a]/40 backdrop-blur-md sticky top-0 z-50">
+      <header className={`border-b ${themeConfig.borderClass} ${themeConfig.headerBgClass} sticky top-0 z-50`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gradient-to-tr from-purple-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-md shadow-purple-500/10">
@@ -439,16 +495,29 @@ export default function DashboardPage() {
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-purple-400 font-semibold text-sm">
-                {profile?.username?.charAt(0).toUpperCase() || <UserIcon className="w-4 h-4" />}
+              <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-purple-400 font-semibold text-sm overflow-hidden">
+                {avatarUrl || profile?.avatar_url ? (
+                  <img src={avatarUrl || profile?.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  profile?.username?.charAt(0).toUpperCase() || <UserIcon className="w-4 h-4" />
+                )}
               </div>
               <span className="hidden sm:inline text-sm font-medium text-slate-300">
                 {profile?.username || 'Jogador'}
               </span>
             </div>
+
+            <button
+              onClick={() => setIsPreferencesOpen(true)}
+              className="p-2 hover:bg-slate-800/80 rounded-lg text-slate-400 hover:text-purple-400 transition-colors cursor-pointer"
+              title="Preferências de Exibição"
+            >
+              <Palette className="w-5 h-5" />
+            </button>
+
             <button
               onClick={handleLogout}
-              className="p-2 hover:bg-slate-800/80 rounded-lg text-slate-400 hover:text-rose-400 transition-colors"
+              className="p-2 hover:bg-slate-800/80 rounded-lg text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
               title="Sair"
             >
               <LogOut className="w-5 h-5" />
@@ -1104,6 +1173,16 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Preferências de Exibição */}
+      <PreferencesModal
+        isOpen={isPreferencesOpen}
+        onClose={() => setIsPreferencesOpen(false)}
+        currentTheme={currentTheme}
+        currentAvatarUrl={avatarUrl || profile?.avatar_url}
+        currentSectionOrder={sectionOrder}
+        onSave={handleSavePreferences}
+      />
     </div>
   );
 }

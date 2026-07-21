@@ -16,6 +16,7 @@ create table public.profiles (
   country text default '' not null,
   state text default '' not null,
   city text default '' not null,
+  preferences jsonb default '{"theme": "dark", "section_order": ["attributes", "resources", "qualities", "spells", "inventory", "rolls"]}'::jsonb not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -486,5 +487,6 @@ exception
   when others then null;
 end $$;
 
-
-
+-- 12. Coluna preferences na tabela profiles
+alter table public.profiles
+  add column if not exists preferences jsonb default '{"theme": "dark", "section_order": ["attributes", "resources", "qualities", "spells", "inventory", "rolls"]}'::jsonb not null;

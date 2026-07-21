@@ -22,11 +22,14 @@ import {
   Plus,
   Info,
   Pencil,
-  Printer
+  Printer,
+  Palette
 } from 'lucide-react';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 import EditAbilityModal from '@/components/EditAbilityModal';
 import BaseSystemBlockModal from '@/components/BaseSystemBlockModal';
+import PreferencesModal from '@/components/PreferencesModal';
+import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 
 type Params = Promise<{ id: string }>;
 
@@ -375,6 +378,12 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   const [activeRollResult, setActiveRollResult] = useState<any>(null);
   const [isSelectingRace, setIsSelectingRace] = useState(false);
   const [showRaceDetails, setShowRaceDetails] = useState(false);
+
+  // States de Preferências e Exibição
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>('dark');
+  const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; title: string; callback: () => void } | null>(null);
 
   // Fechar detalhes da Vantagem Única ao clicar fora
@@ -408,6 +417,24 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         }
 
         setCharacter(charData);
+
+        // Carregar preferências do usuário
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', charData.user_id)
+          .maybeSingle();
+
+        if (profileData) {
+          if (profileData.avatar_url) setAvatarUrl(profileData.avatar_url);
+          const prefs = profileData.preferences || {};
+          const themeFromDb = prefs.theme || (localStorage.getItem('gdd_theme') as ThemeId) || 'dark';
+          const orderFromDb = prefs.section_order || JSON.parse(localStorage.getItem('gdd_section_order') || 'null') || DEFAULT_SECTION_ORDER;
+          setCurrentTheme(themeFromDb);
+          setSectionOrder(orderFromDb);
+          localStorage.setItem('gdd_theme', themeFromDb);
+          localStorage.setItem('gdd_section_order', JSON.stringify(orderFromDb));
+        }
 
         // Carregar sistema de regras (utiliza Alpha como padrão se rule_system_id for nulo)
         const systemId = charData.rule_system_id || '33333333-3333-3333-3333-333333333333';
@@ -500,6 +527,37 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
     return () => clearTimeout(delayDebounceFn);
   }, [character, loading, supabase]);
+
+  async function handleSavePreferences(newPrefs: { theme: ThemeId; avatar_url: string; section_order: string[] }) {
+    setCurrentTheme(newPrefs.theme);
+    setSectionOrder(newPrefs.section_order);
+    if (newPrefs.avatar_url) setAvatarUrl(newPrefs.avatar_url);
+
+    localStorage.setItem('gdd_theme', newPrefs.theme);
+    localStorage.setItem('gdd_section_order', JSON.stringify(newPrefs.section_order));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const payload: any = {
+        preferences: {
+          theme: newPrefs.theme,
+          section_order: newPrefs.section_order
+        }
+      };
+      if (newPrefs.avatar_url) {
+        payload.avatar_url = newPrefs.avatar_url;
+      }
+
+      await supabase
+        .from('profiles')
+        .update(payload)
+        .eq('id', user.id);
+    } catch (err) {
+      console.error('Erro ao salvar preferências:', err);
+    }
+  }
 
   if (loading || !character) {
     return (
@@ -1010,11 +1068,13 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   const scoreSpent = pointsTotal; // Para manter compatibilidade com outras partes do código
   const isOverflow = pointsAvailable < 0;
 
+  const themeConfig = getTheme(currentTheme);
+
   return (
     <>
-      <div className="min-h-screen bg-[#070b19] text-slate-100 pb-16 print:hidden">
+      <div className={`min-h-screen ${themeConfig.bgClass} ${themeConfig.textPrimaryClass} pb-16 print:hidden transition-colors duration-300`}>
       {/* Header */}
-      <header className="border-b border-slate-800 bg-[#0f172a]/40 backdrop-blur-md sticky top-0 z-50">
+      <header className={`border-b ${themeConfig.borderClass} ${themeConfig.headerBgClass} sticky top-0 z-50`}>
         <div className="max-w-7xl mx-auto px-4 py-3 lg:py-0 lg:h-16 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           
           {/* Top Line: Back Button, Name & Mobile-only Indicators */}
@@ -1034,6 +1094,14 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
             {/* Mobile-only Saving & Points */}
             <div className="flex lg:hidden items-center gap-2">
+              <button
+                onClick={() => setIsPreferencesOpen(true)}
+                className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-purple-400 transition-colors cursor-pointer"
+                title="Preferências de Exibição"
+              >
+                <Palette className="w-4 h-4" />
+              </button>
+              
               <button
                 onClick={() => window.print()}
                 className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
@@ -1159,6 +1227,15 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
             {/* Desktop-only Saving & Points */}
             <div className="hidden lg:flex items-center gap-4 ml-2 shrink-0">
               <button
+                onClick={() => setIsPreferencesOpen(true)}
+                className="flex items-center gap-1.5 bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/50 hover:border-slate-600 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-purple-400 transition-all cursor-pointer"
+                title="Preferências de Exibição"
+              >
+                <Palette className="w-3.5 h-3.5" />
+                <span>Personalizar</span>
+              </button>
+
+              <button
                 onClick={() => window.print()}
                 className="flex items-center gap-1.5 bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/50 hover:border-slate-600 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition-all cursor-pointer"
                 title="Imprimir Ficha / Exportar PDF"
@@ -1202,14 +1279,12 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         </div>
       </header>
 
-      {/* Main Grid */}
-      <main className="max-w-7xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Main Container com Reordenação Flex e Temas */}
+      <main className="max-w-7xl mx-auto px-4 mt-8 flex flex-col gap-6">
         
-        {/* Coluna 1: Atributos & Recursos (Ficha Principal) */}
-        <div className="lg:col-span-1 space-y-6">
-          
-          {/* Card de Recursos (Vida / Magia) */}
-          <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+        {/* Section: Recursos (PV / PM) */}
+        <div style={{ order: sectionOrder.indexOf('resources') !== -1 ? sectionOrder.indexOf('resources') : 1 }}>
+          <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-6 transition-colors duration-300`}>
             <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">Recursos</h2>
             
             {Object.keys(systemDef.resources || {})
@@ -1284,10 +1359,11 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
               );
             })}
           </div>
+        </div>
 
-
-          {/* Card de Atributos */}
-          <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+        {/* Section: Atributos & Estatísticas */}
+        <div style={{ order: sectionOrder.indexOf('attributes') !== -1 ? sectionOrder.indexOf('attributes') : 0 }}>
+          <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-5 transition-colors duration-300`}>
             <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Atributos</h2>
             
             <div className="space-y-4">
@@ -1502,11 +1578,11 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
           </div>
         </div>
 
-        {/* Coluna 2: Vantagens, Perícias e Magias */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* Section: Qualidades (Vantagens, Desvantagens, Perícias) */}
+        <div style={{ order: sectionOrder.indexOf('qualities') !== -1 ? sectionOrder.indexOf('qualities') : 2 }} className="space-y-6">
           
           {/* Adicionar Vantagem / Perícia */}
-          <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl shadow-xl transition-all">
+          <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl shadow-xl transition-all`}>
             <button
               onClick={() => setIsAddingAdvantageExpanded(!isAddingAdvantageExpanded)}
               className="w-full flex justify-between items-center p-6 text-left focus:outline-none cursor-pointer"
@@ -2682,6 +2758,16 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
           <span className="font-semibold text-xs leading-relaxed">{toastMessage}</span>
         </div>
       )}
+
+      {/* Modal de Preferências de Exibição */}
+      <PreferencesModal
+        isOpen={isPreferencesOpen}
+        onClose={() => setIsPreferencesOpen(false)}
+        currentTheme={currentTheme}
+        currentAvatarUrl={avatarUrl}
+        currentSectionOrder={sectionOrder}
+        onSave={handleSavePreferences}
+      />
       </div>
 
       {/* Printable Sheet Version (A4 High Contrast) */}

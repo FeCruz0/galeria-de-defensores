@@ -7,6 +7,8 @@ import { RuleSystem } from '@/types/game';
 import { ArrowLeft, Sword, Shield, Loader2, Save } from 'lucide-react';
 
 
+import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
+
 export default function NewCharacterPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -15,6 +17,16 @@ export default function NewCharacterPage() {
   const [baseSystems, setBaseSystems] = useState<RuleSystem[]>([]);
   const [customSystems, setCustomSystems] = useState<RuleSystem[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+
+  // Modal State
+  const [modalConfig, setModalConfig] = useState<SystemModalOptions>({
+    isOpen: false,
+    message: '',
+  });
+
+  const showSystemModal = (options: Omit<SystemModalOptions, 'isOpen'>) => {
+    setModalConfig({ ...options, isOpen: true });
+  };
 
   // Form states
   const [name, setName] = useState('Defensor');
@@ -91,7 +103,11 @@ export default function NewCharacterPage() {
         .maybeSingle();
 
       if (duplicate) {
-        alert(`Você já possui um personagem com o nome "${name}"! Por favor, escolha um nome diferente.`);
+        showSystemModal({
+          type: 'alert',
+          title: 'Nome Indisponível',
+          message: `Você já possui um personagem com o nome "${name}"! Por favor, escolha um nome diferente.`,
+        });
         setLoading(false);
         return;
       }
@@ -134,7 +150,11 @@ export default function NewCharacterPage() {
       }
     } catch (err) {
       console.error('Erro ao salvar personagem:', err);
-      alert('Falha ao criar o personagem. Tente novamente.');
+      showSystemModal({
+        type: 'alert',
+        title: 'Erro ao Criar',
+        message: 'Falha ao criar o personagem. Tente novamente.',
+      });
       setLoading(false);
     }
   }
@@ -270,6 +290,11 @@ export default function NewCharacterPage() {
           </form>
         </div>
       </main>
+
+      <SystemModal
+        {...modalConfig}
+        onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

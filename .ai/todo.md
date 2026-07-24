@@ -9,7 +9,8 @@
 - [x] Integrar botão "Importar (PDF)" e "Exportar Sistema de Regras (PDF)" no Dashboard (`src/app/dashboard/page.tsx`).
 - [x] Ajustar layout de 2 colunas responsivas da ficha de personagem (`lg:grid-cols-12`) e botão "Restaurar Padrões" no modal de preferências.
 
-## 🎨 Próxima Task: Personalização de Caixas por Drag-and-Drop
-- [ ] Implementar eventos Drag-and-Drop nativos (`draggable`, `onDragStart`, `onDragOver`, `onDrop`) na aba "Ordem da Ficha" do modal de preferências.
-- [ ] Adicionar suporte a arrastar e soltar os cards diretamente na tela da ficha ao ativar o modo de personalização.
-- [ ] Substituir o sistema legado de setas para cima/baixo pela nova experiência interativa de drag/drop.
+## ✅ Concluído: Personalização de Caixas por Drag-and-Drop
+- [x] Implementar eventos Drag-and-Drop nativos (`draggable`, `onDragStart`, `onDragOver`, `onDrop`) na aba "Ordem da Ficha" do modal de preferências.
+- [x] Adicionar suporte a arrastar e soltar os cards diretamente na tela da ficha (`attributes`, `resources`, `qualities`).
+- [x] Manter suporte a arrastar/soltar e setas interativas para acessibilidade.
+

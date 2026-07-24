@@ -4,19 +4,14 @@ import React, { useState } from 'react';
 import { 
   Palette, 
   User as UserIcon, 
-  ArrowUp, 
-  ArrowDown, 
   Check, 
   X,
-  Sparkles,
-  LayoutGrid
+  Sparkles
 } from 'lucide-react';
 import { 
   ThemeId, 
   THEMES, 
   DEFAULT_AVATARS, 
-  DEFAULT_SECTION_ORDER, 
-  SECTION_NAMES, 
   getTheme 
 } from '@/lib/theme';
 
@@ -25,8 +20,7 @@ interface PreferencesModalProps {
   onClose: () => void;
   currentTheme: ThemeId;
   currentAvatarUrl?: string;
-  currentSectionOrder?: string[];
-  onSave: (preferences: { theme: ThemeId; avatar_url: string; section_order: string[] }) => void;
+  onSave: (preferences: { theme: ThemeId; avatar_url: string }) => void;
 }
 
 export default function PreferencesModal({
@@ -34,50 +28,24 @@ export default function PreferencesModal({
   onClose,
   currentTheme,
   currentAvatarUrl = '',
-  currentSectionOrder = DEFAULT_SECTION_ORDER,
   onSave
-}: PreferencesModalProps) {
-  const [activeTab, setActiveTab] = useState<'temas' | 'avatar' | 'ordem'>('temas');
+}: Omit<PreferencesModalProps, 'currentSectionOrder'> & { onSave: (preferences: { theme: ThemeId; avatar_url: string }) => void }) {
+  const [activeTab, setActiveTab] = useState<'temas' | 'avatar'>('temas');
   const [selectedTheme, setSelectedTheme] = useState<ThemeId>(currentTheme);
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(currentAvatarUrl);
-  const [sectionOrder, setSectionOrder] = useState<string[]>(
-    currentSectionOrder.length > 0 ? currentSectionOrder : DEFAULT_SECTION_ORDER
-  );
   const [customAvatarInput, setCustomAvatarInput] = useState<string>('');
 
   if (!isOpen) return null;
 
   const themeConfig = getTheme(selectedTheme);
 
-  // Move section up
-  const moveSectionUp = (index: number) => {
-    if (index <= 0) return;
-    const newOrder = [...sectionOrder];
-    const temp = newOrder[index - 1];
-    newOrder[index - 1] = newOrder[index];
-    newOrder[index] = temp;
-    setSectionOrder(newOrder);
-  };
-
-  // Move section down
-  const moveSectionDown = (index: number) => {
-    if (index >= sectionOrder.length - 1) return;
-    const newOrder = [...sectionOrder];
-    const temp = newOrder[index + 1];
-    newOrder[index + 1] = newOrder[index];
-    newOrder[index] = temp;
-    setSectionOrder(newOrder);
-  };
-
   const handleResetToDefault = () => {
     setSelectedTheme('dark');
     setSelectedAvatarUrl('');
     setCustomAvatarInput('');
-    setSectionOrder(DEFAULT_SECTION_ORDER);
     onSave({
       theme: 'dark',
-      avatar_url: '',
-      section_order: DEFAULT_SECTION_ORDER
+      avatar_url: ''
     });
     onClose();
   };
@@ -86,8 +54,7 @@ export default function PreferencesModal({
     const finalAvatar = customAvatarInput.trim() || selectedAvatarUrl;
     onSave({
       theme: selectedTheme,
-      avatar_url: finalAvatar,
-      section_order: sectionOrder
+      avatar_url: finalAvatar
     });
     onClose();
   };
@@ -103,7 +70,7 @@ export default function PreferencesModal({
               <Palette className="w-5 h-5 text-purple-400" />
               Preferências de Exibição
             </h3>
-            <p className="text-xs text-slate-400 mt-1">Personalize o tema visual, seu avatar e a ordem dos blocos da ficha.</p>
+            <p className="text-xs text-slate-400 mt-1">Personalize o tema visual e seu avatar do personagem.</p>
           </div>
           <button
             onClick={onClose}
@@ -137,18 +104,6 @@ export default function PreferencesModal({
           >
             <UserIcon className="w-3.5 h-3.5" />
             Avatar
-          </button>
-
-          <button
-            onClick={() => setActiveTab('ordem')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'ordem'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-            }`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-            Ordem da Ficha
           </button>
         </div>
 
@@ -224,64 +179,6 @@ export default function PreferencesModal({
                   onChange={(e) => setCustomAvatarInput(e.target.value)}
                   className="w-full bg-slate-900/60 border border-slate-800 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
                 />
-              </div>
-            </div>
-          )}
-
-          {/* Tab: Ordem da Ficha */}
-          {activeTab === 'ordem' && (
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Reorganizar Seções da Ficha</span>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Use as setas para ajustar a prioridade com que as seções serão exibidas na sua ficha de personagem.
-              </p>
-
-              <div className="space-y-2">
-                {sectionOrder.map((secId, idx) => (
-                  <div
-                    key={secId}
-                    className="flex justify-between items-center bg-slate-900/50 border border-slate-800/80 p-3 rounded-xl gap-4 font-sans"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-6 h-6 rounded-lg bg-purple-950/50 border border-purple-800/30 flex items-center justify-center text-xs font-bold text-purple-400 font-mono shrink-0">
-                        {idx + 1}
-                      </span>
-                      <span className="text-xs font-bold text-slate-200 truncate">
-                        {SECTION_NAMES[secId] || secId}
-                      </span>
-                    </div>
-
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        type="button"
-                        disabled={idx === 0}
-                        onClick={() => moveSectionUp(idx)}
-                        className={`p-1.5 rounded-lg border transition-all ${
-                          idx === 0
-                            ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed'
-                            : 'border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer'
-                        }`}
-                        title="Mover para cima"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={idx === sectionOrder.length - 1}
-                        onClick={() => moveSectionDown(idx)}
-                        className={`p-1.5 rounded-lg border transition-all ${
-                          idx === sectionOrder.length - 1
-                            ? 'opacity-30 border-slate-800 text-slate-600 cursor-not-allowed'
-                            : 'border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white cursor-pointer'
-                        }`}
-                        title="Mover para baixo"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           )}

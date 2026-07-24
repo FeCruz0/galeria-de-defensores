@@ -8,6 +8,8 @@ export interface UserPreferences {
 export const DEFAULT_SECTION_ORDER = [
   'attributes',
   'resources',
+  'damage_types',
+  'progression',
   'qualities',
   'spells',
   'inventory',
@@ -15,8 +17,10 @@ export const DEFAULT_SECTION_ORDER = [
 ];
 
 export const SECTION_NAMES: Record<string, string> = {
-  attributes: 'Atributos & Estatísticas',
-  resources: 'Pontos de Vida & Magia',
+  attributes: 'Atributos Básicos',
+  resources: 'Recursos (PV & PM)',
+  damage_types: 'Tipos de Dano',
+  progression: 'Progressão',
   qualities: 'Vantagens, Desvantagens e Perícias',
   spells: 'Magias & Grimório',
   inventory: 'Inventário & Equipamentos',

@@ -131,6 +131,8 @@ function sortAttributeKeys(keys: string[], attributes: Record<string, any>): str
 }
 
 
+import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
+
 export default function CharacterSheetPage({ params }: { params: Params }) {
   const { id } = use(params);
   const router = useRouter();
@@ -140,6 +142,16 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   const [character, setCharacter] = useState<Character | null>(null);
   const [systemDef, setSystemDef] = useState<any>(STANDARD_SYSTEMS);
   const [savingStatus, setSavingStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo');
+
+  // Modal State para Alertas e Confirmações
+  const [modalConfig, setModalConfig] = useState<SystemModalOptions>({
+    isOpen: false,
+    message: '',
+  });
+
+  const showSystemModal = (options: Omit<SystemModalOptions, 'isOpen'>) => {
+    setModalConfig({ ...options, isOpen: true });
+  };
 
   // Catálogos e Busca
   const [searchQuery, setSearchQuery] = useState('');
@@ -431,11 +443,8 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
           if (profileData.avatar_url) setAvatarUrl(profileData.avatar_url);
           const prefs = profileData.preferences || {};
           const themeFromDb = prefs.theme || (localStorage.getItem('gdd_theme') as ThemeId) || 'dark';
-          const orderFromDb = prefs.section_order || JSON.parse(localStorage.getItem('gdd_section_order') || 'null') || DEFAULT_SECTION_ORDER;
           setCurrentTheme(themeFromDb);
-          setSectionOrder(orderFromDb);
           localStorage.setItem('gdd_theme', themeFromDb);
-          localStorage.setItem('gdd_section_order', JSON.stringify(orderFromDb));
         }
 
         // Carregar sistema de regras (utiliza Alpha como padrão se rule_system_id for nulo)
@@ -488,7 +497,11 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
         if (duplicate) {
           setSavingStatus('erro');
-          alert(`Conflito: Você já possui outro personagem com o nome "${character.name}"! Escolha um nome diferente para salvar.`);
+          showSystemModal({
+            type: 'alert',
+            title: 'Conflito de Nome',
+            message: `Você já possui outro personagem com o nome "${character.name}"! Escolha um nome diferente para salvar.`
+          });
           return;
         }
 
@@ -530,13 +543,11 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     return () => clearTimeout(delayDebounceFn);
   }, [character, loading, supabase]);
 
-  async function handleSavePreferences(newPrefs: { theme: ThemeId; avatar_url: string; section_order: string[] }) {
+  async function handleSavePreferences(newPrefs: { theme: ThemeId; avatar_url: string }) {
     setCurrentTheme(newPrefs.theme);
-    setSectionOrder(newPrefs.section_order);
     if (newPrefs.avatar_url) setAvatarUrl(newPrefs.avatar_url);
 
     localStorage.setItem('gdd_theme', newPrefs.theme);
-    localStorage.setItem('gdd_section_order', JSON.stringify(newPrefs.section_order));
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -544,8 +555,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
       const payload: any = {
         preferences: {
-          theme: newPrefs.theme,
-          section_order: newPrefs.section_order
+          theme: newPrefs.theme
         }
       };
       if (newPrefs.avatar_url) {
@@ -774,10 +784,24 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     if (roll.pmCost && roll.pmCost > 0) {
       const currentPm = character.resources_current?.['PM'] ?? 0;
       if (currentPm < roll.pmCost) {
-        if (!confirm(`Você não tem PM suficiente (Custo: ${roll.pmCost} PM, Atual: ${currentPm} PM). Deseja realizar a rolagem mesmo assim?`)) {
-          return;
-        }
+        showSystemModal({
+          type: 'confirm',
+          title: 'PM Insuficiente',
+          message: `Você não tem PM suficiente (Custo: ${roll.pmCost} PM, Atual: ${currentPm} PM). Deseja realizar a rolagem mesmo assim?`,
+          confirmText: 'Rolar Mesmo Assim',
+          cancelText: 'Cancelar',
+          onConfirm: () => executeRoll(roll, currentPm)
+        });
+        return;
       }
+    }
+
+    executeRoll(roll, character.resources_current?.['PM'] ?? 0);
+  }
+
+  function executeRoll(roll: any, currentPm: number) {
+    if (!character) return;
+    if (roll.pmCost && roll.pmCost > 0) {
       setCharacter({
         ...character,
         resources_current: {
@@ -1322,137 +1346,135 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         
         {/* Coluna Esquerda: Estatísticas, Atributos & Recursos */}
         <div className="lg:col-span-4 flex flex-col gap-6">
-          {/* Section: Recursos (PV / PM) */}
-          <div style={{ order: sectionOrder.indexOf('resources') !== -1 ? sectionOrder.indexOf('resources') : 1 }}>
-          <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-6 transition-colors duration-300`}>
-            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">Recursos</h2>
-            
-            {Object.keys(systemDef.resources || {})
-              .sort((a, b) => {
-                if (a === 'PV' && b === 'PM') return -1;
-                if (a === 'PM' && b === 'PV') return 1;
-                return a.localeCompare(b);
-              })
-              .map((key) => {
-              const res = systemDef.resources[key];
-              const maxVal = evaluateResourceFormula(res.formula, res.baseAttributeKey, modifiedAttrs, key, character.advantages);
-              const currentVal = character.resources_current[key] ?? maxVal;
+          {/* Section: Atributos & Estatísticas */}
+          <div className="flex flex-col gap-6">
+            <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-5 transition-colors duration-300`}>
+              <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Atributos</h2>
+              
+              <div className="space-y-4">
+                {sortAttributeKeys(Object.keys(systemDef.attributes), systemDef.attributes).map((key) => {
+                  const attr = systemDef.attributes[key];
+                  const value = character.attributes_values[key] ?? 0;
+                  const modValue = modifiedAttrs[key] ?? value;
+                  const bonus = modValue - value;
+                  return (
+                    <div key={key} className="flex justify-between items-center bg-slate-800/20 border border-slate-800/60 rounded-xl p-3">
+                      <span className="font-medium text-slate-300">{attr.name}</span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleAttributeChange(key, -1)}
+                          className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm"
+                        >
+                          -
+                        </button>
+                        <span className="w-16 text-center font-bold text-slate-200 text-base flex justify-center items-center gap-1 font-mono">
+                          {value}
+                          {bonus > 0 && (
+                            <span className="text-[10px] text-emerald-400 font-bold font-sans shrink-0">(+{bonus})</span>
+                          )}
+                          {bonus < 0 && (
+                            <span className="text-[10px] text-rose-500 font-bold font-sans shrink-0">({bonus})</span>
+                          )}
+                        </span>
+                        <button
+                          onClick={() => {
+                            if (pointsAvailable < 1) {
+                              showToast("Saldo de Pontos Guardados insuficiente.");
+                            } else {
+                              handleAttributeChange(key, 1);
+                            }
+                          }}
+                          className={`w-7 h-7 border text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm transition-all ${
+                            pointsAvailable < 1
+                              ? 'opacity-40 bg-slate-800/20 border-slate-850 cursor-not-allowed'
+                              : 'bg-slate-850 hover:bg-slate-700 border-slate-700 cursor-pointer active:scale-95'
+                          }`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-              let colorClass = "from-rose-600 to-rose-500";
-              let textColorClass = "text-rose-400";
-              let Icon = Heart;
+            {/* Section: Recursos (PV / PM) */}
+            <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-6 transition-colors duration-300`}>
+              <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">Recursos</h2>
+              
+              {Object.keys(systemDef.resources || {})
+                .sort((a, b) => {
+                  if (a === 'PV' && b === 'PM') return -1;
+                  if (a === 'PM' && b === 'PV') return 1;
+                  return a.localeCompare(b);
+                })
+                .map((key) => {
+                const res = systemDef.resources[key];
+                const maxVal = evaluateResourceFormula(res.formula, res.baseAttributeKey, modifiedAttrs, key, character.advantages);
+                const currentVal = character.resources_current[key] ?? maxVal;
 
-              if (key === 'PM' || res.name.toLowerCase().includes('magia') || res.name.toLowerCase().includes('mana')) {
-                colorClass = "from-cyan-600 to-cyan-500";
-                textColorClass = "text-cyan-400";
-                Icon = Zap;
-              } else if (key !== 'PV') {
-                colorClass = "from-emerald-600 to-emerald-500";
-                textColorClass = "text-emerald-400";
-                Icon = Shield;
-              }
+                let colorClass = "from-rose-600 to-rose-500";
+                let textColorClass = "text-rose-400";
+                let Icon = Heart;
 
-              return (
-                <div key={key} className="space-y-2">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className={`flex items-center gap-1.5 ${textColorClass} font-semibold`}>
-                      <Icon className="w-4 h-4" />
-                      {res.name}
-                    </span>
-                    <span className="font-bold text-slate-200">
-                      {currentVal} / {maxVal}
-                    </span>
-                  </div>
-                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full bg-gradient-to-r ${colorClass} transition-all duration-300`}
-                      style={{ width: `${Math.min(100, maxVal > 0 ? (currentVal / maxVal) * 100 : 0)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 pt-1">
-                    <button 
-                      onClick={() => handleResourceChange(key, -5, maxVal)}
-                      className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
-                    >
-                      -5
-                    </button>
-                    <button 
-                      onClick={() => handleResourceChange(key, -1, maxVal)}
-                      className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
-                    >
-                      -1
-                    </button>
-                    <button 
-                      onClick={() => handleResourceChange(key, 1, maxVal)}
-                      className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
-                    >
-                      +1
-                    </button>
-                    <button 
-                      onClick={() => handleResourceChange(key, 5, maxVal)}
-                      className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
-                    >
-                      +5
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                if (key === 'PM' || res.name.toLowerCase().includes('magia') || res.name.toLowerCase().includes('mana')) {
+                  colorClass = "from-cyan-600 to-cyan-500";
+                  textColorClass = "text-cyan-400";
+                  Icon = Zap;
+                } else if (key !== 'PV') {
+                  colorClass = "from-emerald-600 to-emerald-500";
+                  textColorClass = "text-emerald-400";
+                  Icon = Shield;
+                }
 
-        {/* Section: Atributos & Estatísticas */}
-        <div style={{ order: sectionOrder.indexOf('attributes') !== -1 ? sectionOrder.indexOf('attributes') : 0 }} className="flex flex-col gap-6">
-          <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-5 transition-colors duration-300`}>
-            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Atributos</h2>
-            
-            <div className="space-y-4">
-              {sortAttributeKeys(Object.keys(systemDef.attributes), systemDef.attributes).map((key) => {
-                const attr = systemDef.attributes[key];
-                const value = character.attributes_values[key] ?? 0;
-                const modValue = modifiedAttrs[key] ?? value;
-                const bonus = modValue - value;
                 return (
-                  <div key={key} className="flex justify-between items-center bg-slate-800/20 border border-slate-800/60 rounded-xl p-3">
-                    <span className="font-medium text-slate-300">{attr.name}</span>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleAttributeChange(key, -1)}
-                        className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm"
-                      >
-                        -
-                      </button>
-                      <span className="w-16 text-center font-bold text-slate-200 text-base flex justify-center items-center gap-1 font-mono">
-                        {value}
-                        {bonus > 0 && (
-                          <span className="text-[10px] text-emerald-400 font-bold font-sans shrink-0">(+{bonus})</span>
-                        )}
-                        {bonus < 0 && (
-                          <span className="text-[10px] text-rose-500 font-bold font-sans shrink-0">({bonus})</span>
-                        )}
+                  <div key={key} className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className={`flex items-center gap-1.5 ${textColorClass} font-semibold`}>
+                        <Icon className="w-4 h-4" />
+                        {res.name}
                       </span>
-                      <button
-                        onClick={() => {
-                          if (pointsAvailable < 1) {
-                            showToast("Saldo de Pontos Guardados insuficiente.");
-                          } else {
-                            handleAttributeChange(key, 1);
-                          }
-                        }}
-                        className={`w-7 h-7 border text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm transition-all ${
-                          pointsAvailable < 1
-                            ? 'opacity-40 bg-slate-800/20 border-slate-850 cursor-not-allowed'
-                            : 'bg-slate-850 hover:bg-slate-700 border-slate-700 cursor-pointer active:scale-95'
-                        }`}
+                      <span className="font-bold text-slate-200">
+                        {currentVal} / {maxVal}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full bg-gradient-to-r ${colorClass} transition-all duration-300`}
+                        style={{ width: `${Math.min(100, maxVal > 0 ? (currentVal / maxVal) * 100 : 0)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button 
+                        onClick={() => handleResourceChange(key, -5, maxVal)}
+                        className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
                       >
-                        +
+                        -5
+                      </button>
+                      <button 
+                        onClick={() => handleResourceChange(key, -1, maxVal)}
+                        className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
+                      >
+                        -1
+                      </button>
+                      <button 
+                        onClick={() => handleResourceChange(key, 1, maxVal)}
+                        className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
+                      >
+                        +1
+                      </button>
+                      <button 
+                        onClick={() => handleResourceChange(key, 5, maxVal)}
+                        className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
+                      >
+                        +5
                       </button>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
 
           {/* Card de Tipos de Dano */}
           <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
@@ -1622,7 +1644,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         {/* Coluna Direita: Habilidades, Vantagens, Perícias, Magias, Inventário & Rolagens */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           {/* Section: Qualidades (Vantagens, Desvantagens, Perícias) */}
-          <div style={{ order: sectionOrder.indexOf('qualities') !== -1 ? sectionOrder.indexOf('qualities') : 2 }} className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6">
           
           {/* Adicionar Vantagem / Perícia */}
           <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl shadow-xl transition-all`}>
@@ -2270,7 +2292,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
               
               {/* Magias */}
               <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                <span className="text-sm font-bold text-slate-300 uppercase tracking-wider block">Magias & Rituais</span>
+                <span className="text-sm font-bold text-slate-300 uppercase tracking-wider block">Magias e Poderes</span>
                 
                 <div className="flex gap-2">
                   <input
@@ -2479,10 +2501,19 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                       </div>
                     );
                   })}
-                  {!character.inventory?.length && (
-                    <p className="text-xs text-slate-500 italic py-1">Inventário vazio.</p>
-                  )}
                 </div>
+              </div>
+
+              {/* Card de Background e Anotações */}
+              <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+                <span className="text-sm font-bold text-slate-300 uppercase tracking-wider block">Background e Anotações</span>
+                <textarea
+                  value={character.annotations || ''}
+                  onChange={(e) => setCharacter({ ...character, annotations: e.target.value })}
+                  placeholder="Escreva a história do personagem, notas de sessão, contatos, segredos..."
+                  rows={6}
+                  className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-purple-500/50 resize-y leading-relaxed font-sans"
+                />
               </div>
 
             </div>
@@ -2808,8 +2839,12 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         onClose={() => setIsPreferencesOpen(false)}
         currentTheme={currentTheme}
         currentAvatarUrl={avatarUrl}
-        currentSectionOrder={sectionOrder}
         onSave={handleSavePreferences}
+      />
+
+      <SystemModal
+        {...modalConfig}
+        onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
       />
       </div>
 

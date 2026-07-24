@@ -29,6 +29,7 @@ import PreferencesModal from '@/components/PreferencesModal';
 import PdfImportModal from '@/components/PdfImportModal';
 import { exportRuleSystemToPdf, ExtractedPayload } from '@/lib/pdfPayload';
 import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
+import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -41,6 +42,16 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'characters' | 'tables' | 'rule_systems'>('characters');
   const [ruleSystems, setRuleSystems] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Modal State para Alertas e Confirmações
+  const [modalConfig, setModalConfig] = useState<SystemModalOptions>({
+    isOpen: false,
+    message: '',
+  });
+
+  const showSystemModal = (options: Omit<SystemModalOptions, 'isOpen'>) => {
+    setModalConfig({ ...options, isOpen: true });
+  };
 
   // States de Preferências e Exibição
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
@@ -177,80 +188,116 @@ export default function DashboardPage() {
   }
 
   // 3. Excluir sistema de regras
-  async function handleDeleteSystem(systemId: string) {
-    if (!confirm('Deseja realmente excluir este sistema de regras? Todos os personagens associados perderão as referências dinâmicas.')) return;
-    try {
-      const { error } = await supabase
-        .from('rule_systems')
-        .delete()
-        .eq('id', systemId);
-      if (error) throw error;
-      setRuleSystems(ruleSystems.filter(s => s.id !== systemId));
-    } catch (err) {
-      alert('Erro ao excluir sistema de regras.');
-      console.error(err);
-    }
+  function handleDeleteSystem(systemId: string) {
+    showSystemModal({
+      type: 'confirm',
+      title: 'Excluir Sistema de Regras',
+      message: 'Deseja realmente excluir este sistema de regras? Todos os personagens associados perderão as referências dinâmicas.',
+      confirmText: 'Excluir',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('rule_systems')
+            .delete()
+            .eq('id', systemId);
+          if (error) throw error;
+          setRuleSystems(ruleSystems.filter(s => s.id !== systemId));
+          showSystemModal({ type: 'success', title: 'Sucesso', message: 'Sistema de regras excluído com sucesso!' });
+        } catch (err) {
+          showSystemModal({ type: 'alert', title: 'Erro', message: 'Erro ao excluir sistema de regras.' });
+          console.error(err);
+        }
+      }
+    });
   }
 
   // Excluir personagem
-  async function handleDeleteCharacter(charId: string) {
-    if (!confirm('Deseja realmente excluir este personagem? Esta ação não pode ser desfeita.')) return;
-    try {
-      const { error } = await supabase
-        .from('characters')
-        .delete()
-        .eq('id', charId);
-      if (error) throw error;
-      setCharacters(prev => prev.filter(c => c.id !== charId));
-    } catch (err) {
-      alert('Erro ao excluir personagem.');
-      console.error(err);
-    }
+  function handleDeleteCharacter(charId: string) {
+    showSystemModal({
+      type: 'confirm',
+      title: 'Excluir Personagem',
+      message: 'Deseja realmente excluir este personagem? Esta ação não pode ser desfeita.',
+      confirmText: 'Excluir Personagem',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('characters')
+            .delete()
+            .eq('id', charId);
+          if (error) throw error;
+          setCharacters(prev => prev.filter(c => c.id !== charId));
+          showSystemModal({ type: 'success', title: 'Sucesso', message: 'Personagem excluído com sucesso!' });
+        } catch (err) {
+          showSystemModal({ type: 'alert', title: 'Erro', message: 'Erro ao excluir personagem.' });
+          console.error(err);
+        }
+      }
+    });
   }
 
   // Excluir mesa (apenas para o mestre)
-  async function handleDeleteTable(tableId: string) {
-    if (!confirm('Deseja realmente excluir esta mesa? Todas as mensagens do chat e dados da mesa serão excluídos permanentemente.')) return;
-    try {
-      const { error } = await supabase
-        .from('tables')
-        .delete()
-        .eq('id', tableId);
-      if (error) throw error;
-      setTables(prev => prev.filter(t => t.id !== tableId));
-    } catch (err) {
-      alert('Erro ao excluir mesa.');
-      console.error(err);
-    }
+  function handleDeleteTable(tableId: string) {
+    showSystemModal({
+      type: 'confirm',
+      title: 'Excluir Mesa de Jogo',
+      message: 'Deseja realmente excluir esta mesa? Todas as mensagens do chat e dados da mesa serão excluídos permanentemente.',
+      confirmText: 'Excluir Mesa',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('tables')
+            .delete()
+            .eq('id', tableId);
+          if (error) throw error;
+          setTables(prev => prev.filter(t => t.id !== tableId));
+          showSystemModal({ type: 'success', title: 'Sucesso', message: 'Mesa de jogo excluída com sucesso!' });
+        } catch (err) {
+          showSystemModal({ type: 'alert', title: 'Erro', message: 'Erro ao excluir mesa.' });
+          console.error(err);
+        }
+      }
+    });
   }
 
   // Sair da mesa (para jogadores)
-  async function handleLeaveTable(tableId: string) {
-    if (!confirm('Deseja realmente sair desta mesa?')) return;
-    try {
-      const { error } = await supabase
-        .from('table_players')
-        .delete()
-        .eq('table_id', tableId)
-        .eq('player_id', profile?.id);
-      if (error) throw error;
-      setTables(prev => prev.filter(t => t.id !== tableId));
-    } catch (err) {
-      alert('Erro ao sair da mesa.');
-      console.error(err);
-    }
+  function handleLeaveTable(tableId: string) {
+    showSystemModal({
+      type: 'confirm',
+      title: 'Sair da Mesa',
+      message: 'Deseja realmente sair desta mesa de jogo?',
+      confirmText: 'Sair da Mesa',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('table_players')
+            .delete()
+            .eq('table_id', tableId)
+            .eq('player_id', profile?.id);
+          if (error) throw error;
+          setTables(prev => prev.filter(t => t.id !== tableId));
+          showSystemModal({ type: 'success', title: 'Sucesso', message: 'Você saiu da mesa.' });
+        } catch (err) {
+          showSystemModal({ type: 'alert', title: 'Erro', message: 'Erro ao sair da mesa.' });
+          console.error(err);
+        }
+      }
+    });
   }
 
   // 4. Salvar alterações do sistema de regras
   async function handleSaveSystem() {
     if (!editingSystem.name.trim()) {
-      alert('Nome do sistema é obrigatório.');
+      showSystemModal({ type: 'alert', title: 'Campo Obrigatório', message: 'Nome do sistema é obrigatório.' });
       return;
     }
 
     const attributeKeys = Object.keys(editingSystem.attributes || {});
     if (attributeKeys.length === 0) {
-      alert('O sistema de regras deve possuir ao menos um atributo.');
+      showSystemModal({ type: 'alert', title: 'Atributos Necessários', message: 'O sistema de regras deve possuir ao menos um atributo.' });
       return;
     }
 
@@ -259,7 +306,7 @@ export default function DashboardPage() {
       const res = resources[key];
       const formVal = validateFormula(res.formula || `${res.baseAttributeKey} * 5`, attributeKeys);
       if (!formVal.valid) {
-        alert(`Fórmula inválida para o recurso ${res.name}: ${formVal.error}`);
+        showSystemModal({ type: 'alert', title: 'Fórmula Inválida', message: `Fórmula inválida para o recurso ${res.name}: ${formVal.error}` });
         return;
       }
     }
@@ -291,7 +338,7 @@ export default function DashboardPage() {
         .maybeSingle();
 
       if (duplicate) {
-        alert(`Já existe um sistema de regras cadastrado com o nome "${editingSystem.name}"! Por favor, escolha outro nome.`);
+        showSystemModal({ type: 'alert', title: 'Nome Conflitante', message: `Já existe um sistema de regras cadastrado com o nome "${editingSystem.name}"! Por favor, escolha outro nome.` });
         return;
       }
 
@@ -322,8 +369,9 @@ export default function DashboardPage() {
       }
       setIsEditingSystem(false);
       setEditingSystem(null);
+      showSystemModal({ type: 'success', title: 'Sistema Salvo', message: 'Sistema de regras salvo com sucesso!' });
     } catch (err: any) {
-      alert('Erro ao salvar sistema de regras: ' + (err?.message || JSON.stringify(err)));
+      showSystemModal({ type: 'alert', title: 'Erro ao Salvar', message: 'Erro ao salvar sistema de regras: ' + (err?.message || JSON.stringify(err)) });
       console.error(err);
     }
   }
@@ -333,7 +381,7 @@ export default function DashboardPage() {
     try {
       const parsed = JSON.parse(systemJsonImport);
       if (!parsed.name || !parsed.attributes) {
-        alert('Formato de JSON inválido. O arquivo deve conter ao menos os campos "name" e "attributes".');
+        showSystemModal({ type: 'alert', title: 'JSON Inválido', message: 'Formato de JSON inválido. O arquivo deve conter ao menos os campos "name" e "attributes".' });
         return;
       }
       const merged = {
@@ -343,9 +391,9 @@ export default function DashboardPage() {
       };
       setEditingSystem(merged);
       setSystemJsonImport('');
-      alert('Sistema importado com sucesso!');
+      showSystemModal({ type: 'success', title: 'Importação Concluída', message: 'Sistema importado com sucesso!' });
     } catch (e) {
-      alert('Erro ao analisar JSON. Certifique-se de que é um JSON válido.');
+      showSystemModal({ type: 'alert', title: 'Erro de Análise', message: 'Erro ao analisar JSON. Certifique-se de que é um JSON válido.' });
     }
   }
 
@@ -364,7 +412,7 @@ export default function DashboardPage() {
     };
     const jsonStr = JSON.stringify(cleanSystem, null, 2);
     navigator.clipboard.writeText(jsonStr);
-    alert('Configuração do sistema (JSON) copiada para a área de transferência!');
+    showSystemModal({ type: 'info', title: 'Copiado', message: 'Configuração do sistema (JSON) copiada para a área de transferência!' });
   }
 
   // 7. Exportar PDF do Livro de Regras do Sistema
@@ -380,7 +428,7 @@ export default function DashboardPage() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Erro ao exportar PDF do sistema:', err);
-      alert('Erro ao gerar o Livro de Regras em PDF.');
+      showSystemModal({ type: 'alert', title: 'Erro ao Exportar', message: 'Erro ao gerar o Livro de Regras em PDF.' });
     }
   }
 
@@ -406,7 +454,7 @@ export default function DashboardPage() {
       if (error) throw error;
       if (inserted) {
         setCharacters(prev => [inserted, ...prev]);
-        alert(`Ficha "${inserted.name}" importada com sucesso via PDF!`);
+        showSystemModal({ type: 'success', title: 'Ficha Importada', message: `Ficha "${inserted.name}" importada com sucesso via PDF!` });
       }
     } else if (payload.type === 'rule_system') {
       const systemData = { ...payload.data };
@@ -425,18 +473,16 @@ export default function DashboardPage() {
       if (error) throw error;
       if (inserted) {
         setRuleSystems(prev => [...prev, inserted]);
-        alert(`Sistema de regras "${inserted.name}" instalado com sucesso via PDF!`);
+        showSystemModal({ type: 'success', title: 'Sistema Instalado', message: `Sistema de regras "${inserted.name}" instalado com sucesso via PDF!` });
       }
     }
   }
 
-  async function handleSavePreferences(newPrefs: { theme: ThemeId; avatar_url: string; section_order: string[] }) {
+  async function handleSavePreferences(newPrefs: { theme: ThemeId; avatar_url: string }) {
     setCurrentTheme(newPrefs.theme);
-    setSectionOrder(newPrefs.section_order);
     if (newPrefs.avatar_url) setAvatarUrl(newPrefs.avatar_url);
 
     localStorage.setItem('gdd_theme', newPrefs.theme);
-    localStorage.setItem('gdd_section_order', JSON.stringify(newPrefs.section_order));
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -444,8 +490,7 @@ export default function DashboardPage() {
 
       const payload: any = {
         preferences: {
-          theme: newPrefs.theme,
-          section_order: newPrefs.section_order
+          theme: newPrefs.theme
         }
       };
       if (newPrefs.avatar_url) {
@@ -512,10 +557,10 @@ export default function DashboardPage() {
       );
 
       setTables(allTables);
-      alert('Convite aceito com sucesso! A mesa agora está disponível no seu painel.');
+      showSystemModal({ type: 'success', title: 'Convite Aceito', message: 'Convite aceito com sucesso! A mesa agora está disponível no seu painel.' });
     } catch (err) {
       console.error('Erro ao aceitar convite:', err);
-      alert('Erro ao aceitar o convite.');
+      showSystemModal({ type: 'alert', title: 'Erro', message: 'Erro ao aceitar o convite.' });
     }
   }
 
@@ -1052,7 +1097,7 @@ export default function DashboardPage() {
                         const color = colorSelect?.value;
 
                         if (!key || !name) {
-                          alert('Preencha chave e nome do atributo.');
+                          showSystemModal({ type: 'alert', title: 'Campos Incompletos', message: 'Preencha chave e nome do atributo.' });
                           return;
                         }
 
@@ -1063,7 +1108,7 @@ export default function DashboardPage() {
                         }));
                         const val = validateUniqueNameAndKey(currentList, key, name);
                         if (!val.valid) {
-                          alert(val.error);
+                          showSystemModal({ type: 'alert', title: 'Validação', message: val.error || 'Nome ou chave já existe.' });
                           return;
                         }
 
@@ -1167,14 +1212,14 @@ export default function DashboardPage() {
                         const color = colorSelect?.value;
 
                         if (!key || !name) {
-                          alert('Preencha chave e nome do recurso.');
+                          showSystemModal({ type: 'alert', title: 'Campos Incompletos', message: 'Preencha chave e nome do recurso.' });
                           return;
                         }
 
                         const attributeKeys = Object.keys(editingSystem.attributes || {});
                         const fVal = validateFormula(formula, attributeKeys);
                         if (!fVal.valid) {
-                          alert(fVal.error);
+                          showSystemModal({ type: 'alert', title: 'Fórmula Inválida', message: fVal.error || 'Fórmula incorreta.' });
                           return;
                         }
 
@@ -1188,7 +1233,7 @@ export default function DashboardPage() {
                         ];
                         const val = validateUniqueNameAndKey(currentList, key, name);
                         if (!val.valid) {
-                          alert(val.error);
+                          showSystemModal({ type: 'alert', title: 'Validação', message: val.error || 'Nome ou chave já existe.' });
                           return;
                         }
 
@@ -1263,7 +1308,6 @@ export default function DashboardPage() {
         onClose={() => setIsPreferencesOpen(false)}
         currentTheme={currentTheme}
         currentAvatarUrl={avatarUrl || profile?.avatar_url}
-        currentSectionOrder={sectionOrder}
         onSave={handleSavePreferences}
       />
 
@@ -1272,6 +1316,11 @@ export default function DashboardPage() {
         isOpen={isPdfModalOpen}
         onClose={() => setIsPdfModalOpen(false)}
         onImportSuccess={handleImportPdfSuccess}
+      />
+
+      <SystemModal
+        {...modalConfig}
+        onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
       />
     </div>
   );

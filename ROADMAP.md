@@ -12,6 +12,7 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
   - [x] Adicionar um validador visual na tela de criação e edição que exiba claramente o saldo de pontos (`Pontos Disponíveis = Pontos Totais - Pontos Gastos`).
   - [x] Bloquear o botão de aumento de atributos (`+`) e adição de novas vantagens/perícias caso o saldo de pontos seja zero ou negativo.
   - [x] Exibir mensagem de aviso em toast ou modal informando que o saldo de pontos é insuficiente para realizar a ação.
+  - [x] Substituir todas as chamadas nativas de `alert()`, `confirm()` por um componente de modal customizado (`SystemModal.tsx`) integrado ao design da aplicação.
   - [x] Adicionar verificação de limite também nas funções de backend/API de atualização para garantir consistência.
 
 ---
@@ -65,9 +66,18 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
   - [x] Criar modal e área de importação Drag-and-Drop de arquivos PDF: extrai automaticamente os metadados embutidos e restaura a Ficha ou instala o Sistema de Regras no app.
   - [x] Suportar exportação de Livro de Regras em PDF que sirva simultaneamente para leitura humana e como instalador automático de módulo de sistema.
 
-### 🎨 7. Interface de Personalização com Drag-and-Drop (Ficha & Dashboard) — Hard
-* **Descrição**: Customização de cores, avatares, temas visuais (Fantasia Clássica, Ficção Científica, Cyberpunk) e reorganização interativa de caixas da ficha por Drag-and-Drop.
+### 🎨 7. Interface de Personalização de Temas Visuais & Avatares — Hard
+* **Descrição**: Customização de cores, avatares e temas visuais (Fantasia Clássica, Ficção Científica, Cyberpunk).
 * **Checklist**:
   - [x] Criar paletas de temas globais (Dark, Cyberpunk, Retro/3D&T clássico) no Tailwind.
   - [x] Desenvolver modal de "Preferências de Exibição" nas configurações da ficha e dashboard.
-  - [ ] Implementar sistema de Drag-and-Drop interativo nativo (arrastar e soltar) nas caixas da ficha e no modal de personalização, substituindo a navegação atual por setas.
+
+---
+
+## 🔮 Futuros Upgrades & Expansões (Baixa Prioridade / Backlog)
+
+### 🧩 Reorganização Dinâmica por Drag-and-Drop das Box
+* **Descrição**: Sistema de Drag-and-Drop interativo fluido (usando biblioteca especializada como `@hello-pangea/dnd`) para customizar a ordem das caixas na ficha.
+* **Checklist**:
+  - [ ] Implementar reordenação fluida de colunas e seções da ficha.
+

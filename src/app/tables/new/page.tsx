@@ -6,12 +6,24 @@ import { createClient } from '@/utils/supabase/client';
 import { ArrowLeft, Users, Loader2, Save, BookOpen } from 'lucide-react';
 import { RuleSystem } from '@/types/game';
 
+import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
+
 export default function NewTablePage() {
   const router = useRouter();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+
+  // Modal State
+  const [modalConfig, setModalConfig] = useState<SystemModalOptions>({
+    isOpen: false,
+    message: '',
+  });
+
+  const showSystemModal = (options: Omit<SystemModalOptions, 'isOpen'>) => {
+    setModalConfig({ ...options, isOpen: true });
+  };
 
   // Form states
   const [name, setName] = useState('');
@@ -83,7 +95,11 @@ export default function NewTablePage() {
       }
     } catch (err) {
       console.error('Erro ao criar mesa:', err);
-      alert('Ocorreu um erro ao criar a mesa de jogo.');
+      showSystemModal({
+        type: 'alert',
+        title: 'Erro ao Criar Mesa',
+        message: 'Ocorreu um erro ao criar a mesa de jogo.',
+      });
       setLoading(false);
     }
   }
@@ -224,6 +240,11 @@ export default function NewTablePage() {
           </form>
         </div>
       </main>
+
+      <SystemModal
+        {...modalConfig}
+        onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

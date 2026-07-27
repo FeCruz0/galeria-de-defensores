@@ -53,6 +53,8 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [selectedCharacterSheet, setSelectedCharacterSheet] = useState<Character | null>(null);
 
   const [messageText, setMessageText] = useState('');
+  const [chatChannel, setChatChannel] = useState<'ON' | 'OFF'>('ON');
+  const [selectedSenderIdentity, setSelectedSenderIdentity] = useState<string>('MASTER'); // 'MASTER' ou ID de um personagem
   const [diceCount, setDiceCount] = useState(1);
   const [diceModifier, setDiceModifier] = useState(0);
   const [inviteUsername, setInviteUsername] = useState('');
@@ -421,13 +423,49 @@ export default function GameTablePage({ params }: { params: Params }) {
     const content = messageText.trim();
     setMessageText('');
 
+    let senderName = profile?.username || 'Jogador';
+    let senderAvatar = profile?.avatar_url || null;
+    let characterId: string | undefined = undefined;
+
+    // Se o chat separado estiver ativo e o canal for ON (Narrativa)
+    if (table?.has_separated_chat && chatChannel === 'ON') {
+      const isMaster = table.master_id === currentUser.id;
+
+      if (isMaster) {
+        if (selectedSenderIdentity === 'MASTER') {
+          senderName = 'Mestre';
+        } else {
+          const chosenChar = linkedCharacters.find(c => c.id === selectedSenderIdentity);
+          if (chosenChar) {
+            senderName = chosenChar.name;
+            senderAvatar = chosenChar.image_url || null;
+            characterId = chosenChar.id;
+          }
+        }
+      } else {
+        // Para jogador: busca o personagem vinculado dele
+        const myLinkedChar = linkedCharacters.find(c => c.user_id === currentUser.id) ||
+                             (selectedSenderIdentity !== 'MASTER' ? linkedCharacters.find(c => c.id === selectedSenderIdentity) : null);
+        if (myLinkedChar) {
+          senderName = myLinkedChar.name;
+          senderAvatar = myLinkedChar.image_url || null;
+          characterId = myLinkedChar.id;
+        } else {
+          senderName = `${profile?.username || 'Jogador'} (Sem Ficha)`;
+        }
+      }
+    }
+
     try {
       const { data, error } = await supabase.from('chat_messages').insert({
         table_id: id,
         sender_id: currentUser.id,
-        sender_name: profile?.username || 'Jogador',
+        sender_name: senderName,
+        sender_avatar: senderAvatar,
         content,
         type: 'TEXT',
+        channel: table?.has_separated_chat ? chatChannel : 'ON',
+        character_id: characterId,
         is_edited: false
       }).select().single();
 
@@ -1213,9 +1251,37 @@ export default function GameTablePage({ params }: { params: Params }) {
             </div>
           ) : (
             <>
+              {/* Sub-abas de Canal se o Chat Separado estiver Ativo na Mesa */}
+              {table?.has_separated_chat && (
+                <div className="flex border-b border-slate-800/80 bg-slate-900/40 px-3 py-1.5 gap-2">
+                  <button
+                    onClick={() => setChatChannel('ON')}
+                    className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+                      chatChannel === 'ON'
+                        ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    ⚔️ Narrativa (ON)
+                  </button>
+                  <button
+                    onClick={() => setChatChannel('OFF')}
+                    className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+                      chatChannel === 'OFF'
+                        ? 'bg-slate-700/40 text-slate-200 border border-slate-600/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    💬 Conversa Livre (OFF)
+                  </button>
+                </div>
+              )}
+
               {/* Feed de Mensagens */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((msg) => {
+                {messages
+                  .filter(msg => !table?.has_separated_chat || (msg.channel || 'ON') === chatChannel)
+                  .map((msg) => {
                   const isMe = msg.sender_id === currentUser?.id;
                   
                   if (msg.type === 'ROLL') {
@@ -1246,7 +1312,12 @@ export default function GameTablePage({ params }: { params: Params }) {
                   return (
                     <div key={msg.id} className={`flex flex-col max-w-[85%] ${isMe ? 'self-end ml-auto' : 'mr-auto'}`}>
                       <div className="flex items-center justify-between gap-2 mb-1 px-1">
-                        <span className="text-[11px] font-bold text-slate-400 truncate">{msg.sender_name}</span>
+                        <span className="text-[11px] font-bold text-slate-400 truncate flex items-center gap-1">
+                          {msg.sender_avatar && (
+                            <img src={msg.sender_avatar} alt="" className="w-3.5 h-3.5 rounded-full object-cover inline-block" />
+                          )}
+                          {msg.sender_name}
+                        </span>
                         <span className="text-[9px] text-slate-500">
                           {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -1264,22 +1335,47 @@ export default function GameTablePage({ params }: { params: Params }) {
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Input Form */}
-              <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-800 bg-[#0c1224] flex gap-2 flex-shrink-0">
-                <input
-                  type="text"
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  placeholder="Digite sua mensagem..."
-                  className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
-                />
-                <button
-                  type="submit"
-                  className="bg-purple-600 hover:bg-purple-500 text-white p-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-95"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
+              {/* Input Form com Seletor de Identidade */}
+              <div className="p-3 border-t border-slate-800 bg-[#0c1224] space-y-2 flex-shrink-0">
+                {/* Seletor de Identidades se for Chat ON e a mesa tiver chats separados */}
+                {table?.has_separated_chat && chatChannel === 'ON' && (
+                  <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
+                    <span>Falando como:</span>
+                    {currentUser?.id === table.master_id ? (
+                      <select
+                        value={selectedSenderIdentity}
+                        onChange={(e) => setSelectedSenderIdentity(e.target.value)}
+                        className="bg-slate-900 border border-slate-700/60 rounded px-2 py-0.5 text-[11px] text-amber-300 font-bold focus:outline-none cursor-pointer"
+                      >
+                        <option value="MASTER">🛡️ Mestre</option>
+                        {linkedCharacters.map(c => (
+                          <option key={c.id} value={c.id}>👤 {c.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="font-bold text-purple-300">
+                        👤 {linkedCharacters.find(c => c.user_id === currentUser?.id)?.name || `${profile?.username} (Sem Ficha)`}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    placeholder={table?.has_separated_chat && chatChannel === 'OFF' ? "Mensagem no chat livre (OFF)..." : "Mensagem no chat narrativo (ON)..."}
+                    className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-purple-600 hover:bg-purple-500 text-white p-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-95"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
             </>
           )}
 

@@ -52,6 +52,7 @@ create table public.tables (
   rules_mod jsonb default '{}'::jsonb not null,
   custom_damage_types jsonb default '[]'::jsonb not null,
   custom_unique_advantages jsonb default '[]'::jsonb not null,
+  has_separated_chat boolean default false not null,
   last_visual_roll jsonb, -- Guarda o estado da última rolagem física/visual da mesa
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -109,6 +110,8 @@ create table public.chat_messages (
   image_url text,
   content text not null,
   type public.message_type default 'TEXT'::public.message_type not null,
+  channel text default 'ON' not null,
+  character_id uuid references public.characters on delete set null,
   roll_result jsonb, -- Detalhes da rolagem
   reply_to_message_id uuid references public.chat_messages on delete set null,
   reply_to_sender_name text,

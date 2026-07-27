@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { ArrowLeft, Users, Loader2, Save, BookOpen } from 'lucide-react';
+import { ArrowLeft, Users, Loader2, Save, BookOpen, HelpCircle, MessageSquare } from 'lucide-react';
 import { RuleSystem } from '@/types/game';
 
 import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
@@ -30,6 +30,7 @@ export default function NewTablePage() {
   const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [password, setPassword] = useState('');
+  const [hasSeparatedChat, setHasSeparatedChat] = useState(true);
   const [systems, setSystems] = useState<RuleSystem[]>([]);
   const [ruleSystemId, setRuleSystemId] = useState<string>('');
 
@@ -80,6 +81,7 @@ export default function NewTablePage() {
           rule_system_id: ruleSystemId || null,
           is_private: isPrivate,
           password: isPrivate && password ? password : null,
+          has_separated_chat: hasSeparatedChat,
           rules_mod: {},
           custom_damage_types: [],
           custom_unique_advantages: [],
@@ -190,9 +192,38 @@ export default function NewTablePage() {
               </p>
             </div>
 
-            {/* Configurações de Privacidade */}
+            {/* Configurações de Chat & Privacidade */}
             <div className="p-4 bg-slate-800/20 border border-slate-800/80 rounded-xl space-y-4">
+              {/* Chat Separado Narrativo vs Off */}
               <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-200 text-sm block">Separar Chat em Narrativa (ON) e Fora de Personagem (OFF)</span>
+                    <button
+                      type="button"
+                      onClick={() => showSystemModal({
+                        type: 'info',
+                        title: 'Sobre o Chat Narrativo Separado',
+                        message: 'Ao ativar esta opção, a mesa terá duas abas de chat separadas:\n\n• Chat Narrativa (ON): Mensagens enviadas dentro do jogo com o nome e avatar dos personagens.\n• Chat Conversa Livre (OFF): Mensagens fora do jogo utilizando o nome de usuário real dos jogadores.'
+                      })}
+                      className="text-slate-400 hover:text-purple-400 transition-colors p-0.5"
+                      title="Clique para mais informações"
+                    >
+                      <HelpCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <span className="text-xs text-slate-400 block">Cria dois canais para organizar falas do personagem e conversas dos jogadores</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={hasSeparatedChat}
+                  onChange={(e) => setHasSeparatedChat(e.target.checked)}
+                  className="w-5 h-5 rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-purple-500"
+                />
+              </div>
+
+              {/* Mesa Privada */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-800/60">
                 <div>
                   <span className="font-semibold text-slate-200 text-sm block">Mesa Privada</span>
                   <span className="text-xs text-slate-400">Jogadores precisarão de uma senha para entrar na mesa</span>

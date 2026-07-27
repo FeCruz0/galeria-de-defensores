@@ -44,6 +44,7 @@ export interface Table {
   rules_mod: Record<string, any>;
   custom_damage_types: string[];
   custom_unique_advantages: UniqueAdvantage[];
+  has_separated_chat?: boolean;
   last_visual_roll?: VisualRoll;
   created_at: string;
 }
@@ -194,6 +195,8 @@ export interface ChatMessage {
   image_url?: string;
   content: string;
   type: MessageType;
+  channel?: 'ON' | 'OFF';
+  character_id?: string;
   roll_result?: RollResult;
   reply_to_message_id?: string;
   reply_to_sender_name?: string;

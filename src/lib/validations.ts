@@ -155,3 +155,20 @@ export function canLinkCharacterToTable(
   if (!tableRuleSystemId) return true;
   return tableRuleSystemId === characterRuleSystemId;
 }
+
+/**
+ * Valida se o novo tipo de dano é válido e não duplicado.
+ */
+export function validateDamageType(
+  existingTypes: string[],
+  newType: string
+): { valid: boolean; error?: string } {
+  const clean = newType.trim();
+  if (!clean) {
+    return { valid: false, error: 'O tipo de dano não pode ser vazio.' };
+  }
+  if (existingTypes.some(t => t.trim().toLowerCase() === clean.toLowerCase())) {
+    return { valid: false, error: `O tipo de dano "${clean}" já existe.` };
+  }
+  return { valid: true };
+}

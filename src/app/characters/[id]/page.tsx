@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Character, RuleSystem, AdvantageItem, Spell, InventoryItem, ModifierOption } from '@/types/game';
 import { calculateScore, getMaxPv, getMaxPm, computedCostPt, executeCustomRoll, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers } from '@/lib/rules';
-import { canAlterAttribute, canAffordCost } from '@/lib/validations';
+import { canAlterAttribute, canAffordCost, validateDamageType, validateUniqueNameAndKey, validateFormula } from '@/lib/validations';
 import { alphaAdvantages, alphaDisadvantages, alphaSkills, alphaRaces, alphaSpecializations } from '@/lib/catalogs/alpha-catalog';
 import { gaidenAdvantages, gaidenDisadvantages, gaidenSkills, gaidenRaces } from '@/lib/catalogs/gaiden-catalog';
 import { 
@@ -24,7 +24,8 @@ import {
   Pencil,
   Printer,
   Palette,
-  Download
+  Download,
+  Upload
 } from 'lucide-react';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 import EditAbilityModal from '@/components/EditAbilityModal';
@@ -140,6 +141,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
   const [loading, setLoading] = useState(true);
   const [character, setCharacter] = useState<Character | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [systemDef, setSystemDef] = useState<any>(STANDARD_SYSTEMS);
   const [savingStatus, setSavingStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo');
 
@@ -148,6 +150,10 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     isOpen: false,
     message: '',
   });
+  const [isManagingDamageTypes, setIsManagingDamageTypes] = useState(false);
+  const [isEditingSystemModalOpen, setIsEditingSystemModalOpen] = useState(false);
+  const [editingSystemState, setEditingSystemState] = useState<any>(null);
+  const [systemJsonImportSheet, setSystemJsonImportSheet] = useState('');
 
   const showSystemModal = (options: Omit<SystemModalOptions, 'isOpen'>) => {
     setModalConfig({ ...options, isOpen: true });
@@ -419,6 +425,9 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   useEffect(() => {
     async function loadCharacter() {
       try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) setCurrentUser(authUser);
+
         const { data: charData, error } = await supabase
           .from('characters')
           .select('*')
@@ -458,14 +467,17 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         if (systemData) {
           setSystemDef({
             id: systemData.id,
+            user_id: systemData.user_id,
             name: systemData.name,
+            description: systemData.description,
             attributes: systemData.attributes,
             resources: systemData.resources,
             advantages: systemData.advantages,
             disadvantages: systemData.disadvantages,
             skills: systemData.skills,
             is_base_system: systemData.is_base_system,
-            damage_types: systemData.damage_types || []
+            damage_types: systemData.damage_types || [],
+            dice_config: systemData.dice_config
           });
         }
       } catch (err) {
@@ -889,6 +901,91 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     });
   }
 
+  // Atualizar lista de tipos de dano do sistema de regras customizado no banco
+  async function handleUpdateSystemDamageTypes(newTypes: string[]) {
+    if (!systemDef || !systemDef.id || systemDef.is_base_system || !systemDef.user_id) return;
+    setSystemDef({
+      ...systemDef,
+      damage_types: newTypes
+    });
+    try {
+      await supabase
+        .from('rule_systems')
+        .update({ damage_types: newTypes })
+        .eq('id', systemDef.id);
+      showToast("Tipos de dano do sistema atualizados!");
+    } catch (err) {
+      console.error("Erro ao atualizar tipos de dano do sistema:", err);
+      showToast("Erro ao salvar tipos de dano.");
+    }
+  }
+
+  // Salvar alterações do sistema de regras customizado diretamente a partir da ficha
+  async function handleSaveCustomSystemFromSheet() {
+    if (!editingSystemState || !editingSystemState.id) return;
+
+    if (!editingSystemState.name.trim()) {
+      showSystemModal({ type: 'alert', title: 'Validação', message: 'O nome do sistema de regras não pode ser vazio.' });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('rule_systems')
+        .update({
+          name: editingSystemState.name.trim(),
+          description: editingSystemState.description,
+          attributes: editingSystemState.attributes,
+          resources: editingSystemState.resources,
+          damage_types: editingSystemState.damage_types || [],
+          advantages: editingSystemState.advantages || [],
+          disadvantages: editingSystemState.disadvantages || [],
+          skills: editingSystemState.skills || [],
+          dice_config: editingSystemState.dice_config || { count: 1, faces: 6 }
+        })
+        .eq('id', editingSystemState.id);
+
+      if (error) throw error;
+
+      setSystemDef(editingSystemState);
+      setIsEditingSystemModalOpen(false);
+      showToast("Sistema de Regras customizado atualizado no banco de dados!");
+    } catch (err) {
+      console.error("Erro ao atualizar sistema de regras:", err);
+      showSystemModal({ type: 'alert', title: 'Erro', message: 'Erro ao salvar o sistema de regras no banco de dados.' });
+    }
+  }
+
+  // Importar especificação JSON para o editor de sistema na ficha
+  function handleImportSystemInSheet() {
+    if (!systemJsonImportSheet.trim()) {
+      showSystemModal({ type: 'alert', title: 'JSON Vazio', message: 'Cole o conteúdo JSON do sistema.' });
+      return;
+    }
+    try {
+      const parsed = JSON.parse(systemJsonImportSheet);
+      if (!parsed.name || !parsed.attributes || !parsed.resources) {
+        showSystemModal({ type: 'alert', title: 'JSON Inválido', message: 'O JSON deve conter ao menos "name", "attributes" e "resources".' });
+        return;
+      }
+      setEditingSystemState({
+        ...editingSystemState,
+        name: parsed.name,
+        description: parsed.description || '',
+        attributes: parsed.attributes,
+        resources: parsed.resources,
+        damage_types: parsed.damage_types || editingSystemState.damage_types || [],
+        advantages: parsed.advantages || editingSystemState.advantages || [],
+        disadvantages: parsed.disadvantages || editingSystemState.disadvantages || [],
+        skills: parsed.skills || editingSystemState.skills || []
+      });
+      setSystemJsonImportSheet('');
+      showToast("Configurações do sistema importadas para o editor!");
+    } catch (err) {
+      showSystemModal({ type: 'alert', title: 'Erro ao Processar JSON', message: 'Certifique-se de que a sintaxe do JSON está correta.' });
+    }
+  }
+
   // Salvar edição de habilidade/vantagem local do personagem
   function handleSaveAbilityEdit(updatedItem: AdvantageItem) {
     if (!character || !editingAbilityItem) return;
@@ -1196,6 +1293,31 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
               <BookOpen className="w-3.5 h-3.5 text-purple-400" />
               <span className="text-[9px] uppercase text-slate-500">Sis:</span>
               <span className="text-slate-200">{systemDef.name || 'Padrão'}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (systemDef.is_base_system || !systemDef.user_id) {
+                    showSystemModal({
+                      type: 'info',
+                      title: 'Sistema Base Nativo (3D&T Alpha)',
+                      message: 'Sistemas base nativos são protegidos contra alteração.\n\nPara personalizar as regras, vá ao Sandbox no Dashboard e crie ou clone um novo Sistema de Regras Customizado!'
+                    });
+                  } else if (currentUser && systemDef.user_id !== currentUser.id) {
+                    showSystemModal({
+                      type: 'info',
+                      title: 'Sistema de Regras de Outro Autor',
+                      message: 'Este sistema de regras customizado pertence a outro usuário.\n\nApenas o criador original pode editar o sistema de regras.'
+                    });
+                  } else {
+                    setEditingSystemState({ ...systemDef });
+                    setIsEditingSystemModalOpen(true);
+                  }
+                }}
+                className="p-0.5 hover:bg-slate-700/50 text-slate-400 hover:text-purple-400 rounded transition-colors ml-0.5 cursor-pointer"
+                title="Editar Sistema de Regras Customizado"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
             </div>
 
             {/* Indicador de Escala */}
@@ -1478,7 +1600,34 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
           {/* Card de Tipos de Dano */}
           <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
-            <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Tipos de Dano</h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Tipos de Dano</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  if (systemDef.is_base_system || !systemDef.user_id) {
+                    showSystemModal({
+                      type: 'info',
+                      title: 'Sistema Base Nativo (3D&T Alpha)',
+                      message: 'Os tipos de dano dos sistemas base nativos são protegidos contra alteração.\n\nPara personalizar os tipos de dano da sua campanha, acesse o Sandbox no Dashboard e crie ou clone um novo Sistema de Regras Customizado!'
+                    });
+                  } else if (currentUser && systemDef.user_id !== currentUser.id) {
+                    showSystemModal({
+                      type: 'info',
+                      title: 'Sistema de Regras de Outro Autor',
+                      message: 'Este sistema de regras customizado pertence a outro usuário.\n\nApenas o criador original pode alterar os tipos de dano do sistema.'
+                    });
+                  } else {
+                    setIsManagingDamageTypes(!isManagingDamageTypes);
+                  }
+                }}
+                className="text-slate-400 hover:text-purple-400 text-xs transition-colors p-1 flex items-center gap-1 cursor-pointer"
+                title="Gerenciar Tipos de Dano do Sistema"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-semibold">{isManagingDamageTypes ? 'Concluir' : 'Editar'}</span>
+              </button>
+            </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -1507,6 +1656,77 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                 </select>
               </div>
             </div>
+
+            {/* Painel Inline de Gerenciamento para Sistemas Customizados */}
+            {isManagingDamageTypes && !systemDef.is_base_system && systemDef.user_id && (!currentUser || systemDef.user_id === currentUser.id) && (
+              <div className="pt-3 border-t border-slate-800/60 space-y-3 animate-fade-in">
+                <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider block">
+                  Gerenciar Tipos de Dano do Sistema Customizado
+                </span>
+                
+                <div className="flex flex-wrap gap-1.5">
+                  {(systemDef.damage_types || []).map((dtype: string, idx: number) => (
+                    <span 
+                      key={idx} 
+                      className="bg-slate-800/80 border border-slate-700/60 text-slate-200 text-[11px] px-2 py-0.5 rounded-md flex items-center gap-1"
+                    >
+                      {dtype}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = (systemDef.damage_types || []).filter((_: any, i: number) => i !== idx);
+                          handleUpdateSystemDamageTypes(updated);
+                        }}
+                        className="text-slate-400 hover:text-rose-400 font-bold ml-0.5 cursor-pointer"
+                        title="Excluir tipo de dano"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <input
+                    id="char-page-damage-type-input"
+                    type="text"
+                    placeholder="Novo tipo de dano..."
+                    className="flex-1 bg-slate-800/30 border border-slate-700/50 rounded-xl py-1.5 px-3 text-xs focus:outline-none text-slate-200"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const input = document.getElementById('char-page-damage-type-input') as HTMLInputElement;
+                        const val = input?.value || '';
+                        const check = validateDamageType(systemDef.damage_types || [], val);
+                        if (!check.valid) {
+                          showToast(check.error || "Tipo de dano inválido.");
+                          return;
+                        }
+                        handleUpdateSystemDamageTypes([...(systemDef.damage_types || []), val.trim()]);
+                        input.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('char-page-damage-type-input') as HTMLInputElement;
+                      const val = input?.value || '';
+                      const check = validateDamageType(systemDef.damage_types || [], val);
+                      if (!check.valid) {
+                        showToast(check.error || "Tipo de dano inválido.");
+                        return;
+                      }
+                      handleUpdateSystemDamageTypes([...(systemDef.damage_types || []), val.trim()]);
+                      input.value = '';
+                    }}
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs px-3 py-1.5 transition-all cursor-pointer"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Card de Desenvolvimento & Orçamento */}
@@ -2830,6 +3050,410 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         <div className="fixed bottom-6 right-6 z-50 bg-[#0f172a]/95 border border-purple-500/30 text-slate-200 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 backdrop-blur-md animate-fade-in max-w-sm">
           <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
           <span className="font-semibold text-xs leading-relaxed">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Modal Editor do Sistema de Regras Customizado na Ficha */}
+      {isEditingSystemModalOpen && editingSystemState && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto flex flex-col">
+            
+            {/* Cabeçalho */}
+            <div className="flex justify-between items-start border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-purple-500" />
+                  Editar Sistema de Regras Customizado
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  As alterações feitas aqui serão salvas no banco de dados e aplicadas a todas as fichas associadas a este sistema.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsEditingSystemModalOpen(false);
+                  setEditingSystemState(null);
+                }}
+                className="text-slate-400 hover:text-white font-bold text-sm"
+              >
+                Fechar ×
+              </button>
+            </div>
+
+            {/* Conteúdo Principal (Scrollable) */}
+            <div className="flex-1 overflow-y-auto space-y-6 pr-1">
+              
+              {/* Seção 1: Metadados */}
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">1. Identificação</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-400">Nome do Sistema</label>
+                    <input
+                      type="text"
+                      value={editingSystemState.name || ''}
+                      onChange={(e) => setEditingSystemState({ ...editingSystemState, name: e.target.value })}
+                      placeholder="Ex: Meu RPG Customizado..."
+                      className="w-full bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-400">Descrição do Sistema</label>
+                    <input
+                      type="text"
+                      value={editingSystemState.description || ''}
+                      onChange={(e) => setEditingSystemState({ ...editingSystemState, description: e.target.value })}
+                      placeholder="Breve resumo..."
+                      className="w-full bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 2: Atributos */}
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">2. Atributos Básicos</span>
+                
+                <div className="space-y-2.5">
+                  {Object.keys(editingSystemState.attributes || {}).map((key) => {
+                    const attr = editingSystemState.attributes[key];
+                    return (
+                      <div key={key} className="flex justify-between items-center bg-slate-800/20 border border-slate-800/45 p-3 rounded-xl">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-2.5 h-2.5 rounded-full`} style={{ backgroundColor: attr.color || '#64748b' }} />
+                          <span className="font-semibold text-sm text-slate-200 uppercase font-mono w-10">{key}</span>
+                          <span className="text-sm text-slate-350">{attr.name}</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const newAttrs = { ...editingSystemState.attributes };
+                            delete newAttrs[key];
+                            setEditingSystemState({ ...editingSystemState, attributes: newAttrs });
+                          }}
+                          className="p-1 text-slate-500 hover:text-rose-400 rounded-md hover:bg-rose-950/10 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {Object.keys(editingSystemState.attributes || {}).length === 0 && (
+                    <div className="text-center py-4 text-xs text-slate-500 italic">Nenhum atributo adicionado.</div>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-800/60 pt-4 mt-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-2">Novo Atributo</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <input
+                      id="sheet-new-attr-key"
+                      type="text"
+                      placeholder="Chave (ex: F, H)"
+                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                    />
+                    <input
+                      id="sheet-new-attr-name"
+                      type="text"
+                      placeholder="Nome (ex: Força)"
+                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                    />
+                    <select
+                      id="sheet-new-attr-color"
+                      className="bg-slate-850 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-300"
+                    >
+                      <option value="purple">Roxo</option>
+                      <option value="cyan">Ciano</option>
+                      <option value="emerald">Verde</option>
+                      <option value="rose">Rosa</option>
+                      <option value="amber">Âmbar</option>
+                      <option value="slate">Cinza</option>
+                    </select>
+                    <button
+                      onClick={() => {
+                        const keyInput = document.getElementById('sheet-new-attr-key') as HTMLInputElement;
+                        const nameInput = document.getElementById('sheet-new-attr-name') as HTMLInputElement;
+                        const colorSelect = document.getElementById('sheet-new-attr-color') as HTMLSelectElement;
+                        
+                        const key = keyInput?.value?.trim();
+                        const name = nameInput?.value?.trim();
+                        const color = colorSelect?.value;
+
+                        if (!key || !name) {
+                          showSystemModal({ type: 'alert', title: 'Campos Incompletos', message: 'Preencha chave e nome do atributo.' });
+                          return;
+                        }
+
+                        const currentList = Object.keys(editingSystemState.attributes || {}).map(k => ({
+                          id: k, key: k, name: editingSystemState.attributes[k].name
+                        }));
+                        const val = validateUniqueNameAndKey(currentList, key, name);
+                        if (!val.valid) {
+                          showSystemModal({ type: 'alert', title: 'Validação', message: val.error || 'Nome ou chave já existe.' });
+                          return;
+                        }
+
+                        const newAttrs = {
+                          ...(editingSystemState.attributes || {}),
+                          [key]: { name, key, color }
+                        };
+
+                        setEditingSystemState({ ...editingSystemState, attributes: newAttrs });
+
+                        keyInput.value = '';
+                        nameInput.value = '';
+                      }}
+                      className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs py-2 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 3: Recursos */}
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">3. Recursos Dinâmicos</span>
+                
+                <div className="space-y-2.5">
+                  {Object.keys(editingSystemState.resources || {}).map((key) => {
+                    const res = editingSystemState.resources[key];
+                    return (
+                      <div key={key} className="flex justify-between items-center bg-slate-800/20 border border-slate-800/45 p-3 rounded-xl">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-2.5 h-2.5 rounded-full`} style={{ backgroundColor: res.color || '#64748b' }} />
+                          <span className="font-semibold text-sm text-slate-200 uppercase font-mono w-10">{key}</span>
+                          <span className="text-xs text-slate-350">{res.name}</span>
+                          <span className="text-[10px] text-slate-500 font-mono bg-slate-900/40 px-2 py-0.5 rounded border border-slate-800/30">
+                            Fórmula: {res.formula || `${res.baseAttributeKey} * 5`}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const newResources = { ...editingSystemState.resources };
+                            delete newResources[key];
+                            setEditingSystemState({ ...editingSystemState, resources: newResources });
+                          }}
+                          className="p-1 text-slate-500 hover:text-rose-450 rounded-md hover:bg-rose-950/10 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {Object.keys(editingSystemState.resources || {}).length === 0 && (
+                    <div className="text-center py-4 text-xs text-slate-500 italic">Nenhum recurso adicionado.</div>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-800/60 pt-4 mt-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-2">Novo Recurso</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                    <input
+                      id="sheet-new-res-key"
+                      type="text"
+                      placeholder="Chave (ex: PV, PM)"
+                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                    />
+                    <input
+                      id="sheet-new-res-name"
+                      type="text"
+                      placeholder="Nome (ex: Vida)"
+                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                    />
+                    <input
+                      id="sheet-new-res-formula"
+                      type="text"
+                      placeholder="Fórmula (ex: R * 5)"
+                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 font-mono"
+                    />
+                    <select
+                      id="sheet-new-res-color"
+                      className="bg-slate-850 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-300"
+                    >
+                      <option value="rose">Rosa/Vermelho</option>
+                      <option value="cyan">Ciano/Azul</option>
+                      <option value="emerald">Verde</option>
+                      <option value="purple">Roxo</option>
+                      <option value="amber">Âmbar</option>
+                    </select>
+                    <button
+                      onClick={() => {
+                        const keyInput = document.getElementById('sheet-new-res-key') as HTMLInputElement;
+                        const nameInput = document.getElementById('sheet-new-res-name') as HTMLInputElement;
+                        const formulaInput = document.getElementById('sheet-new-res-formula') as HTMLInputElement;
+                        const colorSelect = document.getElementById('sheet-new-res-color') as HTMLSelectElement;
+
+                        const key = keyInput?.value?.trim();
+                        const name = nameInput?.value?.trim();
+                        const formula = formulaInput?.value?.trim() || 'R * 5';
+                        const color = colorSelect?.value;
+
+                        if (!key || !name) {
+                          showSystemModal({ type: 'alert', title: 'Campos Incompletos', message: 'Preencha chave e nome do recurso.' });
+                          return;
+                        }
+
+                        const attributeKeys = Object.keys(editingSystemState.attributes || {});
+                        const fVal = validateFormula(formula, attributeKeys);
+                        if (!fVal.valid) {
+                          showSystemModal({ type: 'alert', title: 'Fórmula Inválida', message: fVal.error || 'Fórmula incorreta.' });
+                          return;
+                        }
+
+                        const currentList = [
+                          ...Object.keys(editingSystemState.attributes || {}).map(k => ({
+                            id: k, key: k, name: editingSystemState.attributes[k].name
+                          })),
+                          ...Object.keys(editingSystemState.resources || {}).map(k => ({
+                            id: k, key: k, name: editingSystemState.resources[k].name
+                          }))
+                        ];
+                        const val = validateUniqueNameAndKey(currentList, key, name);
+                        if (!val.valid) {
+                          showSystemModal({ type: 'alert', title: 'Validação', message: val.error || 'Nome ou chave já existe.' });
+                          return;
+                        }
+
+                        const newResources = {
+                          ...(editingSystemState.resources || {}),
+                          [key]: { name, key, color, formula, baseAttributeKey: attributeKeys[0] || 'R' }
+                        };
+
+                        setEditingSystemState({ ...editingSystemState, resources: newResources });
+
+                        keyInput.value = '';
+                        nameInput.value = '';
+                        formulaInput.value = '';
+                      }}
+                      className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs py-2 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 4: Tipos de Dano */}
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">4. Tipos de Dano</span>
+                <p className="text-xs text-slate-400">Gerencie a lista de tipos de dano disponíveis para este sistema de regras.</p>
+                
+                <div className="flex flex-wrap gap-2">
+                  {(editingSystemState.damage_types || []).map((dtype: string, idx: number) => (
+                    <span 
+                      key={idx} 
+                      className="bg-slate-800/60 border border-slate-700/60 text-slate-200 text-xs px-2.5 py-1 rounded-lg flex items-center gap-1.5"
+                    >
+                      {dtype}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = (editingSystemState.damage_types || []).filter((_: any, i: number) => i !== idx);
+                          setEditingSystemState({ ...editingSystemState, damage_types: updated });
+                        }}
+                        className="text-slate-400 hover:text-rose-400 transition-colors p-0.5 rounded cursor-pointer"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  {(editingSystemState.damage_types || []).length === 0 && (
+                    <span className="text-xs text-slate-500 italic">Nenhum tipo de dano cadastrado.</span>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-800/60 pt-3 flex gap-2">
+                  <input
+                    id="sheet-modal-damage-type-input"
+                    type="text"
+                    placeholder="Novo tipo de dano..."
+                    className="flex-1 bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const input = document.getElementById('sheet-modal-damage-type-input') as HTMLInputElement;
+                        const val = input?.value || '';
+                        const check = validateDamageType(editingSystemState.damage_types || [], val);
+                        if (!check.valid) {
+                          showSystemModal({ type: 'alert', title: 'Validação', message: check.error || 'Tipo de dano inválido.' });
+                          return;
+                        }
+                        setEditingSystemState({ 
+                          ...editingSystemState, 
+                          damage_types: [...(editingSystemState.damage_types || []), val.trim()] 
+                        });
+                        input.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('sheet-modal-damage-type-input') as HTMLInputElement;
+                      const val = input?.value || '';
+                      const check = validateDamageType(editingSystemState.damage_types || [], val);
+                      if (!check.valid) {
+                        showSystemModal({ type: 'alert', title: 'Validação', message: check.error || 'Tipo de dano inválido.' });
+                        return;
+                      }
+                      setEditingSystemState({ 
+                        ...editingSystemState, 
+                        damage_types: [...(editingSystemState.damage_types || []), val.trim()] 
+                      });
+                      input.value = '';
+                    }}
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs px-4 py-2 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+
+              {/* Seção 5: Importação JSON */}
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">5. Configuração Avançada (JSON)</span>
+                <p className="text-xs text-slate-400">Importe a especificação em JSON para este sistema de regras.</p>
+                <textarea
+                  value={systemJsonImportSheet}
+                  onChange={(e) => setSystemJsonImportSheet(e.target.value)}
+                  placeholder='Cole o JSON aqui (ex: {"name": "RPG Customizado", "attributes": {...}})'
+                  rows={4}
+                  className="w-full bg-slate-800/20 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-300 font-mono"
+                />
+                <button
+                  onClick={handleImportSystemInSheet}
+                  className="bg-slate-800 hover:bg-slate-700 border border-slate-700/60 text-slate-200 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Importar Configuração
+                </button>
+              </div>
+
+            </div>
+
+            {/* Botoes de Controle de Salvamento */}
+            <div className="flex gap-4 border-t border-slate-800 pt-4 mt-2">
+              <button
+                onClick={() => {
+                  setIsEditingSystemModalOpen(false);
+                  setEditingSystemState(null);
+                }}
+                className="flex-1 py-2.5 bg-slate-850 hover:bg-slate-800 text-slate-350 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveCustomSystemFromSheet}
+                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Salvar Sistema de Regras
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
 

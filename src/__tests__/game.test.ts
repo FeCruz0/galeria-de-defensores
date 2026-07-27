@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers } from '../lib/rules';
-import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost, canLinkCharacterToTable } from '../lib/validations';
+import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost, canLinkCharacterToTable, validateDamageType } from '../lib/validations';
 import { Character } from '../types/game';
 
 
@@ -416,6 +416,22 @@ describe('Inventário Equipável e Modificadores de Equipamentos', () => {
 
     // F(2) + H(2) + R(1) = 5
     expect(calculateScore(char as any)).toBe(5);
+  });
+});
+
+describe('Validação de Tipos de Dano', () => {
+  const existing = ['Corte', 'Perfuração', 'Fogo'];
+
+  it('deve rejeitar tipos de dano vazios ou duplicados (case-insensitive)', () => {
+    expect(validateDamageType(existing, '').valid).toBe(false);
+    expect(validateDamageType(existing, '  ').valid).toBe(false);
+    expect(validateDamageType(existing, 'corte').valid).toBe(false);
+    expect(validateDamageType(existing, 'FOGO').valid).toBe(false);
+  });
+
+  it('deve aceitar novos tipos de dano válidos', () => {
+    expect(validateDamageType(existing, 'Psíquico').valid).toBe(true);
+    expect(validateDamageType(existing, 'Elétrico').valid).toBe(true);
   });
 });
 

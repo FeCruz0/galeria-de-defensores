@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Character, Profile, Table } from '@/types/game';
-import { validateUniqueNameAndKey, validateFormula } from '@/lib/validations';
+import { validateUniqueNameAndKey, validateFormula, validateDamageType } from '@/lib/validations';
 import { 
   User as UserIcon, 
   LogOut, 
@@ -1257,9 +1257,88 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Seção 4: Importação JSON */}
+              {/* Seção 4: Tipos de Dano */}
               <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
-                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">4. Configuração Avançada (JSON)</span>
+                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">4. Tipos de Dano</span>
+                <p className="text-xs text-slate-400">Gerencie a lista de tipos de dano disponíveis no seu sistema de regras para os ataques dos personagens.</p>
+                
+                {/* Tags de Tipos de Dano Existentes */}
+                <div className="flex flex-wrap gap-2">
+                  {(editingSystem.damage_types || []).map((dtype: string, idx: number) => (
+                    <span 
+                      key={idx} 
+                      className="bg-slate-800/60 border border-slate-700/60 text-slate-200 text-xs px-2.5 py-1 rounded-lg flex items-center gap-1.5"
+                    >
+                      {dtype}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = (editingSystem.damage_types || []).filter((_: any, i: number) => i !== idx);
+                          setEditingSystem({ ...editingSystem, damage_types: updated });
+                        }}
+                        className="text-slate-400 hover:text-rose-400 transition-colors p-0.5 rounded"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  {(editingSystem.damage_types || []).length === 0 && (
+                    <span className="text-xs text-slate-500 italic">Nenhum tipo de dano cadastrado.</span>
+                  )}
+                </div>
+
+                {/* Inline Add Novo Tipo de Dano */}
+                <div className="border-t border-slate-800/60 pt-3 flex gap-2">
+                  <input
+                    id="new-damage-type-input"
+                    type="text"
+                    placeholder="Novo tipo de dano (ex: Psíquico, Elétrico)..."
+                    className="flex-1 bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const input = document.getElementById('new-damage-type-input') as HTMLInputElement;
+                        const val = input?.value || '';
+                        const check = validateDamageType(editingSystem.damage_types || [], val);
+                        if (!check.valid) {
+                          showSystemModal({ type: 'alert', title: 'Validação', message: check.error || 'Tipo de dano inválido.' });
+                          return;
+                        }
+                        setEditingSystem({ 
+                          ...editingSystem, 
+                          damage_types: [...(editingSystem.damage_types || []), val.trim()] 
+                        });
+                        input.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('new-damage-type-input') as HTMLInputElement;
+                      const val = input?.value || '';
+                      const check = validateDamageType(editingSystem.damage_types || [], val);
+                      if (!check.valid) {
+                        showSystemModal({ type: 'alert', title: 'Validação', message: check.error || 'Tipo de dano inválido.' });
+                        return;
+                      }
+                      setEditingSystem({ 
+                        ...editingSystem, 
+                        damage_types: [...(editingSystem.damage_types || []), val.trim()] 
+                      });
+                      input.value = '';
+                    }}
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs px-4 py-2 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+
+              {/* Seção 5: Importação JSON */}
+              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">5. Configuração Avançada (JSON)</span>
                 <p className="text-xs text-slate-400">Importe as configurações ou catálogos do sistema de regras colando a string JSON abaixo.</p>
                 <textarea
                   value={systemJsonImport}

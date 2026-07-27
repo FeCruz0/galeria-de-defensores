@@ -38,6 +38,9 @@ export function getMaxPm(resistencia: number, advantages?: AdvantageItem[]): num
  * Calcula o custo computado em pontos de uma vantagem, desvantagem ou perícia.
  */
 export function computedCostPt(item: AdvantageItem): number {
+  if (item.appliedCostPt !== undefined && typeof item.appliedCostPt === 'number') {
+    return item.appliedCostPt;
+  }
   if (!item.isModular) {
     const match = item.cost.match(/-?\d+/);
     return match ? parseInt(match[0], 10) : 0;

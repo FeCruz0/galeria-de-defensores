@@ -67,6 +67,7 @@ export interface AdvantageItem {
   name: string;
   description: string;
   cost: string;
+  appliedCostPt?: number;
   // Campos de Vantagem Modular
   isModular?: boolean;
   modifiers?: ModifierOption[];

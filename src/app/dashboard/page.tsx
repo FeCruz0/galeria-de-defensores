@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import PreferencesModal from '@/components/PreferencesModal';
 import PdfImportModal from '@/components/PdfImportModal';
+import SystemEditorModal from '@/components/SystemEditorModal';
 import { exportRuleSystemToPdf, ExtractedPayload } from '@/lib/pdfPayload';
 import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
@@ -289,19 +290,20 @@ export default function DashboardPage() {
   }
 
   // 4. Salvar alterações do sistema de regras
-  async function handleSaveSystem() {
-    if (!editingSystem.name.trim()) {
+  async function handleSaveSystem(updatedSystem?: any) {
+    const sys = updatedSystem || editingSystem;
+    if (!sys || !sys.name || !sys.name.trim()) {
       showSystemModal({ type: 'alert', title: 'Campo Obrigatório', message: 'Nome do sistema é obrigatório.' });
       return;
     }
 
-    const attributeKeys = Object.keys(editingSystem.attributes || {});
+    const attributeKeys = Object.keys(sys.attributes || {});
     if (attributeKeys.length === 0) {
       showSystemModal({ type: 'alert', title: 'Atributos Necessários', message: 'O sistema de regras deve possuir ao menos um atributo.' });
       return;
     }
 
-    const resources = editingSystem.resources || {};
+    const resources = sys.resources || {};
     for (const key of Object.keys(resources)) {
       const res = resources[key];
       const formVal = validateFormula(res.formula || `${res.baseAttributeKey} * 5`, attributeKeys);
@@ -973,412 +975,16 @@ export default function DashboardPage() {
 
       {/* Modal Editor do Sandbox de Sistemas de Regras */}
       {isEditingSystem && editingSystem && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#0f172a] border border-slate-800 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto flex flex-col">
-            
-            {/* Cabeçalho */}
-            <div className="flex justify-between items-start border-b border-slate-800 pb-4">
-              <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Sword className="w-5 h-5 text-purple-500" />
-                  {editingSystem.id ? 'Editar Sistema de Regras' : 'Novo Sistema de Regras'}
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">Configure os metadados, atributos e recursos do seu RPG.</p>
-              </div>
-              <button
-                onClick={() => {
-                  setIsEditingSystem(false);
-                  setEditingSystem(null);
-                }}
-                className="text-slate-400 hover:text-white font-bold text-sm"
-              >
-                Fechar ×
-              </button>
-            </div>
-
-            {/* Conteúdo Principal (Scrollable) */}
-            <div className="flex-1 overflow-y-auto space-y-6 pr-1">
-              
-              {/* Seção 1: Metadados */}
-              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
-                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">1. Identificação</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-400">Nome do Sistema</label>
-                    <input
-                      type="text"
-                      value={editingSystem.name || ''}
-                      onChange={(e) => setEditingSystem({ ...editingSystem, name: e.target.value })}
-                      placeholder="Ex: 3D&T Alpha, D&D 5e..."
-                      className="w-full bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-400">Descrição do Sistema</label>
-                    <input
-                      type="text"
-                      value={editingSystem.description || ''}
-                      onChange={(e) => setEditingSystem({ ...editingSystem, description: e.target.value })}
-                      placeholder="Breve resumo..."
-                      className="w-full bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Seção 2: Atributos */}
-              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
-                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">2. Atributos Básicos</span>
-                
-                {/* Tabela/Lista de Atributos Existentes */}
-                <div className="space-y-2.5">
-                  {Object.keys(editingSystem.attributes || {}).map((key) => {
-                    const attr = editingSystem.attributes[key];
-                    return (
-                      <div key={key} className="flex justify-between items-center bg-slate-800/20 border border-slate-800/45 p-3 rounded-xl">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`w-2.5 h-2.5 rounded-full`} style={{ backgroundColor: attr.color || '#64748b' }} />
-                          <span className="font-semibold text-sm text-slate-200 uppercase font-mono w-10">{key}</span>
-                          <span className="text-sm text-slate-350">{attr.name}</span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const newAttrs = { ...editingSystem.attributes };
-                            delete newAttrs[key];
-                            setEditingSystem({ ...editingSystem, attributes: newAttrs });
-                          }}
-                          className="p-1 text-slate-500 hover:text-rose-400 rounded-md hover:bg-rose-950/10 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {Object.keys(editingSystem.attributes || {}).length === 0 && (
-                    <div className="text-center py-4 text-xs text-slate-500 italic">Nenhum atributo adicionado.</div>
-                  )}
-                </div>
-
-                {/* Formulário Inline de Novo Atributo */}
-                <div className="border-t border-slate-800/60 pt-4 mt-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-2">Novo Atributo</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                    <input
-                      id="new-attr-key"
-                      type="text"
-                      placeholder="Chave (ex: F, H)"
-                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
-                    />
-                    <input
-                      id="new-attr-name"
-                      type="text"
-                      placeholder="Nome (ex: Força)"
-                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
-                    />
-                    <select
-                      id="new-attr-color"
-                      className="bg-slate-850 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-300"
-                    >
-                      <option value="purple">Roxo</option>
-                      <option value="cyan">Ciano</option>
-                      <option value="emerald">Verde</option>
-                      <option value="rose">Rosa</option>
-                      <option value="amber">Âmbar</option>
-                      <option value="slate">Cinza</option>
-                    </select>
-                    <button
-                      onClick={() => {
-                        const keyInput = document.getElementById('new-attr-key') as HTMLInputElement;
-                        const nameInput = document.getElementById('new-attr-name') as HTMLInputElement;
-                        const colorSelect = document.getElementById('new-attr-color') as HTMLSelectElement;
-                        
-                        const key = keyInput?.value?.trim();
-                        const name = nameInput?.value?.trim();
-                        const color = colorSelect?.value;
-
-                        if (!key || !name) {
-                          showSystemModal({ type: 'alert', title: 'Campos Incompletos', message: 'Preencha chave e nome do atributo.' });
-                          return;
-                        }
-
-                        const currentList = Object.keys(editingSystem.attributes || {}).map(k => ({
-                          id: k,
-                          key: k,
-                          name: editingSystem.attributes[k].name
-                        }));
-                        const val = validateUniqueNameAndKey(currentList, key, name);
-                        if (!val.valid) {
-                          showSystemModal({ type: 'alert', title: 'Validação', message: val.error || 'Nome ou chave já existe.' });
-                          return;
-                        }
-
-                        const newAttrs = {
-                          ...(editingSystem.attributes || {}),
-                          [key]: { name, key, color }
-                        };
-
-                        setEditingSystem({ ...editingSystem, attributes: newAttrs });
-
-                        keyInput.value = '';
-                        nameInput.value = '';
-                      }}
-                      className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs py-2 transition-all flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Adicionar
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Seção 3: Recursos */}
-              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
-                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">3. Recursos Dinâmicos</span>
-                
-                {/* Tabela/Lista de Recursos */}
-                <div className="space-y-2.5">
-                  {Object.keys(editingSystem.resources || {}).map((key) => {
-                    const res = editingSystem.resources[key];
-                    return (
-                      <div key={key} className="flex justify-between items-center bg-slate-800/20 border border-slate-800/45 p-3 rounded-xl">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`w-2.5 h-2.5 rounded-full`} style={{ backgroundColor: res.color || '#64748b' }} />
-                          <span className="font-semibold text-sm text-slate-200 uppercase font-mono w-10">{key}</span>
-                          <span className="text-xs text-slate-350">{res.name}</span>
-                          <span className="text-[10px] text-slate-500 font-mono bg-slate-900/40 px-2 py-0.5 rounded border border-slate-800/30">
-                            Fórmula: {res.formula || `${res.baseAttributeKey} * 5`}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const newResources = { ...editingSystem.resources };
-                            delete newResources[key];
-                            setEditingSystem({ ...editingSystem, resources: newResources });
-                          }}
-                          className="p-1 text-slate-500 hover:text-rose-450 rounded-md hover:bg-rose-950/10 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {Object.keys(editingSystem.resources || {}).length === 0 && (
-                    <div className="text-center py-4 text-xs text-slate-500 italic">Nenhum recurso adicionado.</div>
-                  )}
-                </div>
-
-                {/* Formulário Inline de Novo Recurso */}
-                <div className="border-t border-slate-800/60 pt-4 mt-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-2">Novo Recurso</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                    <input
-                      id="new-res-key"
-                      type="text"
-                      placeholder="Chave (ex: PV, PM)"
-                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
-                    />
-                    <input
-                      id="new-res-name"
-                      type="text"
-                      placeholder="Nome (ex: Vida)"
-                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
-                    />
-                    <input
-                      id="new-res-formula"
-                      type="text"
-                      placeholder="Fórmula (ex: R * 5)"
-                      className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 font-mono"
-                    />
-                    <select
-                      id="new-res-color"
-                      className="bg-slate-850 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-300"
-                    >
-                      <option value="rose">Rosa/Vermelho</option>
-                      <option value="cyan">Ciano/Azul</option>
-                      <option value="emerald">Verde</option>
-                      <option value="purple">Roxo</option>
-                      <option value="amber">Âmbar</option>
-                    </select>
-                    <button
-                      onClick={() => {
-                        const keyInput = document.getElementById('new-res-key') as HTMLInputElement;
-                        const nameInput = document.getElementById('new-res-name') as HTMLInputElement;
-                        const formulaInput = document.getElementById('new-res-formula') as HTMLInputElement;
-                        const colorSelect = document.getElementById('new-res-color') as HTMLSelectElement;
-
-                        const key = keyInput?.value?.trim();
-                        const name = nameInput?.value?.trim();
-                        const formula = formulaInput?.value?.trim() || 'R * 5';
-                        const color = colorSelect?.value;
-
-                        if (!key || !name) {
-                          showSystemModal({ type: 'alert', title: 'Campos Incompletos', message: 'Preencha chave e nome do recurso.' });
-                          return;
-                        }
-
-                        const attributeKeys = Object.keys(editingSystem.attributes || {});
-                        const fVal = validateFormula(formula, attributeKeys);
-                        if (!fVal.valid) {
-                          showSystemModal({ type: 'alert', title: 'Fórmula Inválida', message: fVal.error || 'Fórmula incorreta.' });
-                          return;
-                        }
-
-                        const currentList = [
-                          ...Object.keys(editingSystem.attributes || {}).map(k => ({
-                            id: k, key: k, name: editingSystem.attributes[k].name
-                          })),
-                          ...Object.keys(editingSystem.resources || {}).map(k => ({
-                            id: k, key: k, name: editingSystem.resources[k].name
-                          }))
-                        ];
-                        const val = validateUniqueNameAndKey(currentList, key, name);
-                        if (!val.valid) {
-                          showSystemModal({ type: 'alert', title: 'Validação', message: val.error || 'Nome ou chave já existe.' });
-                          return;
-                        }
-
-                        const newResources = {
-                          ...(editingSystem.resources || {}),
-                          [key]: { name, key, color, formula, baseAttributeKey: attributeKeys[0] || 'R' }
-                        };
-
-                        setEditingSystem({ ...editingSystem, resources: newResources });
-
-                        keyInput.value = '';
-                        nameInput.value = '';
-                        formulaInput.value = '';
-                      }}
-                      className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs py-2 transition-all flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Adicionar
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Seção 4: Tipos de Dano */}
-              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
-                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">4. Tipos de Dano</span>
-                <p className="text-xs text-slate-400">Gerencie a lista de tipos de dano disponíveis no seu sistema de regras para os ataques dos personagens.</p>
-                
-                {/* Tags de Tipos de Dano Existentes */}
-                <div className="flex flex-wrap gap-2">
-                  {(editingSystem.damage_types || []).map((dtype: string, idx: number) => (
-                    <span 
-                      key={idx} 
-                      className="bg-slate-800/60 border border-slate-700/60 text-slate-200 text-xs px-2.5 py-1 rounded-lg flex items-center gap-1.5"
-                    >
-                      {dtype}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = (editingSystem.damage_types || []).filter((_: any, i: number) => i !== idx);
-                          setEditingSystem({ ...editingSystem, damage_types: updated });
-                        }}
-                        className="text-slate-400 hover:text-rose-400 transition-colors p-0.5 rounded"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                  {(editingSystem.damage_types || []).length === 0 && (
-                    <span className="text-xs text-slate-500 italic">Nenhum tipo de dano cadastrado.</span>
-                  )}
-                </div>
-
-                {/* Inline Add Novo Tipo de Dano */}
-                <div className="border-t border-slate-800/60 pt-3 flex gap-2">
-                  <input
-                    id="new-damage-type-input"
-                    type="text"
-                    placeholder="Novo tipo de dano (ex: Psíquico, Elétrico)..."
-                    className="flex-1 bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const input = document.getElementById('new-damage-type-input') as HTMLInputElement;
-                        const val = input?.value || '';
-                        const check = validateDamageType(editingSystem.damage_types || [], val);
-                        if (!check.valid) {
-                          showSystemModal({ type: 'alert', title: 'Validação', message: check.error || 'Tipo de dano inválido.' });
-                          return;
-                        }
-                        setEditingSystem({ 
-                          ...editingSystem, 
-                          damage_types: [...(editingSystem.damage_types || []), val.trim()] 
-                        });
-                        input.value = '';
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = document.getElementById('new-damage-type-input') as HTMLInputElement;
-                      const val = input?.value || '';
-                      const check = validateDamageType(editingSystem.damage_types || [], val);
-                      if (!check.valid) {
-                        showSystemModal({ type: 'alert', title: 'Validação', message: check.error || 'Tipo de dano inválido.' });
-                        return;
-                      }
-                      setEditingSystem({ 
-                        ...editingSystem, 
-                        damage_types: [...(editingSystem.damage_types || []), val.trim()] 
-                      });
-                      input.value = '';
-                    }}
-                    className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs px-4 py-2 transition-all flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Adicionar
-                  </button>
-                </div>
-              </div>
-
-              {/* Seção 5: Importação JSON */}
-              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
-                <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">5. Configuração Avançada (JSON)</span>
-                <p className="text-xs text-slate-400">Importe as configurações ou catálogos do sistema de regras colando a string JSON abaixo.</p>
-                <textarea
-                  value={systemJsonImport}
-                  onChange={(e) => setSystemJsonImport(e.target.value)}
-                  placeholder='Cole o arquivo JSON de regras aqui (ex: {"name": "RPG Customizado", "attributes": {...}})'
-                  rows={4}
-                  className="w-full bg-slate-800/20 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-300 font-mono"
-                />
-                <button
-                  onClick={handleImportSystem}
-                  className="bg-slate-800 hover:bg-slate-700 border border-slate-700/60 text-slate-200 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  Importar Configuração
-                </button>
-              </div>
-
-            </div>
-
-            {/* Botoes de Controle de Salvamento */}
-            <div className="flex gap-4 border-t border-slate-800 pt-4 mt-2">
-              <button
-                onClick={() => {
-                  setIsEditingSystem(false);
-                  setEditingSystem(null);
-                }}
-                className="flex-1 py-2.5 bg-slate-850 hover:bg-slate-800 text-slate-350 font-semibold rounded-xl text-xs transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveSystem}
-                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs transition-colors"
-              >
-                Salvar Sistema de Regras
-              </button>
-            </div>
-
-          </div>
-        </div>
+        <SystemEditorModal
+          isOpen={isEditingSystem}
+          systemState={editingSystem}
+          onSave={handleSaveSystem}
+          onClose={() => {
+            setIsEditingSystem(false);
+            setEditingSystem(null);
+          }}
+          showSystemModal={showSystemModal}
+        />
       )}
 
       {/* Modal de Preferências de Exibição */}

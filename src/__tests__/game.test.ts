@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMaxPv, getMaxPm, calculateScore, executeCustomRoll, getQuickRollModifiers, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers } from '../lib/rules';
+import { getMaxPv, getMaxPm, calculateScore, computedCostPt, executeCustomRoll, getQuickRollModifiers, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers } from '../lib/rules';
 import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost, canLinkCharacterToTable, validateDamageType } from '../lib/validations';
 import { Character } from '../types/game';
 
@@ -145,6 +145,17 @@ describe('Motor de Regras 3D&T Alpha', () => {
     // Desvantagens: -1u
     // Total esperado: 5 + 5 - 1 = 9
     expect(calculateScore(char)).toBe(9);
+  });
+
+  it('deve priorizar appliedCostPt se especificado no item de vantagem', () => {
+    const item: AdvantageItem = {
+      id: 'custom-cost-1',
+      name: 'Magia Branca (Gaiden)',
+      description: '',
+      cost: '1 a 3',
+      appliedCostPt: 3
+    };
+    expect(computedCostPt(item)).toBe(3);
   });
 
   it('deve executar uma rolagem customizada aplicando atributos e modificadores corretos', () => {

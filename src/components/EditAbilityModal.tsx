@@ -16,7 +16,8 @@ interface EditAbilityModalProps {
   item: AbilityItem;
   itemType: 'advantages' | 'disadvantages' | 'skills' | 'specializations';
   isBaseSystem: boolean;
-  onSave: (updatedItem: AbilityItem) => void;
+  isSystemOwner?: boolean;
+  onSave: (updatedItem: AbilityItem & { saveGlobal?: boolean }) => void;
   onClose: () => void;
   onTriggerClone: () => void;
 }
@@ -39,6 +40,7 @@ export default function EditAbilityModal({
   item,
   itemType,
   isBaseSystem,
+  isSystemOwner = false,
   onSave,
   onClose,
   onTriggerClone,
@@ -46,8 +48,10 @@ export default function EditAbilityModal({
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
   const [cost, setCost] = useState(item.cost);
+  const [appliedCostPt, setAppliedCostPt] = useState<number | undefined>(item.appliedCostPt);
   const [description, setDescription] = useState(item.description);
   const [selectedModifiers, setSelectedModifiers] = useState<string[]>(item.selectedModifiers || []);
+  const [saveGlobal, setSaveGlobal] = useState(false);
   const [error, setError] = useState('');
 
   // Atualizar o custo dinamicamente quando os modificadores são selecionados
@@ -72,8 +76,10 @@ export default function EditAbilityModal({
   const handleCancel = () => {
     setName(item.name);
     setCost(item.cost);
+    setAppliedCostPt(item.appliedCostPt);
     setDescription(item.description);
     setSelectedModifiers(item.selectedModifiers || []);
+    setSaveGlobal(false);
     setIsEditing(false);
     setError('');
   };
@@ -88,8 +94,10 @@ export default function EditAbilityModal({
       ...item,
       name: name.trim(),
       cost: cost.trim(),
+      appliedCostPt,
       description: description.trim(),
       selectedModifiers,
+      saveGlobal,
     });
   };
 
@@ -152,14 +160,14 @@ export default function EditAbilityModal({
 
             <div>
               <label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block mb-1">
-                Custo
+                Custo de Referência (Catálogo)
               </label>
               {isEditing ? (
                 <input
                   type="text"
                   value={cost}
                   onChange={(e) => setCost(e.target.value)}
-                  placeholder="Ex: 1 ponto, 2 pontos"
+                  placeholder="Ex: 1 a 3 pontos, Modular"
                   className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
                 />
               ) : (
@@ -168,6 +176,27 @@ export default function EditAbilityModal({
                 </p>
               )}
             </div>
+
+            {/* Pontos Gastos nesta Ficha (Instância do Personagem) */}
+            {isEditing && (
+              <div className="bg-slate-900/40 border border-slate-800/60 p-3 rounded-xl space-y-1.5">
+                <label className="text-[10px] text-purple-400 uppercase font-bold tracking-wider block">
+                  Pontos Aplicados nesta Ficha
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    value={appliedCostPt !== undefined ? appliedCostPt : (computedCostPt(item) || 0)}
+                    onChange={(e) => setAppliedCostPt(parseInt(e.target.value, 10))}
+                    placeholder="Pontos gastos"
+                    className="w-28 bg-slate-800/50 border border-slate-700/50 rounded-xl py-1.5 px-3 text-xs focus:outline-none focus:border-purple-500 text-slate-200 font-mono font-bold"
+                  />
+                  <span className="text-[11px] text-slate-400">
+                    Pontos descontados do orçamento deste personagem
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Modifiers (Modular advantages) */}
             {item.isModular && (
@@ -253,6 +282,22 @@ export default function EditAbilityModal({
                 </div>
               )}
             </div>
+
+            {/* Opção de Salvar Globalmente no Sistema Customizado */}
+            {isEditing && isSystemOwner && (
+              <div className="p-3 bg-purple-950/20 border border-purple-800/30 rounded-xl flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-semibold text-purple-300 block">Atualizar também no Sistema de Regras Customizado</span>
+                  <span className="text-[10px] text-slate-400 block">Salva as alterações de nome/custo/descrição no modelo do catálogo global.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={saveGlobal}
+                  onChange={(e) => setSaveGlobal(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                />
+              </div>
+            )}
           </div>
         </div>
 

@@ -1,14 +1,20 @@
 # 📝 Tasks - Galeria de Defensores
 
-## 🎯 Em Andamento: Correção da Permissão de Edição de Sistema Customizado na Ficha
-- [ ] Carregar `user_id` em `setSystemDef` ao buscar o sistema de regras em `src/app/characters/[id]/page.tsx`.
-- [ ] Carregar `currentUser` (usuário logado) e armazenar no estado da ficha.
-- [ ] Ajustar verificação de permissão: `!systemDef.is_base_system && systemDef.user_id === currentUser.id`.
-- [ ] Se o sistema pertencer a outro usuário, exibir mensagem informativa apropriada no `SystemModal`.
-- [ ] Permitir a edição e salvamento direto em `rule_systems` no Supabase quando a verificação for bem-sucedida.
-- [ ] Executar testes (`npx vitest run`) e validar build (`npm run build`).
+## 🎯 Em Andamento: Varredura de Tradução UI (Inglês -> Português)
+- [ ] Mapear todos os termos em inglês visíveis na UI em componentes, modais, headers e visualizações de fichas/mesas/sandbox.
+- [ ] Substituir rótulos de UI:
+  - `advantages` -> `Vantagens`
+  - `disadvantages` -> `Desvantagens`
+  - `skills` -> `Perícias`
+  - `specializations` -> `Especializações`
+  - `inventory` -> `Inventário`
+  - `spells` -> `Magias`
+  - `damage_types` -> `Tipos de Dano`
+  - `resources` -> `Recursos`
+- [ ] Preservar contratos de dados/banco de dados Supabase (`RuleSystem`, `Character`) mantendo compatibilidade de API.
+- [ ] Executar suíte de testes (`npx vitest run`) e build (`npm run build`).
 
-## ✅ Concluído: Edição de Sistema Customizado e Tipos de Dano
-- [x] Validações e testes unitários.
-- [x] Modal de edição de sistema na ficha.
-- [x] Gerenciamento inline de tipos de dano.
+## ✅ Concluído: Edição de Sistemas e Catálogo de Regras
+- [x] Componente `SystemEditorModal.tsx` centralizado.
+- [x] Gerenciamento de Vantagens, Desvantagens e Perícias no editor do sistema.
+- [x] Suporte a `appliedCostPt` e vantagens modulares.

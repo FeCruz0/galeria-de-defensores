@@ -23,7 +23,8 @@ import {
   HelpCircle,
   AlertCircle,
   Check,
-  Palette
+  Palette,
+  Bell
 } from 'lucide-react';
 import PreferencesModal from '@/components/PreferencesModal';
 import PdfImportModal from '@/components/PdfImportModal';
@@ -326,6 +327,7 @@ export default function DashboardPage() {
         disadvantages: editingSystem.disadvantages || [],
         skills: editingSystem.skills || [],
         damage_types: editingSystem.damage_types || [],
+        attribute_roll_config: editingSystem.attribute_roll_config,
         dice_config: editingSystem.dice_config || { count: 1, faces: 6 },
         is_base_system: false,
         user_id: user.id
@@ -579,6 +581,19 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleDismissNotification(notifId: string) {
+    try {
+      await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notifId);
+
+      setNotifications(prev => prev.filter(n => n.id !== notifId));
+    } catch (err) {
+      console.error('Erro ao marcar notificação como lida:', err);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#070b19] flex items-center justify-center">
@@ -677,38 +692,78 @@ export default function DashboardPage() {
         </div>
 
         {/* Notificações / Convites */}
-        {notifications.length > 0 && (
-          <div className="mb-8 space-y-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-purple-400 animate-pulse" />
-              Convites Pendentes ({notifications.length})
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {notifications.map((notif) => (
-                <div key={notif.id} className="bg-purple-950/10 border border-purple-900/35 p-4 rounded-xl flex flex-col justify-between sm:flex-row sm:items-center gap-4 shadow-xl">
-                  <div>
-                    <span className="text-xs font-bold text-purple-400 block mb-1">{notif.title}</span>
-                    <p className="text-xs text-slate-300">{notif.message}</p>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => handleAcceptInvite(notif)}
-                      className="bg-purple-600 hover:bg-purple-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs transition-colors active:scale-95 cursor-pointer"
-                    >
-                      Aceitar
-                    </button>
-                    <button
-                      onClick={() => handleDeclineInvite(notif.id)}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 py-1.5 px-3 rounded-lg text-xs transition-colors active:scale-95 cursor-pointer"
-                    >
-                      Recusar
-                    </button>
+        {(() => {
+          const inviteNotifs = notifications.filter(n => n.type === 'INVITE' || !n.type);
+          const systemNotifs = notifications.filter(n => n.type === 'SYSTEM');
+
+          if (notifications.length === 0) return null;
+
+          return (
+            <div className="mb-8 space-y-6">
+              {/* Convites de Mesa */}
+              {inviteNotifs.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-purple-400 animate-pulse" />
+                    Convites de Mesa Pendentes ({inviteNotifs.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {inviteNotifs.map((notif) => (
+                      <div key={notif.id} className="bg-purple-950/10 border border-purple-900/35 p-4 rounded-xl flex flex-col justify-between sm:flex-row sm:items-center gap-4 shadow-xl">
+                        <div>
+                          <span className="text-xs font-bold text-purple-400 block mb-1">{notif.title}</span>
+                          <p className="text-xs text-slate-300">{notif.message}</p>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => handleAcceptInvite(notif)}
+                            className="bg-purple-600 hover:bg-purple-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs transition-colors active:scale-95 cursor-pointer"
+                          >
+                            Aceitar
+                          </button>
+                          <button
+                            onClick={() => handleDeclineInvite(notif.id)}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 py-1.5 px-3 rounded-lg text-xs transition-colors active:scale-95 cursor-pointer"
+                          >
+                            Recusar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* Avisos do Sistema (ex: PE/XP Recebido) */}
+              {systemNotifs.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Bell className="w-4 h-4 text-cyan-400 animate-pulse" />
+                    Notificações & Avisos do Sistema ({systemNotifs.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {systemNotifs.map((notif) => (
+                      <div key={notif.id} className="bg-cyan-950/10 border border-cyan-900/35 p-4 rounded-xl flex flex-col justify-between sm:flex-row sm:items-center gap-4 shadow-xl">
+                        <div>
+                          <span className="text-xs font-bold text-cyan-400 block mb-1">{notif.title}</span>
+                          <p className="text-xs text-slate-300">{notif.message}</p>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => handleDismissNotification(notif.id)}
+                            className="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs transition-colors active:scale-95 cursor-pointer"
+                          >
+                            Entendido
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Abas e Visualização */}
         <div className="flex border-b border-slate-800 mb-6">

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMaxPv, getMaxPm, calculateScore, computedCostPt, executeCustomRoll, getQuickRollModifiers, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers } from '../lib/rules';
+import { getMaxPv, getMaxPm, calculateScore, computedCostPt, executeCustomRoll, getQuickRollModifiers, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers, executeAttributeTest } from '../lib/rules';
 import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost, canLinkCharacterToTable, validateDamageType } from '../lib/validations';
 import { Character } from '../types/game';
 
@@ -443,6 +443,71 @@ describe('Validação de Tipos de Dano', () => {
   it('deve aceitar novos tipos de dano válidos', () => {
     expect(validateDamageType(existing, 'Psíquico').valid).toBe(true);
     expect(validateDamageType(existing, 'Elétrico').valid).toBe(true);
+  });
+});
+
+describe('Mecânica de Rolagem de Atributo Base (executeAttributeTest)', () => {
+  it('deve realizar teste ROLL_UNDER no 3D&T Alpha (1d6 <= Atributo)', () => {
+    const config = {
+      type: 'ROLL_UNDER' as const,
+      diceCount: 1,
+      diceFaces: 6,
+      allowCritical: true,
+      critSuccessValue: 1,
+      critFailureValue: 6
+    };
+
+    // Dado 3 <= Habilidade 4 -> SUCESSO
+    const resSuccess = executeAttributeTest('H', 'Habilidade', 4, config, 0, [3]);
+    expect(resSuccess.success).toBe(true);
+    expect(resSuccess.isCritSuccess).toBe(false);
+    expect(resSuccess.isCritFailure).toBe(false);
+
+    // Dado 5 <= Habilidade 4 -> FALHA
+    const resFail = executeAttributeTest('H', 'Habilidade', 4, config, 0, [5]);
+    expect(resFail.success).toBe(false);
+
+    // Dado 1 -> SUCESSO CRÍTICO
+    const resCrit = executeAttributeTest('H', 'Habilidade', 4, config, 0, [1]);
+    expect(resCrit.success).toBe(true);
+    expect(resCrit.isCritSuccess).toBe(true);
+
+    // Dado 6 -> FALHA CRÍTICA
+    const resBlunder = executeAttributeTest('H', 'Habilidade', 4, config, 0, [6]);
+    expect(resBlunder.success).toBe(false);
+    expect(resBlunder.isCritFailure).toBe(true);
+  });
+
+  it('deve realizar teste ROLL_OVER (1d6 + Atributo >= Dificuldade)', () => {
+    const config = {
+      type: 'ROLL_OVER' as const,
+      diceCount: 1,
+      diceFaces: 6,
+      allowCritical: true,
+      critSuccessValue: 6,
+      critFailureValue: 1,
+      defaultTargetNumber: 6
+    };
+
+    // Força 2 + Dado 4 = 6 >= Dificuldade 6 -> SUCESSO
+    const res = executeAttributeTest('F', 'Força', 2, config, 0, [4]);
+    expect(res.total).toBe(6);
+    expect(res.success).toBe(true);
+  });
+
+  it('deve realizar teste DICE_POOL (N dados d6 por ponto de Atributo)', () => {
+    const config = {
+      type: 'DICE_POOL' as const,
+      diceCount: 1,
+      diceFaces: 6,
+      allowCritical: false,
+      critSuccessValue: 5 // Sucesso se dado >= 5
+    };
+
+    // Habilidade 3 -> rola 3d6: [2, 5, 6] -> 2 sucessos
+    const res = executeAttributeTest('H', 'Habilidade', 3, config, 0, [2, 5, 6]);
+    expect(res.total).toBe(2);
+    expect(res.success).toBe(true);
   });
 });
 

@@ -16,6 +16,18 @@ export interface Profile {
   updated_at: string;
 }
 
+export type AttributeRollType = 'ROLL_UNDER' | 'ROLL_OVER' | 'DICE_POOL' | 'ROLL_AND_ADD';
+
+export interface AttributeRollConfig {
+  type: AttributeRollType;
+  diceCount: number;
+  diceFaces: number;
+  allowCritical: boolean;
+  critSuccessValue?: number;
+  critFailureValue?: number;
+  defaultTargetNumber?: number;
+}
+
 export interface RuleSystem {
   id: string;
   user_id: string;
@@ -28,6 +40,7 @@ export interface RuleSystem {
   disadvantages?: any[];
   skills?: any[];
   damage_types?: string[];
+  attribute_roll_config?: AttributeRollConfig;
   is_base_system?: boolean;
   created_at: string;
 }

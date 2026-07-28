@@ -4,7 +4,7 @@ import React, { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Character, RuleSystem, AdvantageItem, Spell, InventoryItem, ModifierOption } from '@/types/game';
-import { calculateScore, getMaxPv, getMaxPm, computedCostPt, executeCustomRoll, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers } from '@/lib/rules';
+import { calculateScore, getMaxPv, getMaxPm, computedCostPt, executeCustomRoll, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers, executeAttributeTest } from '@/lib/rules';
 import { canAlterAttribute, canAffordCost, validateDamageType, validateUniqueNameAndKey, validateFormula } from '@/lib/validations';
 import { alphaAdvantages, alphaDisadvantages, alphaSkills, alphaRaces, alphaSpecializations } from '@/lib/catalogs/alpha-catalog';
 import { gaidenAdvantages, gaidenDisadvantages, gaidenSkills, gaidenRaces } from '@/lib/catalogs/gaiden-catalog';
@@ -25,7 +25,8 @@ import {
   Printer,
   Palette,
   Download,
-  Upload
+  Upload,
+  Dices
 } from 'lucide-react';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 import EditAbilityModal from '@/components/EditAbilityModal';
@@ -835,6 +836,26 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     });
   }
 
+  // Acionar rolagem de teste de atributo base da ficha
+  function handleTriggerAttributeRoll(key: string, name: string, value: number) {
+    if (!character) return;
+    const testResult = executeAttributeTest(key, name, value, systemDef.attribute_roll_config);
+
+    setVirtualRoll({
+      results: testResult.dices.length > 0 ? testResult.dices : [6],
+      title: `Teste de ${name}`,
+      callback: () => {
+        setActiveRollResult({
+          total: testResult.total,
+          dices: testResult.dices,
+          modifiers: 0,
+          isCrit: testResult.isCritSuccess,
+          componentsText: testResult.descriptionText
+        });
+      }
+    });
+  }
+
   // Excluir rolagem customizada
   function handleDeleteCustomRoll(rollId: string) {
     if (!character) return;
@@ -942,6 +963,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
           advantages: editingSystemState.advantages || [],
           disadvantages: editingSystemState.disadvantages || [],
           skills: editingSystemState.skills || [],
+          attribute_roll_config: editingSystemState.attribute_roll_config,
           dice_config: editingSystemState.dice_config || { count: 1, faces: 6 }
         })
         .eq('id', editingSystemState.id);
@@ -1502,7 +1524,15 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                   const bonus = modValue - value;
                   return (
                     <div key={key} className="flex justify-between items-center bg-slate-800/20 border border-slate-800/60 rounded-xl p-3">
-                      <span className="font-medium text-slate-300">{attr.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerAttributeRoll(key, attr.name, modValue)}
+                        className="flex items-center gap-1.5 font-medium text-slate-300 hover:text-purple-400 group cursor-pointer transition-colors text-left"
+                        title={`Testar Atributo ${attr.name}`}
+                      >
+                        <Dices className="w-3.5 h-3.5 text-slate-500 group-hover:text-purple-400 transition-colors shrink-0" />
+                        <span>{attr.name}</span>
+                      </button>
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => handleAttributeChange(key, -1)}

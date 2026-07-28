@@ -1,4 +1,4 @@
-import { Character, AdvantageItem, CustomRoll, RollResult, InventoryItem } from '../types/game';
+import { Character, AdvantageItem, CustomRoll, RollResult, InventoryItem, AttributeRollConfig, AttributeRollType } from '../types/game';
 
 /**
  * Retorna o valor máximo de Pontos de Vida (PV) baseado na Resistência do personagem.
@@ -357,5 +357,139 @@ export function convertXpToPoints(
   return {
     experience: finalXp,
     saved_points: finalSavedPoints
+  };
+}
+
+export interface AttributeTestResult {
+  attributeKey: string;
+  attributeName: string;
+  attributeValue: number;
+  rollType: AttributeRollType;
+  dices: number[];
+  total: number;
+  success: boolean;
+  isCritSuccess: boolean;
+  isCritFailure: boolean;
+  targetValue?: number;
+  descriptionText: string;
+}
+
+/**
+ * Executa um teste de atributo baseado nas configurações do sistema de regras (ROLL_UNDER, ROLL_OVER, DICE_POOL, etc.).
+ */
+export function executeAttributeTest(
+  attributeKey: string,
+  attributeName: string,
+  attributeValue: number,
+  config?: AttributeRollConfig,
+  modifier: number = 0,
+  diceOverride?: number[]
+): AttributeTestResult {
+  const rollType = config?.type || 'ROLL_UNDER';
+  const diceCount = config?.diceCount || 1;
+  const diceFaces = config?.diceFaces || 6;
+  const allowCritical = config?.allowCritical ?? true;
+  const critSuccessVal = config?.critSuccessValue ?? (rollType === 'ROLL_UNDER' ? 1 : diceFaces);
+  const critFailureVal = config?.critFailureValue ?? (rollType === 'ROLL_UNDER' ? diceFaces : 1);
+
+  const dices: number[] = [];
+  let overrideIndex = 0;
+
+  if (rollType === 'DICE_POOL') {
+    const poolSize = Math.max(1, attributeValue + modifier);
+    for (let i = 0; i < poolSize; i++) {
+      const die = (diceOverride && overrideIndex < diceOverride.length)
+        ? diceOverride[overrideIndex++]
+        : Math.floor(Math.random() * diceFaces) + 1;
+      dices.push(die);
+    }
+
+    const threshold = config?.critSuccessValue || 5;
+    const successes = dices.filter(d => d >= threshold).length;
+    const isSuccess = successes > 0;
+
+    return {
+      attributeKey,
+      attributeName,
+      attributeValue,
+      rollType,
+      dices,
+      total: successes,
+      success: isSuccess,
+      isCritSuccess: dices.includes(diceFaces),
+      isCritFailure: successes === 0 && dices.includes(1),
+      targetValue: threshold,
+      descriptionText: `Teste de ${attributeName} (Dice Pool): Dados [${dices.join(', ')}] vs Limiar ${threshold} ➔ ${successes} Sucesso(s)`
+    };
+  }
+
+  for (let i = 0; i < diceCount; i++) {
+    const die = (diceOverride && overrideIndex < diceOverride.length)
+      ? diceOverride[overrideIndex++]
+      : Math.floor(Math.random() * diceFaces) + 1;
+    dices.push(die);
+  }
+
+  const diceSum = dices.reduce((sum, d) => sum + d, 0);
+
+  if (rollType === 'ROLL_UNDER') {
+    const effectiveTarget = attributeValue + modifier;
+    const isCritSuccess = allowCritical && dices.length === 1 && dices[0] === critSuccessVal;
+    const isCritFailure = allowCritical && dices.length === 1 && dices[0] === critFailureVal;
+    const isSuccess = isCritSuccess || (!isCritFailure && diceSum <= effectiveTarget);
+
+    const resultLabel = isCritSuccess ? 'SUCESSO CRÍTICO!' : isCritFailure ? 'FALHA CRÍTICA!' : (isSuccess ? 'SUCESSO!' : 'FALHA!');
+
+    return {
+      attributeKey,
+      attributeName,
+      attributeValue,
+      rollType,
+      dices,
+      total: diceSum,
+      success: isSuccess,
+      isCritSuccess,
+      isCritFailure,
+      targetValue: effectiveTarget,
+      descriptionText: `Teste de ${attributeName} (Roll Under): Rolou [${dices.join(', ')}] vs ${attributeName} ${effectiveTarget} ➔ ${resultLabel}`
+    };
+  }
+
+  if (rollType === 'ROLL_OVER') {
+    const total = diceSum + attributeValue + modifier;
+    const target = config?.defaultTargetNumber || 6;
+    const isCritSuccess = allowCritical && dices.length === 1 && dices[0] === critSuccessVal;
+    const isCritFailure = allowCritical && dices.length === 1 && dices[0] === critFailureVal;
+    const isSuccess = isCritSuccess || (!isCritFailure && total >= target);
+
+    const resultLabel = isCritSuccess ? 'SUCESSO CRÍTICO!' : isCritFailure ? 'FALHA CRÍTICA!' : (isSuccess ? 'SUCESSO!' : 'FALHA!');
+
+    return {
+      attributeKey,
+      attributeName,
+      attributeValue,
+      rollType,
+      dices,
+      total,
+      success: isSuccess,
+      isCritSuccess,
+      isCritFailure,
+      targetValue: target,
+      descriptionText: `Teste de ${attributeName} (Roll Over): Dado [${dices.join(', ')}] + ${attributeValue} = ${total} vs Dificuldade ${target} ➔ ${resultLabel}`
+    };
+  }
+
+  const total = diceSum + attributeValue + modifier;
+  return {
+    attributeKey,
+    attributeName,
+    attributeValue,
+    rollType,
+    dices,
+    total,
+    success: true,
+    isCritSuccess: allowCritical && dices.length === 1 && dices[0] === diceFaces,
+    isCritFailure: allowCritical && dices.length === 1 && dices[0] === 1,
+    descriptionText: `Rolagem de ${attributeName}: Dado [${dices.join(', ')}] + ${attributeValue} = ${total}`
   };
 }

@@ -4,7 +4,7 @@ import React, { use, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { Table, ChatMessage, Profile, Character } from '@/types/game';
-import { executeCustomRoll, getMaxPv, getMaxPm, getModifiedAttributes, getEquippedItemsModifiers } from '@/lib/rules';
+import { executeCustomRoll, getMaxPv, getMaxPm, getModifiedAttributes, getEquippedItemsModifiers, executeAttributeTest } from '@/lib/rules';
 import { canLinkCharacterToTable } from '@/lib/validations';
 import { 
   ArrowLeft, 
@@ -132,7 +132,7 @@ export default function GameTablePage({ params }: { params: Params }) {
         // Mesa
         const { data: tblData } = await supabase
           .from('tables')
-          .select('*, rule_systems(name)')
+          .select('*, rule_systems(name, attribute_roll_config)')
           .eq('id', id)
           .single();
 
@@ -674,10 +674,8 @@ export default function GameTablePage({ params }: { params: Params }) {
       else attrKey = name;
 
       const modifiedValue = modifiedAttrs[attrKey] ?? value;
-
-      const dieVal = Math.floor(Math.random() * 6) + 1;
-      const isCrit = dieVal === 6;
-      const total = dieVal + modifiedValue;
+      const rollConfig = (table?.rule_systems as any)?.attribute_roll_config;
+      const testResult = executeAttributeTest(attrKey, name, modifiedValue, rollConfig);
       
       let statusSuffix = '';
       if (activeEffects.length > 0) {
@@ -688,15 +686,15 @@ export default function GameTablePage({ params }: { params: Params }) {
         if (activeNames) statusSuffix = ` [Status: ${activeNames}]`;
       }
 
-      content = `rolou teste de ${name} [${modifiedValue}]${statusSuffix} 🎲`;
-      diceValuesForAnimation = [dieVal];
+      content = `realizou teste de ${name}${statusSuffix} 🎲`;
+      diceValuesForAnimation = testResult.dices;
       
       rollResultPayload = {
-        total,
-        dices: [dieVal],
-        modifiers: modifiedValue,
-        isCrit,
-        componentsText: `1d6 [${dieVal}${isCrit ? '!' : ''}] + ${name} [${modifiedValue}] = ${total}`
+        total: testResult.total,
+        dices: testResult.dices,
+        modifiers: 0,
+        isCrit: testResult.isCritSuccess,
+        componentsText: testResult.descriptionText
       };
     } else if (rollObj) {
       const result = executeCustomRoll(
@@ -1642,7 +1640,7 @@ export default function GameTablePage({ params }: { params: Params }) {
                 ))}
                 {(selectedCharacterSheet.skills || []).map((sk: any, index: number) => (
                   <div key={index} className="flex justify-between items-center bg-slate-800/10 p-2 rounded-lg border border-slate-800/40">
-                    <span className="text-slate-300 font-medium">{sk}</span>
+                    <span className="text-slate-300 font-medium">{typeof sk === 'object' ? sk.name : sk}</span>
                     <span className="text-[10px] text-slate-500 font-mono">Perícia</span>
                   </div>
                 ))}

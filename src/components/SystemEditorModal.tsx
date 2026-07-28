@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { BookOpen, Plus, Trash2, Edit2, Search, Upload, X, Check, Layers } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, Upload, X, Check, Layers, Dices } from 'lucide-react';
 import { validateUniqueNameAndKey, validateFormula, validateDamageType } from '@/lib/validations';
 
 interface SystemEditorModalProps {
@@ -267,6 +267,7 @@ export default function SystemEditorModal({
         attributes: parsed.attributes,
         resources: parsed.resources,
         damage_types: parsed.damage_types || editingSystem.damage_types || [],
+        attribute_roll_config: parsed.attribute_roll_config || editingSystem.attribute_roll_config,
         advantages: parsed.advantages || editingSystem.advantages || [],
         disadvantages: parsed.disadvantages || editingSystem.disadvantages || [],
         skills: parsed.skills || editingSystem.skills || []
@@ -524,12 +525,106 @@ export default function SystemEditorModal({
             </div>
           </div>
 
-          {/* Seção 5: Catálogo de Habilidades (Vantagens, Desvantagens, Perícias) */}
+          {/* Seção 5: Mecânica de Rolagem de Atributo Base */}
+          <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Dices className="w-4 h-4 text-purple-400" />
+              <span className="text-xs font-bold text-slate-350 uppercase tracking-wider block">
+                5. Mecânica de Rolagem de Atributo Base
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Define como as rolagens de atributo (ex: Teste de Habilidade ou Força) se comportam quando acionadas na mesa ou ficha.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400">Tipo de Teste</label>
+                <select
+                  value={editingSystem.attribute_roll_config?.type || 'ROLL_UNDER'}
+                  onChange={(e) => {
+                    const type = e.target.value as any;
+                    setEditingSystem({
+                      ...editingSystem,
+                      attribute_roll_config: {
+                        ...(editingSystem.attribute_roll_config || { diceCount: 1, diceFaces: 6, allowCritical: true }),
+                        type,
+                        critSuccessValue: type === 'ROLL_UNDER' ? 1 : 6,
+                        critFailureValue: type === 'ROLL_UNDER' ? 6 : 1
+                      }
+                    });
+                  }}
+                  className="w-full bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                >
+                  <option value="ROLL_UNDER">Roll Under (1d6 ≤ Atributo - 3D&T)</option>
+                  <option value="ROLL_OVER">Roll Over (1d6 + Atributo ≥ Dificuldade)</option>
+                  <option value="DICE_POOL">Dice Pool (N dados por ponto de Atributo)</option>
+                  <option value="ROLL_AND_ADD">Rolar e Somar (1d6 + Atributo)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400">Faces do Dado</label>
+                <select
+                  value={editingSystem.attribute_roll_config?.diceFaces || 6}
+                  onChange={(e) => {
+                    setEditingSystem({
+                      ...editingSystem,
+                      attribute_roll_config: {
+                        ...(editingSystem.attribute_roll_config || { type: 'ROLL_UNDER', diceCount: 1, allowCritical: true }),
+                        diceFaces: parseInt(e.target.value, 10) || 6
+                      }
+                    });
+                  }}
+                  className="w-full bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                >
+                  <option value="6">d6 (6 lados)</option>
+                  <option value="10">d10 (10 lados)</option>
+                  <option value="20">d20 (20 lados)</option>
+                  <option value="100">d100 (100 lados)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400">Qtd de Dados Base</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={editingSystem.attribute_roll_config?.diceCount || 1}
+                  onChange={(e) => {
+                    setEditingSystem({
+                      ...editingSystem,
+                      attribute_roll_config: {
+                        ...(editingSystem.attribute_roll_config || { type: 'ROLL_UNDER', diceFaces: 6, allowCritical: true }),
+                        diceCount: parseInt(e.target.value, 10) || 1
+                      }
+                    });
+                  }}
+                  disabled={editingSystem.attribute_roll_config?.type === 'DICE_POOL'}
+                  className="w-full bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 font-mono disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl text-xs text-purple-300">
+              <strong>Resumo do Teste:</strong>{' '}
+              {editingSystem.attribute_roll_config?.type === 'ROLL_OVER'
+                ? `O jogador rola ${editingSystem.attribute_roll_config?.diceCount || 1}d${editingSystem.attribute_roll_config?.diceFaces || 6} + Atributo. Sucesso se total ≥ Dificuldade.`
+                : editingSystem.attribute_roll_config?.type === 'DICE_POOL'
+                ? `O jogador rola N d${editingSystem.attribute_roll_config?.diceFaces || 6} (onde N = valor do Atributo). Cada dado ≥ 5 conta como Sucesso.`
+                : editingSystem.attribute_roll_config?.type === 'ROLL_AND_ADD'
+                ? `O jogador rola ${editingSystem.attribute_roll_config?.diceCount || 1}d${editingSystem.attribute_roll_config?.diceFaces || 6} + Atributo.`
+                : `O jogador rola ${editingSystem.attribute_roll_config?.diceCount || 1}d${editingSystem.attribute_roll_config?.diceFaces || 6}. Sucesso se resultado ≤ Atributo (3D&T Alpha/Gaiden).`}
+            </div>
+          </div>
+
+          {/* Seção 6: Catálogo de Habilidades (Vantagens, Desvantagens, Perícias) */}
           <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800/60 pb-3">
               <div>
                 <span className="text-xs font-bold text-purple-400 uppercase tracking-wider block">
-                  5. Catálogo de Habilidades do Sistema
+                  6. Catálogo de Habilidades do Sistema
                 </span>
                 <p className="text-[11px] text-slate-400">
                   Gerencie o modelo global de vantagens, desvantagens e perícias oferecidas neste sistema.

@@ -36,6 +36,7 @@ create table public.rule_systems (
   skills jsonb default '[]'::jsonb not null, -- Catálogo de Perícias do sistema
   damage_types jsonb default '[]'::jsonb not null, -- Tipos de dano permitidos
   dice_config jsonb default '{"count": 1, "faces": 6}'::jsonb not null, -- Configuração dos dados
+  attribute_roll_config jsonb, -- Configurações de rolagem de atributo base
   is_base_system boolean default false not null, -- Impede exclusão/modificação de regras nativas
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

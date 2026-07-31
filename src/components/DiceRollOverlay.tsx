@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 interface DiceRollOverlayProps {
   diceResults: number[];
@@ -11,39 +11,49 @@ interface DiceRollOverlayProps {
 
 type Vec3 = [number, number, number];
 
+interface DiePhysics {
+  id: number;
+  val: number;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  rx: number;
+  ry: number;
+  dhRx: number;
+  dhRy: number;
+  state: 'idle' | 'rolling' | 'dragging' | 'settled';
+  size: number;
+  // Para d100 (dezena e unidade)
+  tensVal?: number;
+  unitsVal?: number;
+  rxUnits?: number;
+  ryUnits?: number;
+  dhRxUnits?: number;
+  dhRyUnits?: number;
+}
+
 export default function DiceRollOverlay({ 
   diceResults, 
   diceFaces = 6, 
   onComplete, 
   title = 'Rolando Dados' 
 }: DiceRollOverlayProps) {
-  const [animationPhase, setAnimationPhase] = useState<'rolling' | 'settled'>('rolling');
-  
-  // Guardar rotações dos dados (no d100, guarda pares de dezenas e unidades)
-  const [rotations, setRotations] = useState<{ rx: number; ry: number }[]>([]);
-  const [rotationsUnits, setRotationsUnits] = useState<{ rx: number; ry: number }[]>([]);
+  const [animationPhase, setAnimationPhase] = useState<'idle' | 'rolling' | 'settled'>('idle');
+  const [dicePhysics, setDicePhysics] = useState<DiePhysics[]>([]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDraggingGroupRef = useRef<boolean>(false);
+  const wasDraggingRef = useRef<boolean>(false);
+  const touchHistoryRef = useRef<{ x: number; y: number; t: number }[]>([]);
+  const dragOffsetsRef = useRef<{ id: number; offsetX: number; offsetY: number }[]>([]);
+
+  // Rotações finais alvo calculadas matematicamente via Normais 3D
+  const targetAnglesRef = useRef<{ rx: number; ry: number }[]>([]);
+  const targetAnglesUnitsRef = useRef<{ rx: number; ry: number }[]>([]);
 
   useEffect(() => {
-    // Definir rotações iniciais aleatórias
-    const initialRotations = diceResults.map(() => ({
-      rx: Math.floor(Math.random() * 360),
-      ry: Math.floor(Math.random() * 360)
-    }));
-    const initialUnits = diceResults.map(() => ({
-      rx: Math.floor(Math.random() * 360),
-      ry: Math.floor(Math.random() * 360)
-    }));
-
-    setRotations(initialRotations);
-    setRotationsUnits(initialUnits);
-
-    // Animação com desaceleração física fluida (Easing Cubic Ease-Out)
-    let animationFrameId: number;
-    const duration = 1600;
-    const startTime = performance.now();
-
-    // Rotações finais alvo calculadas matematicamente via Normais 3D
-    const targetAngles = diceResults.map((val) => {
+    targetAnglesRef.current = diceResults.map((val) => {
       if (diceFaces === 100) {
         const tensVal = val === 100 ? 0 : Math.floor(val / 10) * 10;
         return getTargetAnglesByFaceNormal(10, tensVal, true, false);
@@ -51,7 +61,7 @@ export default function DiceRollOverlay({
       return getTargetAnglesByFaceNormal(diceFaces, val);
     });
 
-    const targetAnglesUnits = diceResults.map((val) => {
+    targetAnglesUnitsRef.current = diceResults.map((val) => {
       if (diceFaces === 100) {
         const unitsVal = val === 100 ? 0 : val % 10;
         return getTargetAnglesByFaceNormal(10, unitsVal, false, true);
@@ -59,172 +69,536 @@ export default function DiceRollOverlay({
       return { rx: 0, ry: 0 };
     });
 
-    const animate = (now: number) => {
-      const elapsed = Math.min(duration, now - startTime);
-      const progress = elapsed / duration;
-      
-      // Curva de desaceleração física (ease-out cúbico)
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-
-      if (progress < 1) {
-        setRotations(initialRotations.map((init, idx) => {
-          const target = targetAngles[idx];
-          const totalSpinsX = 720 * (1 - easeOut);
-          const totalSpinsY = 720 * (1 - easeOut);
-          return {
-            rx: target.rx + totalSpinsX,
-            ry: target.ry + totalSpinsY
-          };
-        }));
-
-        if (diceFaces === 100) {
-          setRotationsUnits(initialUnits.map((init, idx) => {
-            const target = targetAnglesUnits[idx];
-            const totalSpinsX = 720 * (1 - easeOut);
-            const totalSpinsY = 720 * (1 - easeOut);
-            return {
-              rx: target.rx + totalSpinsX,
-              ry: target.ry + totalSpinsY
-            };
-          }));
-        }
-
-        animationFrameId = requestAnimationFrame(animate);
-      } else {
-        setAnimationPhase('settled');
-        setRotations(targetAngles);
-        if (diceFaces === 100) {
-          setRotationsUnits(targetAnglesUnits);
-        }
-      }
+    // Posições e velocidades iniciais dos dados (Grid Responsivo Centralizado na Viewport)
+    const getScreenDimensions = () => {
+      const w = Math.max(320, typeof window !== 'undefined' ? window.innerWidth : 800);
+      const h = Math.max(400, typeof window !== 'undefined' ? window.innerHeight : 600);
+      return { w, h };
     };
 
-    animationFrameId = requestAnimationFrame(animate);
+    const { w, h } = getScreenDimensions();
+    const count = diceResults.length;
+    const isD100 = diceFaces === 100;
+    const dieW = isD100 ? Math.min(w - 20, 270) : Math.min(w - 20, 150);
+    const dieH = isD100 ? 140 : 150;
+    const gap = 16;
 
-    const autoDismissTimer = setTimeout(() => {
-      onComplete();
-    }, 3800);
+    // Calcular colunas e linhas responsivas para caber perfeitamente na viewport
+    const maxCols = Math.max(1, Math.floor((w - 20) / (dieW + gap)));
+    const numCols = Math.min(count, maxCols);
+    const numRows = Math.ceil(count / numCols);
+
+    const totalGridH = numRows * dieH + (numRows - 1) * gap;
+    const startGridY = Math.max(75, (h - totalGridH) / 2);
+
+    const initialDice: DiePhysics[] = diceResults.map((val, idx) => {
+      const row = Math.floor(idx / numCols);
+      const col = idx % numCols;
+      const itemsInRow = Math.min(numCols, count - row * numCols);
+
+      const rowWidth = itemsInRow * dieW + (itemsInRow - 1) * gap;
+      const startRowX = (w - rowWidth) / 2;
+
+      const calcX = startRowX + col * (dieW + gap);
+      const calcY = startGridY + row * (dieH + gap);
+
+      return {
+        id: idx,
+        val,
+        x: Math.max(10, Math.min(w - dieW - 10, calcX)),
+        y: Math.max(70, Math.min(h - dieH - 70, calcY)),
+        dx: 0,
+        dy: 0,
+        rx: Math.floor(Math.random() * 360),
+        ry: Math.floor(Math.random() * 360),
+        dhRx: 0,
+        dhRy: 0,
+        state: 'idle',
+        size: dieW,
+        tensVal: val === 100 ? 0 : Math.floor(val / 10) * 10,
+        unitsVal: val === 100 ? 0 : val % 10,
+        rxUnits: Math.floor(Math.random() * 360),
+        ryUnits: Math.floor(Math.random() * 360),
+        dhRxUnits: 0,
+        dhRyUnits: 0,
+      };
+    });
+
+    setDicePhysics(initialDice);
+
+    let animationFrameId: number;
+    let autoDismissTimer: NodeJS.Timeout | null = null;
+
+    const runPhysicsLoop = () => {
+      const curW = Math.max(320, window.innerWidth || 800);
+      const curH = Math.max(400, window.innerHeight || 600);
+      const minX = 10;
+      const minY = 70;
+
+      setDicePhysics((prevDice) => {
+        if (prevDice.length === 0) return prevDice;
+
+        const nextDice = prevDice.map((die, idx) => {
+          if (die.state === 'idle') {
+            // Garantir que se a janela carregar ou for redimensionada, os dados estáticos fiquem perfeitamente centralizados
+            const dW = die.size;
+            const dH = isD100 ? 140 : 150;
+            const g = 16;
+            const mCols = Math.max(1, Math.floor((curW - 20) / (dW + g)));
+            const nCols = Math.min(prevDice.length, mCols);
+            const nRows = Math.ceil(prevDice.length / nCols);
+            const gridH = nRows * dH + (nRows - 1) * g;
+            const gridY = Math.max(75, (curH - gridH) / 2);
+            const r = Math.floor(idx / nCols);
+            const c = idx % nCols;
+            const inRow = Math.min(nCols, prevDice.length - r * nCols);
+            const rW = inRow * dW + (inRow - 1) * g;
+            const rX = (curW - rW) / 2;
+            const targetX = Math.max(10, Math.min(curW - dW - 10, rX + c * (dW + g)));
+            const targetY = Math.max(70, Math.min(curH - dH - 70, gridY + r * (dH + g)));
+
+            // Atualizar posições estáticas se houver discrepância por causa de carregamento
+            if (Math.abs(die.x - targetX) > 2 || Math.abs(die.y - targetY) > 2) {
+              return { ...die, x: targetX, y: targetY };
+            }
+            return die;
+          }
+
+          if (die.state === 'dragging') {
+            return die;
+          }
+
+          if (die.state === 'settled') {
+            return die;
+          }
+
+          // Atualizar Posição 2D
+          let newX = die.x + die.dx;
+          let newY = die.y + die.dy;
+          let newDx = die.dx;
+          let newDy = die.dy;
+
+          // Atualizar Rotações 3D
+          let newRx = die.rx + die.dhRx;
+          let newRy = die.ry + die.dhRy;
+          let newDhRx = die.dhRx * 0.96;
+          let newDhRy = die.dhRy * 0.96;
+
+          let newRxUnits = (die.rxUnits ?? 0) + (die.dhRxUnits ?? 0);
+          let newRyUnits = (die.ryUnits ?? 0) + (die.dhRyUnits ?? 0);
+          let newDhRxUnits = (die.dhRxUnits ?? 0) * 0.96;
+          let newDhRyUnits = (die.dhRyUnits ?? 0) * 0.96;
+
+          const maxX = curW - die.size - 10;
+          const maxY = curH - die.size - 120;
+
+          // Rebatimento nas Paredes (Wall Bouncing com Restituição de 70%)
+          if (newX < minX) {
+            newX = minX;
+            newDx = Math.abs(newDx) * 0.7;
+            newDhRx += (Math.random() * 20 - 10);
+          } else if (newX > maxX) {
+            newX = maxX;
+            newDx = -Math.abs(newDx) * 0.7;
+            newDhRx += (Math.random() * 20 - 10);
+          }
+
+          if (newY < minY) {
+            newY = minY;
+            newDy = Math.abs(newDy) * 0.7;
+            newDhRy += (Math.random() * 20 - 10);
+          } else if (newY > maxY) {
+            newY = maxY;
+            newDy = -Math.abs(newDy) * 0.7;
+            newDhRy += (Math.random() * 20 - 10);
+          }
+
+          // Atrito Físico (Damping)
+          newDx *= 0.975;
+          newDy *= 0.975;
+
+          const currentSpeed = Math.sqrt(newDx * newDx + newDy * newDy);
+          const target = targetAnglesRef.current[idx] || { rx: 0, ry: 0 };
+          const targetUnits = targetAnglesUnitsRef.current[idx] || { rx: 0, ry: 0 };
+
+          let newState: 'rolling' | 'settled' = 'rolling';
+
+          // Suavizar rotação em direção ao ângulo alvo quando desacelerar
+          if (currentSpeed < 4) {
+            newRx = lerpAngle(newRx, target.rx, 0.15);
+            newRy = lerpAngle(newRy, target.ry, 0.15);
+            if (diceFaces === 100) {
+              newRxUnits = lerpAngle(newRxUnits, targetUnits.rx, 0.15);
+              newRyUnits = lerpAngle(newRyUnits, targetUnits.ry, 0.15);
+            }
+          }
+
+          // Critério de parada completa
+          if (currentSpeed < 0.35 && Math.abs(newDhRx) < 0.5) {
+            newState = 'settled';
+            newDx = 0;
+            newDy = 0;
+            newRx = target.rx;
+            newRy = target.ry;
+            newRxUnits = targetUnits.rx;
+            newRyUnits = targetUnits.ry;
+          }
+
+          return {
+            ...die,
+            x: newX,
+            y: newY,
+            dx: newDx,
+            dy: newDy,
+            rx: newRx,
+            ry: newRy,
+            dhRx: newDhRx,
+            dhRy: newDhRy,
+            rxUnits: newRxUnits,
+            ryUnits: newRyUnits,
+            dhRxUnits: newDhRxUnits,
+            dhRyUnits: newDhRyUnits,
+            state: newState
+          };
+        });
+
+        // Colisões Elásticas entre Dados (Dice-to-Dice Collision)
+        for (let i = 0; i < nextDice.length; i++) {
+          for (let j = i + 1; j < nextDice.length; j++) {
+            const d1 = nextDice[i];
+            const d2 = nextDice[j];
+
+            const c1x = d1.x + d1.size / 2;
+            const c1y = d1.y + d1.size / 2;
+            const c2x = d2.x + d2.size / 2;
+            const c2y = d2.y + d2.size / 2;
+
+            const dx = c2x - c1x;
+            const dy = c2y - c1y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const minDist = (d1.size + d2.size) * 0.46;
+
+            if (dist < minDist) {
+              // Separação Estática
+              const overlap = minDist - dist;
+              const nx = dx / dist;
+              const ny = dy / dist;
+
+              if (d1.state === 'rolling') {
+                d1.x -= nx * overlap * 0.5;
+                d1.y -= ny * overlap * 0.5;
+              }
+              if (d2.state === 'rolling') {
+                d2.x += nx * overlap * 0.5;
+                d2.y += ny * overlap * 0.5;
+              }
+
+              // Impulso Elástico Dinâmico com Transferência Angular Intensificada
+              const rvx = d2.dx - d1.dx;
+              const rvy = d2.dy - d1.dy;
+              const velAlongNormal = rvx * nx + rvy * ny;
+
+              if (velAlongNormal < 0) {
+                const restitution = 0.88;
+                const impulse = -(1 + restitution) * velAlongNormal / 2;
+
+                // Força de Rotação Angular proporcional ao impacto
+                const spinPower = Math.min(50, Math.abs(velAlongNormal) * 3 + 28);
+
+                if (d1.state === 'rolling') {
+                  d1.dx -= impulse * nx;
+                  d1.dy -= impulse * ny;
+                  d1.dhRx += (Math.random() * spinPower - spinPower / 2);
+                  d1.dhRy += (Math.random() * spinPower - spinPower / 2);
+                  if (diceFaces === 100) {
+                    d1.dhRxUnits = (d1.dhRxUnits ?? 0) + (Math.random() * spinPower - spinPower / 2);
+                    d1.dhRyUnits = (d1.dhRyUnits ?? 0) + (Math.random() * spinPower - spinPower / 2);
+                  }
+                }
+                if (d2.state === 'rolling') {
+                  d2.dx += impulse * nx;
+                  d2.dy += impulse * ny;
+                  d2.dhRx += (Math.random() * spinPower - spinPower / 2);
+                  d2.dhRy += (Math.random() * spinPower - spinPower / 2);
+                  if (diceFaces === 100) {
+                    d2.dhRxUnits = (d2.dhRxUnits ?? 0) + (Math.random() * spinPower - spinPower / 2);
+                    d2.dhRyUnits = (d2.dhRyUnits ?? 0) + (Math.random() * spinPower - spinPower / 2);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Verificar se todos os dados já foram lançados e se estabilizaram
+        const hasBeenThrown = nextDice.some((d) => d.state === 'rolling' || d.state === 'settled');
+        const allSettled = hasBeenThrown && nextDice.every((d) => d.state === 'settled');
+        if (allSettled && animationPhase !== 'settled') {
+          setAnimationPhase('settled');
+          if (!autoDismissTimer) {
+            autoDismissTimer = setTimeout(() => {
+              onComplete();
+            }, 4500);
+          }
+        }
+
+        return nextDice;
+      });
+
+      animationFrameId = requestAnimationFrame(runPhysicsLoop);
+    };
+
+    animationFrameId = requestAnimationFrame(runPhysicsLoop);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-      clearTimeout(autoDismissTimer);
+      if (autoDismissTimer) clearTimeout(autoDismissTimer);
     };
   }, [diceResults, diceFaces, onComplete]);
+
+  // Manipulação de Eventos de Arraste/Arremesso em Grupo (Pointer Events para Touch e Mouse)
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (animationPhase === 'settled') return;
+
+    isDraggingGroupRef.current = true;
+    wasDraggingRef.current = false;
+    touchHistoryRef.current = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
+
+    dragOffsetsRef.current = dicePhysics.map((d) => ({
+      id: d.id,
+      offsetX: e.clientX - d.x,
+      offsetY: e.clientY - d.y
+    }));
+
+    setDicePhysics((prev) =>
+      prev.map((d) =>
+        d.state === 'idle' || d.state === 'dragging'
+          ? { ...d, state: 'dragging', dx: 0, dy: 0 }
+          : d
+      )
+    );
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingGroupRef.current) return;
+
+    wasDraggingRef.current = true;
+    const now = performance.now();
+    const history = touchHistoryRef.current;
+    history.push({ x: e.clientX, y: e.clientY, t: now });
+    if (history.length > 6) history.shift();
+
+    const offsetsMap = new Map(dragOffsetsRef.current.map((o) => [o.id, o]));
+
+    setDicePhysics((prev) =>
+      prev.map((d) => {
+        if (d.state !== 'dragging') return d;
+        const offset = offsetsMap.get(d.id);
+        if (!offset) return d;
+
+        const newX = e.clientX - offset.offsetX;
+        const newY = e.clientY - offset.offsetY;
+        const deltaX = newX - d.x;
+
+        return {
+          ...d,
+          x: newX,
+          y: newY,
+          rx: d.rx + deltaX * 1.5,
+          ry: d.ry + (newY - d.y) * 1.5
+        };
+      })
+    );
+  };
+
+  const handlePointerUp = () => {
+    if (!isDraggingGroupRef.current) return;
+
+    const history = touchHistoryRef.current;
+    let vx = 0;
+    let vy = 0;
+
+    if (history.length >= 2) {
+      const first = history[0];
+      const last = history[history.length - 1];
+      const dt = Math.max(1, last.t - first.t);
+      vx = ((last.x - first.x) / dt) * 16;
+      vy = ((last.y - first.y) / dt) * 16;
+    }
+
+    // Se o arremesso foi muito lento, aplicar impulso mínimo padrão para girar suavemente
+    if (Math.abs(vx) < 3 && Math.abs(vy) < 3) {
+      vx = (Math.random() * 16 - 8);
+      vy = (Math.random() * 16 - 8);
+    }
+
+    isDraggingGroupRef.current = false;
+    touchHistoryRef.current = [];
+    wasDraggingRef.current = true;
+    setTimeout(() => {
+      wasDraggingRef.current = false;
+    }, 300);
+
+    setAnimationPhase('rolling');
+
+    setDicePhysics((prev) => {
+      const draggingCount = prev.filter((d) => d.state === 'dragging').length;
+      return prev.map((d) => {
+        if (d.state !== 'dragging') return d;
+
+        // Adicionar pequena variação aleatória de velocidade por dado para espalhamento realístico
+        const spreadX = draggingCount > 1 ? (Math.random() * 12 - 6) : 0;
+        const spreadY = draggingCount > 1 ? (Math.random() * 12 - 6) : 0;
+
+        return {
+          ...d,
+          state: 'rolling',
+          dx: Math.max(-35, Math.min(35, vx + spreadX)),
+          dy: Math.max(-35, Math.min(35, vy + spreadY)),
+          dhRx: Math.random() * 30 - 15,
+          dhRy: Math.random() * 30 - 15
+        };
+      });
+    });
+  };
+
+  const handleContainerClick = (e: React.MouseEvent) => {
+    if (wasDraggingRef.current) {
+      e.stopPropagation();
+      wasDraggingRef.current = false;
+      return;
+    }
+    if (animationPhase === 'settled') {
+      onComplete();
+    }
+  };
 
   const total = diceResults.reduce((acc, curr) => acc + curr, 0);
 
   return (
     <div 
-      onClick={onComplete}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md cursor-pointer animate-fade-in select-none"
+      ref={containerRef}
+      onClick={handleContainerClick}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-slate-950/85 backdrop-blur-md cursor-pointer animate-fade-in select-none overflow-hidden touch-none"
     >
       <style jsx global>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
         }
-        @keyframes diceBounce {
+        @keyframes bounceSubtle {
           0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
+          50% { transform: translateY(-8px); }
         }
         .animate-fade-in {
           animation: fadeIn 0.3s ease-out forwards;
         }
+        .animate-bounce-subtle {
+          animation: bounceSubtle 1.8s ease-in-out infinite;
+        }
       `}</style>
 
-      {/* Cabeçalho */}
-      <div className="text-center space-y-1.5 pointer-events-none mb-6">
+      {/* Cabeçalho Fixo */}
+      <div className="text-center space-y-1 pt-6 pointer-events-none z-10">
         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
           {title}
         </span>
         <h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-cyan-400 to-blue-400 font-mono tracking-wider">
           {diceResults.length}d{diceFaces}
         </h2>
+        <p className="text-[11px] font-bold text-cyan-400 animate-pulse pt-1">
+          {animationPhase === 'idle' 
+            ? '🖐️ Segure e arremesse os dados para rolar!' 
+            : animationPhase === 'rolling'
+            ? '🎲 Dados em movimento...'
+            : '✨ Rolagem concluída!'}
+        </p>
       </div>
 
-      {/* Container Principal de Dados */}
-      <div className="flex flex-wrap gap-10 justify-center items-center py-6 px-6 max-w-5xl">
-        {diceFaces === 100 ? (
-          /* Rolagem de d100: Agrupamento em pares (Dezena + Unidade com Rotações Independentes) */
-          diceResults.map((val, idx) => {
-            const rotTens = rotations[idx] || { rx: 0, ry: 0 };
-            const rotUnits = rotationsUnits[idx] || { rx: 0, ry: 0 };
-
-            const tensVal = val === 100 ? 0 : Math.floor(val / 10) * 10;
-            const unitsVal = val === 100 ? 0 : val % 10;
-
-            return (
-              <div 
-                key={idx} 
-                className="flex items-center gap-3 bg-slate-900/60 border border-cyan-500/30 p-4 rounded-3xl backdrop-blur-md shadow-2xl"
-                style={{
-                  animation: animationPhase === 'rolling' ? `diceBounce 0.6s ease-in-out infinite alternate ${idx * 0.15}s` : 'none'
-                }}
-              >
-                {/* Dado de Dezenas */}
-                <div className="w-40 h-40 flex items-center justify-center relative">
-                  <Polyhedral3DEngine 
-                    faces={10} 
-                    val={tensVal} 
-                    rx={rotTens.rx} 
-                    ry={rotTens.ry} 
-                    isD100Tens
-                    isSettled={animationPhase === 'settled'}
-                  />
-                </div>
-                {/* Dado de Unidades */}
-                <div className="w-40 h-40 flex items-center justify-center relative">
-                  <Polyhedral3DEngine 
-                    faces={10} 
-                    val={unitsVal} 
-                    rx={rotUnits.rx} 
-                    ry={rotUnits.ry} 
-                    isD100Units
-                    isSettled={animationPhase === 'settled'}
-                  />
-                </div>
+      {/* Arena de Física dos Dados (Posicionamento Livre 2D) */}
+      <div className="absolute inset-0 pointer-events-auto overflow-hidden">
+        {dicePhysics.map((die, idx) => {
+          return (
+            <div
+              key={idx}
+              onPointerDown={handlePointerDown}
+              className="absolute touch-none cursor-grab active:cursor-grabbing transition-shadow duration-200"
+              style={{
+                transform: `translate3d(${die.x}px, ${die.y}px, 0)`,
+                width: die.size,
+                height: die.size,
+                willChange: 'transform'
+              }}
+            >
+              <div className={`w-full h-full ${die.state === 'idle' ? 'animate-bounce-subtle' : ''}`}>
+                {diceFaces === 100 ? (
+                  /* Dado de d100: Par Dezena + Unidade */
+                  <div className="flex items-center gap-2 bg-slate-900/60 border border-cyan-500/30 p-2 rounded-3xl backdrop-blur-md shadow-2xl">
+                    <div className="w-32 h-32 flex items-center justify-center relative">
+                      <Polyhedral3DEngine 
+                        faces={10} 
+                        val={die.tensVal ?? 0} 
+                        rx={die.rx} 
+                        ry={die.ry} 
+                        isD100Tens
+                        isSettled={die.state === 'settled'}
+                      />
+                    </div>
+                    <div className="w-32 h-32 flex items-center justify-center relative">
+                      <Polyhedral3DEngine 
+                        faces={10} 
+                        val={die.unitsVal ?? 0} 
+                        rx={die.rxUnits ?? 0} 
+                        ry={die.ryUnits ?? 0} 
+                        isD100Units
+                        isSettled={die.state === 'settled'}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* Dado d4, d6, d8, d10, d12, d20 Padrão */
+                  <div className="w-full h-full flex items-center justify-center relative">
+                    <Polyhedral3DEngine 
+                      faces={diceFaces} 
+                      val={die.val} 
+                      rx={die.rx} 
+                      ry={die.ry} 
+                      isSettled={die.state === 'settled'}
+                    />
+                  </div>
+                )}
               </div>
-            );
-          })
-        ) : (
-          /* Dados d4, d6, d8, d10, d12, d20 Padrão */
-          diceResults.map((val, idx) => {
-            const rot = rotations[idx] || { rx: 0, ry: 0 };
-            return (
-              <div 
-                key={idx} 
-                className="w-44 h-44 flex items-center justify-center relative"
-                style={{
-                  animation: animationPhase === 'rolling' ? `diceBounce 0.6s ease-in-out infinite alternate ${idx * 0.12}s` : 'none'
-                }}
-              >
-                <Polyhedral3DEngine 
-                  faces={diceFaces} 
-                  val={val} 
-                  rx={rot.rx} 
-                  ry={rot.ry} 
-                  isSettled={animationPhase === 'settled'}
-                />
-              </div>
-            );
-          })
-        )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Total Geral */}
-      <div className={`mt-6 text-center space-y-1 transition-all duration-400 ${
-        animationPhase === 'settled' ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+      {/* Total Geral de Rodada */}
+      <div className={`mb-8 text-center space-y-1 z-10 pointer-events-none transition-all duration-400 ${
+        animationPhase === 'settled' ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
       }`}>
         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Total da Rolagem</span>
         <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-300 font-mono drop-shadow-[0_0_30px_rgba(59,130,246,0.5)]">
           {total}
         </h1>
-        <p className="text-[11px] text-slate-500 animate-pulse pt-3 font-semibold">
-          Clique em qualquer lugar para fechar
+        <p className="text-[11px] text-slate-500 animate-pulse pt-2 font-semibold">
+          Clique fora para fechar
         </p>
       </div>
     </div>
   );
+}
+
+// Interpolação linear de ângulos
+function lerpAngle(start: number, end: number, factor: number) {
+  let diff = (end - start) % 360;
+  if (diff < -180) diff += 360;
+  if (diff > 180) diff -= 360;
+  return start + diff * factor;
 }
 
 /* =========================================================================

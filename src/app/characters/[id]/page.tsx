@@ -406,7 +406,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   const [currentTheme, setCurrentTheme] = useState<ThemeId>('dark');
   const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
   const [avatarUrl, setAvatarUrl] = useState<string>('');
-  const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; title: string; callback: () => void } | null>(null);
+  const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; faces?: number; title: string; callback: () => void } | null>(null);
 
   // Fechar detalhes da Vantagem Única ao clicar fora
   useEffect(() => {
@@ -826,9 +826,11 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
     }
 
     const result = executeCustomRoll(roll, character.attributes_values);
+    const rollFaces = roll.components?.[0]?.faces || 6;
 
     setVirtualRoll({
       results: result.dices.length > 0 ? result.dices : [6],
+      faces: rollFaces,
       title: roll.name,
       callback: () => {
         setActiveRollResult(result);
@@ -840,9 +842,11 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   function handleTriggerAttributeRoll(key: string, name: string, value: number) {
     if (!character) return;
     const testResult = executeAttributeTest(key, name, value, systemDef.attribute_roll_config);
+    const attrFaces = systemDef.attribute_roll_config?.diceFaces || 6;
 
     setVirtualRoll({
       results: testResult.dices.length > 0 ? testResult.dices : [6],
+      faces: attrFaces,
       title: `Teste de ${name}`,
       callback: () => {
         setActiveRollResult({
@@ -3068,6 +3072,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
       {virtualRoll && (
         <DiceRollOverlay
           diceResults={virtualRoll.results}
+          diceFaces={virtualRoll.faces || 6}
           title={virtualRoll.title}
           onComplete={() => {
             virtualRoll.callback();

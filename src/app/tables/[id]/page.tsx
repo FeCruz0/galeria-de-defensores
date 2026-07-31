@@ -3,7 +3,7 @@
 import React, { use, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { Table, ChatMessage, Profile, Character } from '@/types/game';
+import { Table, ChatMessage, Profile, Character, RollResult } from '@/types/game';
 import { executeCustomRoll, getMaxPv, getMaxPm, getModifiedAttributes, getEquippedItemsModifiers, executeAttributeTest } from '@/lib/rules';
 import { canLinkCharacterToTable } from '@/lib/validations';
 import { 
@@ -56,9 +56,16 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [chatChannel, setChatChannel] = useState<'ON' | 'OFF'>('ON');
   const [selectedSenderIdentity, setSelectedSenderIdentity] = useState<string>('MASTER'); // 'MASTER' ou ID de um personagem
   const [diceCount, setDiceCount] = useState(1);
+  const [diceFaces, setDiceFaces] = useState(6);
   const [diceModifier, setDiceModifier] = useState(0);
+  const [rollMode, setRollMode] = useState<'QUICK' | 'ADVANCED'>('QUICK');
+  const [rollActionName, setRollActionName] = useState('Rolagem de Mesa');
+  const [rollCategory, setRollCategory] = useState<'ATTACK' | 'DEFENSE' | 'MAGIC' | 'TEST' | 'INITIATIVE' | 'OTHER'>('OTHER');
+  const [selectedPrimaryAttr, setSelectedPrimaryAttr] = useState<string>('none');
+  const [selectedSecondaryAttr, setSelectedSecondaryAttr] = useState<string>('none');
+  const [selectedCharForRoll, setSelectedCharForRoll] = useState<string>('none');
   const [inviteUsername, setInviteUsername] = useState('');
-  const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; title: string; callback: () => void } | null>(null);
+  const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; faces?: number; title: string; callback: () => void } | null>(null);
   const [activeTab, setActiveTab] = useState<'mesa' | 'chat' | 'journal'>('mesa');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDistributingXp, setIsDistributingXp] = useState(false);
@@ -482,59 +489,132 @@ export default function GameTablePage({ params }: { params: Params }) {
     }
   }
 
-  // Realizar Rolagem de Dados
+  // Realizar Rolagem de Dados na Mesa
   async function handleRollDice() {
     if (!currentUser || !table) return;
 
-    const diceValues: number[] = [];
-    let rollSum = 0;
-    let isCritical = false;
+    if (rollMode === 'QUICK') {
+      const diceValues: number[] = [];
+      let rollSum = 0;
+      let isCritical = false;
 
-    for (let i = 0; i < diceCount; i++) {
-      const val = Math.floor(Math.random() * 6) + 1; // 1d6
-      diceValues.push(val);
-      rollSum += val;
-      if (val === 6) isCritical = true; // Em 3D&T Alpha 6 é crítico
-    }
-
-    const total = rollSum + diceModifier;
-    const modifierText = diceModifier !== 0 ? ` ${diceModifier >= 0 ? '+' : '-'} ${Math.abs(diceModifier)}` : '';
-    const content = `rolou ${diceCount}d6${modifierText} 🎲`;
-
-    setVirtualRoll({
-      results: diceValues,
-      title: 'Rolando Dados na Mesa',
-      callback: async () => {
-        try {
-          const { data, error } = await supabase.from('chat_messages').insert({
-            table_id: id,
-            sender_id: currentUser.id,
-            sender_name: profile?.username || 'Jogador',
-            content,
-            type: 'ROLL',
-            roll_result: {
-              total,
-              dices: diceValues,
-              modifiers: diceModifier,
-              isCrit: isCritical,
-              componentsText: `[${diceValues.join(', ')}]`
-            },
-            is_edited: false
-          }).select().single();
-
-          if (error) {
-            console.error('Erro ao salvar rolagem:', error);
-          } else if (data) {
-            setMessages((prev) => {
-              if (prev.some(m => m.id === data.id)) return prev;
-              return [...prev, data];
-            });
-          }
-        } catch (err) {
-          console.error('Erro ao salvar rolagem:', err);
-        }
+      for (let i = 0; i < diceCount; i++) {
+        const val = Math.floor(Math.random() * diceFaces) + 1;
+        diceValues.push(val);
+        rollSum += val;
+        if (val === diceFaces) isCritical = true;
       }
-    });
+
+      const total = rollSum + diceModifier;
+      const modifierText = diceModifier !== 0 ? ` ${diceModifier >= 0 ? '+' : '-'} ${Math.abs(diceModifier)}` : '';
+      const content = `rolou ${diceCount}d${diceFaces}${modifierText} 🎲`;
+
+      const rollPayload: RollResult = {
+        total,
+        dices: diceValues,
+        modifiers: diceModifier,
+        isCrit: isCritical,
+        componentsText: `${diceCount}d${diceFaces} [${diceValues.join(', ')}]${modifierText} = ${total}`
+      };
+
+      setVirtualRoll({
+        results: diceValues,
+        faces: diceFaces,
+        title: `Rolagem de Dados (${diceCount}d${diceFaces})`,
+        callback: async () => {
+          try {
+            const { data, error } = await supabase.from('chat_messages').insert({
+              table_id: id,
+              sender_id: currentUser.id,
+              sender_name: profile?.username || 'Jogador',
+              content,
+              type: 'ROLL',
+              roll_result: rollPayload,
+              is_edited: false
+            }).select().single();
+
+            if (error) {
+              console.error('Erro ao salvar rolagem:', error);
+            } else if (data) {
+              setMessages((prev) => {
+                if (prev.some(m => m.id === data.id)) return prev;
+                return [...prev, data];
+              });
+            }
+          } catch (err) {
+            console.error('Erro ao salvar rolagem:', err);
+          }
+        }
+      });
+    } else {
+      // Modo Avançado (CustomRoll)
+      const selectedChar = linkedCharacters.find(c => c.id === selectedCharForRoll);
+      const actionTitle = rollActionName.trim() || 'Rolagem Customizada';
+
+      const customRollObj: any = {
+        id: crypto.randomUUID(),
+        name: actionTitle,
+        type: rollCategory,
+        components: [
+          {
+            id: 'c1',
+            count: diceCount,
+            faces: diceFaces,
+            bonus: 0,
+            isNegative: false,
+            canCrit: true,
+            critMultiplier: 2
+          }
+        ],
+        globalModifier: diceModifier,
+        primaryAttribute: selectedPrimaryAttr,
+        secondaryAttribute: selectedSecondaryAttr,
+        accumulateCrit: true
+      };
+
+      const equippedMods = getEquippedItemsModifiers(selectedChar?.inventory);
+      const testResult = executeCustomRoll(
+        customRollObj,
+        selectedChar?.attributes_values || {},
+        undefined,
+        selectedChar?.status_effects || [],
+        equippedMods
+      );
+
+      const senderDisplayName = selectedChar ? selectedChar.name : (profile?.username || 'Jogador');
+      const content = `realizou ${actionTitle} 🎲`;
+
+      setVirtualRoll({
+        results: testResult.dices.length > 0 ? testResult.dices : [1],
+        faces: diceFaces,
+        title: actionTitle,
+        callback: async () => {
+          try {
+            const { data, error } = await supabase.from('chat_messages').insert({
+              table_id: id,
+              sender_id: currentUser.id,
+              sender_name: senderDisplayName,
+              character_id: selectedChar?.id || null,
+              content,
+              type: 'ROLL',
+              roll_result: testResult,
+              is_edited: false
+            }).select().single();
+
+            if (error) {
+              console.error('Erro ao salvar rolagem:', error);
+            } else if (data) {
+              setMessages((prev) => {
+                if (prev.some(m => m.id === data.id)) return prev;
+                return [...prev, data];
+              });
+            }
+          } catch (err) {
+            console.error('Erro ao salvar rolagem:', err);
+          }
+        }
+      });
+    }
   }
 
   // Vincular personagem à mesa
@@ -931,63 +1011,231 @@ export default function GameTablePage({ params }: { params: Params }) {
           <div className="space-y-6">
             
             {/* Rolador de Dados Card */}
-            <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl">
-              <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Dice5 className="w-5 h-5 text-purple-400" />
-                Rolador de Dados (3D&T)
-              </h2>
+            <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800/80 pb-3">
+                <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <Dice5 className="w-5 h-5 text-purple-400" />
+                  Rolador de Dados da Mesa
+                </h2>
+
+                {/* Alternador de Modo: Rápido vs Avançado */}
+                <div className="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setRollMode('QUICK')}
+                    className={`py-1 px-3 rounded-lg transition-all ${
+                      rollMode === 'QUICK'
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    ⚡ Rápido
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRollMode('ADVANCED')}
+                    className={`py-1 px-3 rounded-lg transition-all ${
+                      rollMode === 'ADVANCED'
+                        ? 'bg-cyan-600/30 text-cyan-300 border border-cyan-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    ⚙️ Customizado
+                  </button>
+                </div>
+              </div>
 
               <div className="space-y-4">
-                {/* Qtd Dados */}
+                {/* Seleção de Lados do Dado (Faces) */}
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                    Quantidade de Dados (d6)
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                    Lados do Dado (Faces)
                   </label>
-                  <div className="flex items-center gap-3 bg-slate-800/30 border border-slate-800/80 rounded-xl p-2">
-                    <button 
-                      onClick={() => setDiceCount(prev => Math.max(1, prev - 1))}
-                      className="w-10 h-10 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold"
-                    >
-                      -
-                    </button>
-                    <span className="flex-1 text-center font-bold text-lg">{diceCount}d6</span>
-                    <button 
-                      onClick={() => setDiceCount(prev => Math.min(10, prev + 1))}
-                      className="w-10 h-10 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold"
-                    >
-                      +
-                    </button>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[4, 6, 8, 10, 12, 20, 100].map((faces) => (
+                      <button
+                        key={faces}
+                        type="button"
+                        onClick={() => setDiceFaces(faces)}
+                        className={`py-1.5 px-3 rounded-xl text-xs font-bold font-mono transition-all border cursor-pointer ${
+                          diceFaces === faces
+                            ? 'bg-purple-600/20 text-purple-300 border-purple-500/40 shadow-sm shadow-purple-500/10'
+                            : 'bg-slate-800/30 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800/50'
+                        }`}
+                      >
+                        d{faces}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Modificadores */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                    Modificador Geral
-                  </label>
-                  <div className="flex items-center gap-3 bg-slate-800/30 border border-slate-800/80 rounded-xl p-2">
-                    <button 
-                      onClick={() => setDiceModifier(prev => prev - 1)}
-                      className="w-10 h-10 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold"
-                    >
-                      -
-                    </button>
-                    <span className="flex-1 text-center font-bold text-lg">
-                      {diceModifier >= 0 ? `+${diceModifier}` : diceModifier}
-                    </span>
-                    <button 
-                      onClick={() => setDiceModifier(prev => prev + 1)}
-                      className="w-10 h-10 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold"
-                    >
-                      +
-                    </button>
+                {/* Quantidade e Modificador Geral em Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Qtd Dados */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                      Quantidade
+                    </label>
+                    <div className="flex items-center gap-2 bg-slate-800/30 border border-slate-800/80 rounded-xl p-1.5">
+                      <button 
+                        type="button"
+                        onClick={() => setDiceCount(prev => Math.max(1, prev - 1))}
+                        className="w-8 h-8 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold shrink-0 cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="flex-1 text-center font-bold text-sm font-mono">{diceCount}d{diceFaces}</span>
+                      <button 
+                        type="button"
+                        onClick={() => setDiceCount(prev => Math.min(10, prev + 1))}
+                        className="w-8 h-8 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold shrink-0 cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Modificador Geral */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                      Modificador Geral
+                    </label>
+                    <div className="flex items-center gap-2 bg-slate-800/30 border border-slate-800/80 rounded-xl p-1.5">
+                      <button 
+                        type="button"
+                        onClick={() => setDiceModifier(prev => prev - 1)}
+                        className="w-8 h-8 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold shrink-0 cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="flex-1 text-center font-bold text-sm font-mono">
+                        {diceModifier >= 0 ? `+${diceModifier}` : diceModifier}
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => setDiceModifier(prev => prev + 1)}
+                        className="w-8 h-8 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold shrink-0 cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Parâmetros do Modo Avançado */}
+                {rollMode === 'ADVANCED' && (
+                  <div className="space-y-4 pt-3 border-t border-slate-800/60 animate-fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Nome da Ação */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Nome da Ação / Rótulo
+                        </label>
+                        <input
+                          type="text"
+                          value={rollActionName}
+                          onChange={(e) => setRollActionName(e.target.value)}
+                          placeholder="Ex: Ataque com Espada"
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                        />
+                      </div>
+
+                      {/* Categoria */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Categoria da Rolagem
+                        </label>
+                        <select
+                          value={rollCategory}
+                          onChange={(e) => setRollCategory(e.target.value as any)}
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 cursor-pointer"
+                        >
+                          <option value="OTHER">Outro</option>
+                          <option value="ATTACK">⚔️ Ataque</option>
+                          <option value="DEFENSE">🛡️ Defesa</option>
+                          <option value="MAGIC">✨ Magia</option>
+                          <option value="TEST">🎲 Teste de Atributo</option>
+                          <option value="INITIATIVE">⚡ Iniciativa</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Seleção de Personagem e Atributos */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* Personagem que Fornece os Atributos */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Personagem
+                        </label>
+                        <select
+                          value={selectedCharForRoll}
+                          onChange={(e) => setSelectedCharForRoll(e.target.value)}
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 cursor-pointer"
+                        >
+                          <option value="none">Nenhum (Sem Ficha)</option>
+                          {linkedCharacters.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Atributo Primário */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Atributo Primário
+                        </label>
+                        <select
+                          value={selectedPrimaryAttr}
+                          onChange={(e) => setSelectedPrimaryAttr(e.target.value)}
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-purple-300 font-semibold cursor-pointer"
+                        >
+                          <option value="none">Nenhum</option>
+                          <option value="F">Força (F)</option>
+                          <option value="H">Habilidade (H)</option>
+                          <option value="R">Resistência (R)</option>
+                          <option value="A">Armadura (A)</option>
+                          <option value="PdF">Poder de Fogo (PdF)</option>
+                        </select>
+                      </div>
+
+                      {/* Atributo Secundário */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Atributo Secundário
+                        </label>
+                        <select
+                          value={selectedSecondaryAttr}
+                          onChange={(e) => setSelectedSecondaryAttr(e.target.value)}
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-cyan-300 font-semibold cursor-pointer"
+                        >
+                          <option value="none">Nenhum</option>
+                          <option value="F">Força (F)</option>
+                          <option value="H">Habilidade (H)</option>
+                          <option value="R">Resistência (R)</option>
+                          <option value="A">Armadura (A)</option>
+                          <option value="PdF">Poder de Fogo (PdF)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Preview da Fórmula */}
+                <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl text-xs text-slate-400 flex items-center justify-between">
+                  <span className="text-slate-500 font-mono text-[11px]">Fórmula:</span>
+                  <span className="font-mono text-purple-300 font-semibold">
+                    {diceCount}d{diceFaces}
+                    {rollMode === 'ADVANCED' && selectedPrimaryAttr !== 'none' && ` + ${selectedPrimaryAttr}`}
+                    {rollMode === 'ADVANCED' && selectedSecondaryAttr !== 'none' && ` + ${selectedSecondaryAttr}`}
+                    {diceModifier !== 0 && ` ${diceModifier >= 0 ? '+' : '-'} ${Math.abs(diceModifier)}`}
+                  </span>
                 </div>
 
                 {/* Botão Rolar */}
                 <button
+                  type="button"
                   onClick={handleRollDice}
-                  className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-purple-500/25 active:scale-[0.98]"
+                  className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-purple-500/25 active:scale-[0.98] cursor-pointer"
                 >
                   <Dice5 className="w-5 h-5 animate-bounce" />
                   Rolar Dados na Mesa
@@ -1963,6 +2211,7 @@ export default function GameTablePage({ params }: { params: Params }) {
       {virtualRoll && (
         <DiceRollOverlay
           diceResults={virtualRoll.results}
+          diceFaces={virtualRoll.faces || 6}
           title={virtualRoll.title}
           onComplete={() => {
             virtualRoll.callback();

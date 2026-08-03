@@ -213,7 +213,7 @@ export default function DiceRollOverlay({
             newDhRy += (Math.random() * 20 - 10);
           }
 
-          // Atrito Físico (Damping)
+          // Atrito Físico 2D (Damping)
           newDx *= 0.975;
           newDy *= 0.975;
 
@@ -223,21 +223,45 @@ export default function DiceRollOverlay({
 
           let newState: 'rolling' | 'settled' = 'rolling';
 
-          // Suavizar rotação em direção ao ângulo alvo quando desacelerar
-          if (currentSpeed < 4) {
-            newRx = lerpAngle(newRx, target.rx, 0.15);
-            newRy = lerpAngle(newRy, target.ry, 0.15);
+          // Fase de Pouso & Desaceleração Rotação 3D (Landing Phase - Alinhamento Ultra-Suave Lento)
+          if (currentSpeed < 6.5) {
+            // Amortecimento angular harmônico que desacelera junto com o movimento linear
+            newDhRx *= 0.90;
+            newDhRy *= 0.90;
+            newDhRxUnits *= 0.90;
+            newDhRyUnits *= 0.90;
+
+            // Interpolação ultra-lenta (3.5% por quadro) para alinhamento gradual sem sobressalto
+            newRx = lerpAngle(newRx, target.rx, 0.035);
+            newRy = lerpAngle(newRy, target.ry, 0.035);
             if (diceFaces === 100) {
-              newRxUnits = lerpAngle(newRxUnits, targetUnits.rx, 0.15);
-              newRyUnits = lerpAngle(newRyUnits, targetUnits.ry, 0.15);
+              newRxUnits = lerpAngle(newRxUnits, targetUnits.rx, 0.035);
+              newRyUnits = lerpAngle(newRyUnits, targetUnits.ry, 0.035);
             }
           }
 
-          // Critério de parada completa
-          if (currentSpeed < 0.35 && Math.abs(newDhRx) < 0.5) {
+          // Verificar diferença de ângulo restante para o alvo
+          const diffRx = getShortestAngleDiff(newRx, target.rx);
+          const diffRy = getShortestAngleDiff(newRy, target.ry);
+          const diffRxUnits = diceFaces === 100 ? getShortestAngleDiff(newRxUnits, targetUnits.rx) : 0;
+          const diffRyUnits = diceFaces === 100 ? getShortestAngleDiff(newRyUnits, targetUnits.ry) : 0;
+
+          const isAligned = 
+            Math.abs(diffRx) < 1.2 && 
+            Math.abs(diffRy) < 1.2 && 
+            Math.abs(diffRxUnits) < 1.2 && 
+            Math.abs(diffRyUnits) < 1.2;
+          const isStopped = currentSpeed < 0.15;
+
+          // Critério de parada suave e contínua
+          if (isStopped && isAligned) {
             newState = 'settled';
             newDx = 0;
             newDy = 0;
+            newDhRx = 0;
+            newDhRy = 0;
+            newDhRxUnits = 0;
+            newDhRyUnits = 0;
             newRx = target.rx;
             newRy = target.ry;
             newRxUnits = targetUnits.rx;
@@ -593,12 +617,17 @@ export default function DiceRollOverlay({
   );
 }
 
-// Interpolação linear de ângulos
-function lerpAngle(start: number, end: number, factor: number) {
+// Cálculo da menor diferença angular
+function getShortestAngleDiff(start: number, end: number) {
   let diff = (end - start) % 360;
   if (diff < -180) diff += 360;
   if (diff > 180) diff -= 360;
-  return start + diff * factor;
+  return diff;
+}
+
+// Interpolação linear de ângulos
+function lerpAngle(start: number, end: number, factor: number) {
+  return start + getShortestAngleDiff(start, end) * factor;
 }
 
 /* =========================================================================

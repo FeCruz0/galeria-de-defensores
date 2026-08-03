@@ -1,14 +1,16 @@
 # 📝 Tasks - Galeria de Defensores
 
-## ✅ Concluído: Fase 10, Item 1 - Abstração da Camada de Serviços (Service Layer)
-- [x] Criar `src/services/characterService.ts` (CRUD de fichas e busca por ID/usuário).
-- [x] Criar `src/services/tableService.ts` (Gerenciamento de mesas VTT, participantes e distribuição de XP).
-- [x] Criar `src/services/systemService.ts` (Busca e customização de sistemas de regras no Sandbox).
-- [x] Criar testes unitários para a camada de serviços (`src/services/__tests__/services.test.ts`).
+## ✅ Concluído: Fase 10, Item 2 - Validação Server-Side & Anti-Cheat (Server Actions)
+- [x] Criar esquemas `Zod` de validação em `src/lib/validations/actions.ts` (`CharacterMutationSchema`, `DiceRollActionSchema`, `XPDistributionSchema`).
+- [x] Criar `src/actions/gameActions.ts` com Next.js Server Actions ('use server').
+- [x] Implementar validação server-side do orçamento de pontos em `saveCharacterAction` usando `rules.ts`.
+- [x] Implementar auditoria server-side de rolagens de dados em `rollDiceServerAction`.
+- [x] Criar testes unitários para Server Actions em `src/actions/__tests__/actions.test.ts`.
 - [x] Executar suíte de testes (`npx vitest run`) e build de produção (`npm run build`).
 
-## ✅ Concluído: Ajuste de Rotação Suave de Pouso (Slow Landing Rotation)
-- [x] Ajustar limiar de início da fase de pouso (`currentSpeed < 6.5`) em `DiceRollOverlay.tsx`.
-- [x] Reduzir o fator de interpolação `lerpAngle` para `0.035`.
-- [x] Ajustar amortecimento angular de spin (`newDhRx *= 0.90`).
-- [x] Validar com testes unitários e build.
+## ✅ Concluído: Fase 10, Item 1 - Abstração da Camada de Serviços (Service Layer)
+- [x] Criar `src/services/characterService.ts`.
+- [x] Criar `src/services/tableService.ts`.
+- [x] Criar `src/services/systemService.ts`.
+- [x] Criar testes unitários para a camada de serviços (`src/services/__tests__/services.test.ts`).
+- [x] Executar suíte de testes e build de produção.

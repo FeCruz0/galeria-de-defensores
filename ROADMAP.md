@@ -81,3 +81,29 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 * **Checklist**:
   - [ ] Implementar reordenação fluida de colunas e seções da ficha.
 
+---
+
+## 🛡️ Fase 10: Maturação de Arquitetura & Segurança Enterprise (Nova)
+
+### 🏗️ 1. Abstração da Camada de Serviços (Service Layer) — High Priority
+* **Descrição**: Desacoplar chamadas diretas do cliente Supabase (`supabase.from(...)`) dos componentes React `.tsx` para arquivos de serviço encapsulados, facilitando manutenibilidade e testes.
+* **Checklist**:
+  - [ ] Criar `src/services/characterService.ts` para operações CRUD e sincronização da ficha.
+  - [ ] Criar `src/services/tableService.ts` para gerenciamento da mesa VTT e convites.
+  - [ ] Criar `src/services/systemService.ts` para importação/exportação de regras e Sandbox.
+
+### 🛡️ 2. Validação Server-Side & Anti-Cheat (Next.js Server Actions) — High Priority
+* **Descrição**: Garantir que mutações de pontos, distribuições de XP e rolagens críticas de dados sejam validadas no servidor via Next.js Server Actions antes de serem gravadas no banco.
+* **Checklist**:
+  - [ ] Criar esquemas rigorosos com `Zod` para todas as mutações sensíveis da API/Server Actions.
+  - [ ] Executar a validação do motor de regras ([rules.ts](file:///home/felipe/projetos/galeria-de-defensores/src/lib/rules.ts)) no servidor para impedir payloads falsificados do cliente.
+  - [ ] Registrar sementes/entradas das rolagens oficiais de dados para garantir auditoria anti-cheat nas mesas.
+
+### 🔐 3. Endurecimento do Banco de Dados (PostgreSQL Constraints & Triggers) — Medium Priority
+* **Descrição**: Adicionar garantias físicas no PostgreSQL em [schema.sql](file:///home/felipe/projetos/galeria-de-defensores/supabase/schema.sql) para impedir inconsistência de dados mesmo se a API falhar.
+* **Checklist**:
+  - [ ] Adicionar restrições `CHECK` nativas para saldo não negativo de `points_total`, `experience` e valores de atributos.
+  - [ ] Criar triggers PostgreSQL para atualização automática do campo `updated_at`.
+  - [ ] Realizar auditoria completa de políticas RLS em todas as tabelas.
+
+

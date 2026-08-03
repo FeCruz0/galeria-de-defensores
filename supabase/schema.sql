@@ -494,3 +494,42 @@ end $$;
 -- 12. Coluna preferences na tabela profiles
 alter table public.profiles
   add column if not exists preferences jsonb default '{"theme": "dark", "section_order": ["attributes", "resources", "qualities", "spells", "inventory", "rolls"]}'::jsonb not null;
+
+-- 13. RESTRIÇÕES FÍSICAS NATIVAS (CHECK CONSTRAINTS) & TRIGGERS DE AUTOMATIZAÇÃO
+-- ------------------------------------------------------------------------------
+
+-- Restrições CHECK para garantir integridade física de dados na tabela characters
+alter table public.characters
+  add constraint check_points_total_positive check (points_total >= 0),
+  add constraint check_points_spent_positive check (points_spent >= 0),
+  add constraint check_experience_positive check (experience >= 0),
+  add constraint check_saved_points_positive check (saved_points >= 0),
+  add constraint check_scale_valid check (scale >= 0 and scale <= 3);
+
+-- Restrição CHECK para formato mínimo de nome de usuário na tabela profiles
+alter table public.profiles
+  add constraint check_username_min_length check (username is null or char_length(username) >= 3);
+
+-- Função PL/pgSQL reutilizável para atualização automática do campo updated_at no servidor
+create or replace function public.handle_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger BEFORE UPDATE para a tabela profiles
+drop trigger if exists set_profiles_updated_at on public.profiles;
+create trigger set_profiles_updated_at
+  before update on public.profiles
+  for each row
+  execute function public.handle_updated_at();
+
+-- Trigger BEFORE UPDATE para a tabela characters
+drop trigger if exists set_characters_updated_at on public.characters;
+create trigger set_characters_updated_at
+  before update on public.characters
+  for each row
+  execute function public.handle_updated_at();
+

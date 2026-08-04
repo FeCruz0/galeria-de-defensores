@@ -74,12 +74,42 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 
 ---
 
-## 🔮 Futuros Upgrades & Expansões (Baixa Prioridade / Backlog)
+## 👥 Fase 11: Recursos Sociais, Lobby, Espectadores & Ferramentas do Mestre (Planejado)
 
-### 🧩 Reorganização Dinâmica por Drag-and-Drop das Box
-* **Descrição**: Sistema de Drag-and-Drop interativo fluido (usando biblioteca especializada como `@hello-pangea/dnd`) para customizar a ordem das caixas na ficha.
+### 💬 1. Lobby Geral & Lista de Amigos
+* **Descrição**: Sala de bate-papo global integrada (Lobby) para conversação em tempo real e sistema de amizades para mensagens privadas (DM).
 * **Checklist**:
-  - [ ] Implementar reordenação fluida de colunas e seções da ficha.
+  - [ ] Criar painel de Lobby Geral com chat em tempo real via canais de Broadcast do Supabase (sem persistência em disco).
+  - [ ] Implementar sistema de amizades: adicionar amigos pelo chat do lobby, lista de membros ou buscando pelo ID do usuário.
+  - [ ] Criar lista de amigos interativa com status de presença (online/offline).
+  - [ ] Implementar chat privado (DMs) em tempo real entre amigos com RLS rigoroso para garantir a privacidade dos dados.
+
+### 👁️ 2. Espectadores e Visibilidade de Mesas
+* **Descrição**: Listagem global de todas as mesas criadas, gerenciamento dinâmico de limites/papéis pelo Mestre e modo espectador passivo.
+* **Checklist**:
+  - [ ] Modificar a criação/configuração da mesa (`tables`) para definir um limite máximo de jogadores (excluindo o Mestre) e permitir a edição livre de configurações básicas da mesa (nome, descrição, limite, permissão de espectadores) a qualquer momento pelo Mestre.
+  - [ ] Listar publicamente todas as mesas criadas no dashboard global de todos os usuários.
+  - [ ] Implementar modo "Espectador": usuários não vinculados como jogador ou mestre podem entrar em mesas públicas (caso permitido) e assistir a ficha, chat narrativo e rolagens em tempo real, com interações de escrita, envio de mensagens e rolagens desativadas.
+  - [ ] Criar ações de moderação do Mestre: promover um espectador para jogador (respeitando o limite configurado), rebaixar um jogador para espectador, banir espectadores e banir jogadores da mesa de forma definitiva.
+  - [ ] Exibir lista lateral de usuários online na mesa ativa com tags distintivas: **Mestre**, **Jogador** ou **Espectador** via canais de Presença Realtime do Supabase.
+
+### 👺 3. Mini-Ficha Resumida do Mestre (Quick NPC Tracker)
+* **Descrição**: Painel compacto e simplificado de uso exclusivo do Mestre para gerenciar ameaças, capangas e NPCs diretamente na mesa.
+* **Checklist**:
+  - [ ] Criar painel/drawer de Mini-Ficha rápida visível e acessível estritamente pelo Mestre (`master_id`).
+  - [ ] Permitir cadastro ágil de atributos base (F, H, R, A, PdF), controle rápido de PV/PM e botões de atalho para rolagens instantâneas no chat narrativo sem expor a ficha inteira para os jogadores.
+
+### 📱 4. PWA (Progressive Web App) & Suporte a Acesso Offline
+* **Descrição**: Transformação da aplicação em um Web App instalável com cache local e sincronização offline de fichas.
+* **Checklist**:
+  - [ ] Configurar Manifest do PWA (`manifest.json`) e Service Worker com estratégia de cache para permitir o uso e carregamento do app offline.
+  - [ ] Armazenar fichas e dados locais via `IndexedDB` para edição e rolagens sem conexão com sincronização automática ao reconectar ao Supabase.
+
+### 📝 5. Aprimoramento da Exportação de PDF & Editor de Sistemas
+* **Descrição**: Melhorias incrementais na formatação do PDF da ficha para impressão e otimizações na UX do editor de sistemas customizados.
+* **Checklist**:
+  - [ ] Ajustar espaçamento, quebras de página e margens no CSS `@media print` para garantir impressão perfeita em A4.
+  - [ ] Otimizar a criação/edição de atributos e recursos customizados no Sandbox do sistema de regras com um construtor de formulários mais visual.
 
 ---
 

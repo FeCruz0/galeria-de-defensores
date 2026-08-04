@@ -24,11 +24,14 @@ import {
   AlertCircle,
   Check,
   Palette,
-  Bell
+  Bell,
+  MessageSquare
 } from 'lucide-react';
 import PreferencesModal from '@/components/PreferencesModal';
 import PdfImportModal from '@/components/PdfImportModal';
 import SystemEditorModal from '@/components/SystemEditorModal';
+import LobbyChat from '@/components/LobbyChat';
+import FriendsDrawer from '@/components/FriendsDrawer';
 import { exportRuleSystemToPdf, ExtractedPayload } from '@/lib/pdfPayload';
 import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
@@ -58,6 +61,8 @@ export default function DashboardPage() {
   // States de Preferências e Exibição
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [isLobbyOpen, setIsLobbyOpen] = useState(true);
+  const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeId>('dark');
   const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
   const [avatarUrl, setAvatarUrl] = useState<string>('');
@@ -608,9 +613,9 @@ export default function DashboardPage() {
   const themeConfig = getTheme(currentTheme);
 
   return (
-    <div className={`min-h-screen ${themeConfig.bgClass} ${themeConfig.textPrimaryClass} pb-12 transition-colors duration-300`}>
+    <div className={`h-screen flex flex-col ${themeConfig.bgClass} ${themeConfig.textPrimaryClass} transition-colors duration-300 overflow-hidden`}>
       {/* Header / Navbar */}
-      <header className={`border-b ${themeConfig.borderClass} ${themeConfig.headerBgClass} sticky top-0 z-50`}>
+      <header className={`border-b ${themeConfig.borderClass} ${themeConfig.headerBgClass} sticky top-0 z-50 shrink-0`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gradient-to-tr from-purple-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-md shadow-purple-500/10">
@@ -654,18 +659,28 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-        {/* Banner de Boas-vindas */}
-        <div className="bg-gradient-to-r from-purple-900/20 to-cyan-900/10 border border-slate-800/80 rounded-2xl p-6 sm:p-8 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">
-              Saudações, {profile?.username || 'Defensor'}!
-            </h2>
-            <p className="text-slate-400 text-sm sm:text-base">
-              Gerencie suas fichas e participe de mesas multiplayer de 3D&T.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
+      {/* Main Content Area with Right Sidebar */}
+      <div className="flex-1 flex overflow-hidden min-h-0 relative">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="max-w-7xl mx-auto">
+            {/* Banner de Boas-vindas */}
+            <div className="bg-gradient-to-r from-purple-900/20 to-cyan-900/10 border border-slate-800/80 rounded-2xl p-6 sm:p-8 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">
+                  Saudações, {profile?.username || 'Defensor'}!
+                </h2>
+                <p className="text-slate-400 text-sm sm:text-base">
+                  Gerencie suas fichas e participe de mesas multiplayer de 3D&T.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button 
+                  onClick={() => setIsFriendsOpen(true)}
+                  className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 px-4 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 active:scale-95 transition-all cursor-pointer"
+                >
+                  <Users className="w-4 h-4 text-purple-400" />
+                  Amigos & DMs
+                </button>
             <button 
               onClick={() => router.push('/characters/new')}
               className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 shadow-lg shadow-purple-600/15 active:scale-95 transition-all cursor-pointer"
@@ -1026,37 +1041,69 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
-      </main>
+      
+        {/* Modal Editor do Sandbox de Sistemas de Regras */}
+        {isEditingSystem && editingSystem && (
+          <SystemEditorModal
+            isOpen={isEditingSystem}
+            systemState={editingSystem}
+            onSave={handleSaveSystem}
+            onClose={() => {
+              setIsEditingSystem(false);
+              setEditingSystem(null);
+            }}
+            showSystemModal={showSystemModal}
+          />
+        )}
 
-      {/* Modal Editor do Sandbox de Sistemas de Regras */}
-      {isEditingSystem && editingSystem && (
-        <SystemEditorModal
-          isOpen={isEditingSystem}
-          systemState={editingSystem}
-          onSave={handleSaveSystem}
-          onClose={() => {
-            setIsEditingSystem(false);
-            setEditingSystem(null);
-          }}
-          showSystemModal={showSystemModal}
+        {/* Modal de Preferências de Exibição */}
+        <PreferencesModal
+          isOpen={isPreferencesOpen}
+          onClose={() => setIsPreferencesOpen(false)}
+          currentTheme={currentTheme}
+          currentAvatarUrl={avatarUrl || profile?.avatar_url}
+          onSave={handleSavePreferences}
         />
+
+        {/* Modal de Importação de PDF */}
+        <PdfImportModal
+          isOpen={isPdfModalOpen}
+          onClose={() => setIsPdfModalOpen(false)}
+          onImportSuccess={handleImportPdfSuccess}
+        />
+          </div>
+        </main>
+
+        {profile && isLobbyOpen && (
+          <LobbyChat
+            isOpen={isLobbyOpen}
+            onClose={() => setIsLobbyOpen(false)}
+            currentUserId={profile.id}
+            currentUsername={profile.username || 'Aventureiro'}
+            currentAvatarUrl={profile.avatar_url || avatarUrl}
+          />
+        )}
+      </div>
+
+      {/* Etiqueta Lateral Fixa no Canto Direito (para abrir o Lobby quando estiver offline) */}
+      {!isLobbyOpen && profile && (
+        <button
+          onClick={() => setIsLobbyOpen(true)}
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-3.5 px-2 rounded-l-2xl shadow-2xl flex flex-col items-center gap-2 transition-all cursor-pointer border-l border-t border-b border-purple-400/40 group hover:pr-3 animate-fade-in"
+          title="Entrar no Lobby"
+        >
+          <MessageSquare className="w-4 h-4 text-purple-200 group-hover:scale-110 transition-transform" />
+          <span className="[writing-mode:vertical-rl] tracking-widest text-[10px] uppercase font-extrabold">Lobby</span>
+        </button>
       )}
 
-      {/* Modal de Preferências de Exibição */}
-      <PreferencesModal
-        isOpen={isPreferencesOpen}
-        onClose={() => setIsPreferencesOpen(false)}
-        currentTheme={currentTheme}
-        currentAvatarUrl={avatarUrl || profile?.avatar_url}
-        onSave={handleSavePreferences}
-      />
-
-      {/* Modal de Importação de PDF */}
-      <PdfImportModal
-        isOpen={isPdfModalOpen}
-        onClose={() => setIsPdfModalOpen(false)}
-        onImportSuccess={handleImportPdfSuccess}
-      />
+      {profile && (
+        <FriendsDrawer
+          isOpen={isFriendsOpen}
+          onClose={() => setIsFriendsOpen(false)}
+          currentUserId={profile.id}
+        />
+      )}
 
       <SystemModal
         {...modalConfig}

@@ -241,3 +241,15 @@ export interface Notification {
   is_read: boolean;
   created_at: string;
 }
+
+export interface TableNPC {
+  id: string;
+  table_id: string;
+  name: string;
+  concept?: string | null;
+  attributes_values: Record<string, number>;
+  resources_current: Record<string, number>;
+  annotations?: string | null;
+  created_at: string;
+  updated_at: string;
+}

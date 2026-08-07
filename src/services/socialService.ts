@@ -1,4 +1,5 @@
-import { supabase } from '../lib/supabase';
+import { supabase as staticSupabase } from '../lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export interface Friendship {
   id: string;
@@ -26,7 +27,12 @@ export interface DirectMessage {
   };
 }
 
-export async function fetchUserFriends(userId: string): Promise<Friendship[]> {
+function getSupabase(customClient?: SupabaseClient) {
+  return customClient || staticSupabase;
+}
+
+export async function fetchUserFriends(userId: string, customClient?: SupabaseClient): Promise<Friendship[]> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('friendships')
     .select('*')
@@ -40,7 +46,8 @@ export async function fetchUserFriends(userId: string): Promise<Friendship[]> {
   if (!data || data.length === 0) return [];
 
   // Extrair IDs de perfis dos amigos
-  const friendUserIds = data.map((f: any) => (f.user_id === userId ? f.friend_id : f.user_id));
+  const friendsList = (data || []) as { user_id: string; friend_id: string }[];
+  const friendUserIds = friendsList.map((f) => (f.user_id === userId ? f.friend_id : f.user_id));
   
   const { data: profiles, error: profError } = await supabase
     .from('profiles')
@@ -51,19 +58,20 @@ export async function fetchUserFriends(userId: string): Promise<Friendship[]> {
     console.error('Error fetching profiles for friends:', profError);
   }
 
-  const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+  const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
   // Formatar perfil de amigo relativo ao usuário logado
-  return data.map((f: any) => {
+  return friendsList.map((f) => {
     const targetId = f.user_id === userId ? f.friend_id : f.user_id;
     return {
       ...f,
-      friend_profile: profileMap.get(targetId) || { id: targetId, username: 'Aventureiro', avatar_url: '' },
+      friend_profile: (profileMap.get(targetId) || { id: targetId, username: 'Aventureiro', avatar_url: '' }) as { id: string; username: string | null; avatar_url: string | null },
     };
   }) as Friendship[];
 }
 
-export async function searchUserProfile(query: string) {
+export async function searchUserProfile(query: string, customClient?: SupabaseClient) {
+  const supabase = getSupabase(customClient);
   const trimmed = query.trim();
   if (!trimmed) return null;
 
@@ -89,7 +97,8 @@ export async function searchUserProfile(query: string) {
   return data || null;
 }
 
-export async function sendFriendRequest(userId: string, friendId: string): Promise<Friendship | null> {
+export async function sendFriendRequest(userId: string, friendId: string, customClient?: SupabaseClient): Promise<Friendship | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('friendships')
     .insert([{ user_id: userId, friend_id: friendId, status: 'pending' }])
@@ -103,7 +112,8 @@ export async function sendFriendRequest(userId: string, friendId: string): Promi
   return data as Friendship;
 }
 
-export async function updateFriendshipStatus(friendshipId: string, status: 'accepted' | 'blocked'): Promise<boolean> {
+export async function updateFriendshipStatus(friendshipId: string, status: 'accepted' | 'blocked', customClient?: SupabaseClient): Promise<boolean> {
+  const supabase = getSupabase(customClient);
   const { error } = await supabase
     .from('friendships')
     .update({ status, updated_at: new Date().toISOString() })
@@ -116,7 +126,8 @@ export async function updateFriendshipStatus(friendshipId: string, status: 'acce
   return true;
 }
 
-export async function deleteFriendship(friendshipId: string): Promise<boolean> {
+export async function deleteFriendship(friendshipId: string, customClient?: SupabaseClient): Promise<boolean> {
+  const supabase = getSupabase(customClient);
   const { error } = await supabase
     .from('friendships')
     .delete()
@@ -129,7 +140,8 @@ export async function deleteFriendship(friendshipId: string): Promise<boolean> {
   return true;
 }
 
-export async function fetchDirectMessages(userId: string, friendId: string): Promise<DirectMessage[]> {
+export async function fetchDirectMessages(userId: string, friendId: string, customClient?: SupabaseClient): Promise<DirectMessage[]> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('direct_messages')
     .select('*')
@@ -144,21 +156,23 @@ export async function fetchDirectMessages(userId: string, friendId: string): Pro
   if (!data || data.length === 0) return [];
 
   // Get sender profiles
-  const senderIds = Array.from(new Set(data.map((m: any) => m.sender_id)));
+  const messagesList = (data || []) as { sender_id: string; receiver_id: string; content: string }[];
+  const senderIds = Array.from(new Set(messagesList.map((m) => m.sender_id)));
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, username, avatar_url')
     .in('id', senderIds);
 
-  const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+  const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
-  return data.map((m: any) => ({
+  return messagesList.map((m) => ({
     ...m,
-    sender_profile: profileMap.get(m.sender_id) || { username: 'Aventureiro', avatar_url: '' }
+    sender_profile: (profileMap.get(m.sender_id) || { username: 'Aventureiro', avatar_url: '' }) as { username: string | null; avatar_url: string | null }
   })) as DirectMessage[];
 }
 
-export async function sendDirectMessage(senderId: string, receiverId: string, content: string): Promise<DirectMessage | null> {
+export async function sendDirectMessage(senderId: string, receiverId: string, content: string, customClient?: SupabaseClient): Promise<DirectMessage | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('direct_messages')
     .insert([{ sender_id: senderId, receiver_id: receiverId, content }])

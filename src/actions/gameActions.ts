@@ -6,12 +6,12 @@ import {
   XPDistributionSchema 
 } from '../lib/validations/actions';
 import { calculateScore } from '../lib/rules';
-import { updateCharacter, fetchCharacterById } from '../services/characterService';
+import { updateCharacter } from '../services/characterService';
 import { distributeExperience } from '../services/tableService';
-import { supabase } from '../lib/supabase';
+import { createClient } from '../utils/supabase/server';
 import { Character } from '../types/game';
 
-export interface ActionResult<T = any> {
+export interface ActionResult<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -35,10 +35,11 @@ export async function saveCharacterAction(rawPayload: unknown): Promise<ActionRe
     };
   }
 
+  const supabase = await createClient();
   const updated = await updateCharacter(charData.id, {
     ...charData,
     points_spent: computedScore
-  });
+  }, supabase);
 
   if (!updated) {
     return { success: false, error: 'Falha ao salvar personagem no banco de dados' };
@@ -76,6 +77,7 @@ export async function rollDiceServerAction(rawPayload: unknown): Promise<ActionR
 
   const messageContent = `rolou ${diceCount}d${diceFaces}${attributeBonus !== 0 ? ` (${attributeBonus >= 0 ? '+' : ''}${attributeBonus})` : ''} 🎲 Resultado: ${total}`;
 
+  const supabase = await createClient();
   const { data: insertedMessage, error } = await supabase
     .from('chat_messages')
     .insert([
@@ -109,7 +111,8 @@ export async function distributeXpServerAction(rawPayload: unknown): Promise<Act
   }
 
   const { characterIds, xpAmount } = parsed.data;
-  const ok = await distributeExperience(characterIds, xpAmount);
+  const supabase = await createClient();
+  const ok = await distributeExperience(characterIds, xpAmount, supabase);
   if (!ok) {
     return { success: false, error: 'Falha ao distribuir XP no servidor' };
   }

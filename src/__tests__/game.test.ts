@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getMaxPv, getMaxPm, calculateScore, computedCostPt, executeCustomRoll, getQuickRollModifiers, convertXpToPoints, getModifiedAttributes, getEquippedItemsModifiers, executeAttributeTest } from '../lib/rules';
 import { validateUniqueNameAndKey, validateFormula, canAlterAttribute, canAffordCost, canLinkCharacterToTable, validateDamageType } from '../lib/validations';
-import { Character } from '../types/game';
+import { Character, AdvantageItem } from '../types/game';
 
 
 

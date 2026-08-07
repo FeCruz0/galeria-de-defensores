@@ -1,7 +1,13 @@
-import { supabase } from '../lib/supabase';
+import { supabase as staticSupabase } from '../lib/supabase';
 import { Table, Character, TablePlayer } from '../types/game';
+import { SupabaseClient } from '@supabase/supabase-js';
 
-export async function fetchTableById(id: string): Promise<Table | null> {
+function getSupabase(customClient?: SupabaseClient) {
+  return customClient || staticSupabase;
+}
+
+export async function fetchTableById(id: string, customClient?: SupabaseClient): Promise<Table | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('tables')
     .select('*, rule_systems(name)')
@@ -15,7 +21,8 @@ export async function fetchTableById(id: string): Promise<Table | null> {
   return data as Table;
 }
 
-export async function fetchUserTables(userId: string): Promise<Table[]> {
+export async function fetchUserTables(userId: string, customClient?: SupabaseClient): Promise<Table[]> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('tables')
     .select('*, rule_systems(name)')
@@ -29,7 +36,8 @@ export async function fetchUserTables(userId: string): Promise<Table[]> {
   return (data || []) as Table[];
 }
 
-export async function fetchAllPublicTables(): Promise<(Table & { player_count?: number })[]> {
+export async function fetchAllPublicTables(customClient?: SupabaseClient): Promise<(Table & { player_count?: number })[]> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('tables')
     .select('*, rule_systems(name), table_players(player_id, role)')
@@ -41,8 +49,9 @@ export async function fetchAllPublicTables(): Promise<(Table & { player_count?: 
     return [];
   }
 
-  return (data || []).map((table: any) => {
-    const activePlayers = (table.table_players || []).filter((p: any) => p.role === 'player').length;
+  return (data || []).map((table) => {
+    const players = (table.table_players || []) as { player_id: string; role: string }[];
+    const activePlayers = players.filter((p) => p.role === 'player').length;
     return {
       ...table,
       player_count: activePlayers,
@@ -50,7 +59,8 @@ export async function fetchAllPublicTables(): Promise<(Table & { player_count?: 
   });
 }
 
-export async function fetchTableMembers(tableId: string): Promise<TablePlayer[]> {
+export async function fetchTableMembers(tableId: string, customClient?: SupabaseClient): Promise<TablePlayer[]> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('table_players')
     .select('table_id, player_id, role, created_at, profiles(username, avatar_url)')
@@ -64,7 +74,8 @@ export async function fetchTableMembers(tableId: string): Promise<TablePlayer[]>
   return (data || []) as unknown as TablePlayer[];
 }
 
-export async function createTable(tableData: Partial<Table>): Promise<Table | null> {
+export async function createTable(tableData: Partial<Table>, customClient?: SupabaseClient): Promise<Table | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('tables')
     .insert([tableData])
@@ -78,7 +89,8 @@ export async function createTable(tableData: Partial<Table>): Promise<Table | nu
   return data as Table;
 }
 
-export async function updateTable(id: string, updates: Partial<Table>): Promise<Table | null> {
+export async function updateTable(id: string, updates: Partial<Table>, customClient?: SupabaseClient): Promise<Table | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('tables')
     .update(updates)
@@ -96,15 +108,17 @@ export async function updateTable(id: string, updates: Partial<Table>): Promise<
 export async function joinTable(
   tableId: string,
   userId: string,
-  preferredRole: 'player' | 'spectator' = 'player'
+  preferredRole: 'player' | 'spectator' = 'player',
+  customClient?: SupabaseClient
 ): Promise<{ success: boolean; role: 'player' | 'spectator'; message?: string }> {
+  const supabase = getSupabase(customClient);
   // 1. Obter informações da mesa e contagem de jogadores
-  const table = await fetchTableById(tableId);
+  const table = await fetchTableById(tableId, customClient);
   if (!table) {
     return { success: false, role: preferredRole, message: 'Mesa não encontrada.' };
   }
 
-  const members = await fetchTableMembers(tableId);
+  const members = await fetchTableMembers(tableId, customClient);
   const existingMember = members.find(m => m.player_id === userId);
   if (existingMember) {
     return { success: true, role: existingMember.role, message: 'Você já faz parte desta mesa.' };
@@ -137,11 +151,13 @@ export async function joinTable(
 export async function updateMemberRole(
   tableId: string,
   playerId: string,
-  newRole: 'player' | 'spectator'
+  newRole: 'player' | 'spectator',
+  customClient?: SupabaseClient
 ): Promise<{ success: boolean; message?: string }> {
+  const supabase = getSupabase(customClient);
   if (newRole === 'player') {
-    const table = await fetchTableById(tableId);
-    const members = await fetchTableMembers(tableId);
+    const table = await fetchTableById(tableId, customClient);
+    const members = await fetchTableMembers(tableId, customClient);
     const activePlayersCount = members.filter(m => m.player_id !== playerId && m.role === 'player').length;
     const maxLimit = table?.max_players ?? 4;
 
@@ -164,7 +180,8 @@ export async function updateMemberRole(
   return { success: true };
 }
 
-export async function kickTableMember(tableId: string, playerId: string): Promise<boolean> {
+export async function kickTableMember(tableId: string, playerId: string, customClient?: SupabaseClient): Promise<boolean> {
+  const supabase = getSupabase(customClient);
   const { error } = await supabase
     .from('table_players')
     .delete()
@@ -178,7 +195,8 @@ export async function kickTableMember(tableId: string, playerId: string): Promis
   return true;
 }
 
-export async function fetchTableCharacters(tableId: string): Promise<Character[]> {
+export async function fetchTableCharacters(tableId: string, customClient?: SupabaseClient): Promise<Character[]> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('characters')
     .select('*')
@@ -191,8 +209,9 @@ export async function fetchTableCharacters(tableId: string): Promise<Character[]
   return (data || []) as Character[];
 }
 
-export async function distributeExperience(characterIds: string[], xpAmount: number): Promise<boolean> {
+export async function distributeExperience(characterIds: string[], xpAmount: number, customClient?: SupabaseClient): Promise<boolean> {
   if (!characterIds.length || xpAmount <= 0) return false;
+  const supabase = getSupabase(customClient);
 
   try {
     const { error } = await supabase.rpc('distribute_xp_to_characters', {

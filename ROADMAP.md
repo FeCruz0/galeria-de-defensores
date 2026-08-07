@@ -79,10 +79,10 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 💬 1. Lobby Geral & Lista de Amigos
 * **Descrição**: Sala de bate-papo global integrada (Lobby) para conversação em tempo real e sistema de amizades para mensagens privadas (DM).
 * **Checklist**:
-  - [ ] Criar painel de Lobby Geral com chat em tempo real via canais de Broadcast do Supabase (sem persistência em disco).
-  - [ ] Implementar sistema de amizades: adicionar amigos pelo chat do lobby, lista de membros ou buscando pelo ID do usuário.
-  - [ ] Criar lista de amigos interativa com status de presença (online/offline).
-  - [ ] Implementar chat privado (DMs) em tempo real entre amigos com RLS rigoroso para garantir a privacidade dos dados.
+  - [x] Criar painel de Lobby Geral com chat em tempo real via canais de Broadcast do Supabase (sem persistência em disco).
+  - [x] Implementar sistema de amizades: adicionar amigos pelo chat do lobby, lista de membros ou buscando pelo ID do usuário.
+  - [x] Criar lista de amigos interativa com status de presença (online/offline).
+  - [x] Implementar chat privado (DMs) em tempo real entre amigos com RLS rigoroso para garantir a privacidade dos dados.
 
 ### 👁️ 2. Espectadores e Visibilidade de Mesas
 * **Descrição**: Listagem global de todas as mesas criadas, gerenciamento dinâmico de limites/papéis pelo Mestre e modo espectador passivo.
@@ -96,8 +96,8 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 👺 3. Mini-Ficha Resumida do Mestre (Quick NPC Tracker)
 * **Descrição**: Painel compacto e simplificado de uso exclusivo do Mestre para gerenciar ameaças, capangas e NPCs diretamente na mesa.
 * **Checklist**:
-  - [ ] Criar painel/drawer de Mini-Ficha rápida visível e acessível estritamente pelo Mestre (`master_id`).
-  - [ ] Permitir cadastro ágil de atributos base (F, H, R, A, PdF), controle rápido de PV/PM e botões de atalho para rolagens instantâneas no chat narrativo sem expor a ficha inteira para os jogadores.
+  - [x] Criar painel/drawer de Mini-Ficha rápida visível e acessível estritamente pelo Mestre (`master_id`).
+  - [x] Permitir cadastro ágil de atributos base (F, H, R, A, PdF), controle rápido de PV/PM e botões de atalho para rolagens instantâneas no chat narrativo sem expor a ficha inteira para os jogadores.
 
 ### 📱 4. PWA (Progressive Web App) & Suporte a Acesso Offline
 * **Descrição**: Transformação da aplicação em um Web App instalável com cache local e sincronização offline de fichas.
@@ -118,7 +118,8 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 🗄️ 1. Versionamento de Migrações com Supabase CLI
 * **Descrição**: Transição do arquivo de script monolítico para versionamento nativo de migrações SQL através do Supabase CLI.
 * **Checklist**:
-  - [ ] Criar diretório `supabase/migrations/` e migrar a estrutura existente para arquivos numerados timestamped (ex: `20260807000000_schema.sql`).
+  - [x] Criar diretório `supabase/migrations/` e migrar a estrutura existente para arquivos numerados timestamped (`20260807000000_init_schema.sql`, `20260807000001_phase11_social_and_spectators.sql`, `20260807000002_future_npcs_audit_and_indexes.sql`).
+  - [x] Criar os manuais de arquitetura e banco de dados ([DATABASE.md](DATABASE.md) e [ARCHITECTURE.md](ARCHITECTURE.md)).
   - [ ] Integrar fluxo de execução de migrações nos ambientes de desenvolvimento local e docker.
 
 ### 🧩 2. Decomposição de Componentes Monolíticos (Refatoração de Mesa VTT)

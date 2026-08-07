@@ -1,7 +1,13 @@
-import { supabase } from '../lib/supabase';
+import { supabase as staticSupabase } from '../lib/supabase';
 import { Character } from '../types/game';
+import { SupabaseClient } from '@supabase/supabase-js';
 
-export async function fetchCharacterById(id: string): Promise<Character | null> {
+function getSupabase(customClient?: SupabaseClient) {
+  return customClient || staticSupabase;
+}
+
+export async function fetchCharacterById(id: string, customClient?: SupabaseClient): Promise<Character | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('characters')
     .select('*')
@@ -15,7 +21,8 @@ export async function fetchCharacterById(id: string): Promise<Character | null> 
   return data as Character;
 }
 
-export async function fetchUserCharacters(userId: string): Promise<Character[]> {
+export async function fetchUserCharacters(userId: string, customClient?: SupabaseClient): Promise<Character[]> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('characters')
     .select('*')
@@ -29,7 +36,8 @@ export async function fetchUserCharacters(userId: string): Promise<Character[]> 
   return (data || []) as Character[];
 }
 
-export async function createCharacter(characterData: Partial<Character>): Promise<Character | null> {
+export async function createCharacter(characterData: Partial<Character>, customClient?: SupabaseClient): Promise<Character | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('characters')
     .insert([characterData])
@@ -43,7 +51,8 @@ export async function createCharacter(characterData: Partial<Character>): Promis
   return data as Character;
 }
 
-export async function updateCharacter(id: string, updates: Partial<Character>): Promise<Character | null> {
+export async function updateCharacter(id: string, updates: Partial<Character>, customClient?: SupabaseClient): Promise<Character | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('characters')
     .update({ ...updates, updated_at: new Date().toISOString() })
@@ -58,7 +67,8 @@ export async function updateCharacter(id: string, updates: Partial<Character>): 
   return data as Character;
 }
 
-export async function deleteCharacter(id: string): Promise<boolean> {
+export async function deleteCharacter(id: string, customClient?: SupabaseClient): Promise<boolean> {
+  const supabase = getSupabase(customClient);
   const { error } = await supabase
     .from('characters')
     .delete()

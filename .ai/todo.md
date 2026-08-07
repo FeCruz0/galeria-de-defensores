@@ -1,5 +1,13 @@
 # 📝 Tasks - Galeria de Defensores
 
+## ✅ Concluído: Fase 11, Item 3 - Mini-Ficha Resumida do Mestre (Quick NPC Tracker)
+- [x] Tabela `table_npcs` no Supabase com RLS exclusivo para o Mestre.
+- [x] Interface `TableNPC` em `src/types/game.ts` e validações Zod em `src/lib/validations/npc.ts`.
+- [x] Camada de serviço `src/services/npcService.ts` e Server Actions em `src/actions/npcActions.ts`.
+- [x] Componente UI `NpcTrackerDrawer.tsx` com ajuste rápido de recursos (`-1`, `+1`, `-5`, `+5`), rolagens 3D atalhos (**Ataque Físico**, **Distância**, **Defesa**, **Esquiva**) e envio automático ao chat narrativo da mesa.
+- [x] Integração de escuta Realtime e botão no cabeçalho em `src/app/tables/[id]/page.tsx`.
+- [x] Suíte de testes unitários em `src/services/__tests__/npcService.test.ts`.
+
 ## ✅ Concluído: Fase 11, Item 2 - Espectadores e Visibilidade de Mesas
 - [x] Schema do Supabase com colunas `max_players`, `allow_spectators` e `role` (`table_players`) e políticas RLS ajustadas.
 - [x] Abstração da Camada de Serviços em `src/services/tableService.ts` (`fetchAllPublicTables`, `fetchTableMembers`, `joinTable`, `updateMemberRole`, `kickTableMember`).

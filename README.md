@@ -76,10 +76,19 @@ Galeria de Defensores is a fullstack web application designed for managing chara
 
 3. Open [http://localhost:3000](http://localhost:3000) to view the application.
 
+## Documentation
+
+- 📚 **[DATABASE.md](DATABASE.md)**: Full database ER diagram, table schemas, RLS policies matrix, and Realtime channels specification.
+- 🏗️ **[ARCHITECTURE.md](ARCHITECTURE.md)**: Layered software architecture (UI -> Server Actions -> Service Layer -> PostgreSQL), anti-cheat rules, and testing guidelines.
+
 ## Database Setup & Migrations
 
-1. Execute the base SQL script in [supabase/schema.sql](supabase/schema.sql) using the SQL Editor in your Supabase dashboard. It sets up all the tables, relations, triggers, and Row Level Security (RLS) policies.
-2. If you are updating an existing database setup, execute the following SQL migration script to add the new catalog columns, scale constraints, notifications policy, uniqueness checks, and reload the schema cache:
+1. For new environments, execute the consolidated schema in [supabase/schema.sql](supabase/schema.sql) using the Supabase SQL Editor.
+2. For version-controlled migrations using Supabase CLI, run the sequential migration files located in `supabase/migrations/`:
+   - `20260807000000_init_schema.sql`
+   - `20260807000001_phase11_social_and_spectators.sql`
+   - `20260807000002_future_npcs_audit_and_indexes.sql`
+3. Refer to [DATABASE.md](DATABASE.md) for full relational table specifications and RLS security rules.
    ```sql
    -- 1. Make user_id optional in rule_systems (for native systems)
    ALTER TABLE public.rule_systems ALTER COLUMN user_id DROP NOT NULL;

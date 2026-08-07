@@ -3,7 +3,7 @@
 import React, { use, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { Table, ChatMessage, Profile, Character, RollResult } from '@/types/game';
+import { Table, ChatMessage, Profile, Character, RollResult, TableNPC } from '@/types/game';
 import { executeCustomRoll, getMaxPv, getMaxPm, getModifiedAttributes, getEquippedItemsModifiers, executeAttributeTest } from '@/lib/rules';
 import { canLinkCharacterToTable } from '@/lib/validations';
 import { 
@@ -38,6 +38,8 @@ import {
 import { STATUS_CONDITIONS, StatusCondition } from '@/lib/status';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 import { updateMemberRoleAction, kickTableMemberAction, updateTableSettingsAction } from '@/actions/tableActions';
+import { fetchTableNpcs } from '@/services/npcService';
+import { NpcTrackerDrawer } from '@/components/NpcTrackerDrawer';
 
 type Params = Promise<{ id: string }>;
 
@@ -57,6 +59,8 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [tablePlayers, setTablePlayers] = useState<any[]>([]);
   const [userRole, setUserRole] = useState<'MASTER' | 'PLAYER' | 'SPECTATOR' | 'GUEST'>('GUEST');
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+  const [tableNpcs, setTableNpcs] = useState<TableNPC[]>([]);
+  const [isNpcDrawerOpen, setIsNpcDrawerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMembersOpen, setIsMembersOpen] = useState(false);
   const [editTableName, setEditTableName] = useState('');
@@ -193,6 +197,10 @@ export default function GameTablePage({ params }: { params: Params }) {
         if (playersData) {
           setTablePlayers(playersData);
         }
+
+        // NPCs da mesa
+        const npcsData = await fetchTableNpcs(id);
+        setTableNpcs(npcsData);
 
         // Determinar o cargo do usuário logado
         if (user.id === tblData.master_id) {
@@ -363,6 +371,19 @@ export default function GameTablePage({ params }: { params: Params }) {
           } else if (payload.eventType === 'DELETE') {
             setCustomConditions((prev) => prev.filter(c => c.id !== payload.old.id));
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'table_npcs',
+          filter: `table_id=eq.${id}`,
+        },
+        async () => {
+          const npcsData = await fetchTableNpcs(id);
+          setTableNpcs(npcsData);
         }
       )
       .on(
@@ -921,7 +942,10 @@ export default function GameTablePage({ params }: { params: Params }) {
           PM: Math.max(0, currentPm - rollObj.pmCost)
         };
         
-        selectedCharacterSheet.resources_current = updatedResources;
+        setSelectedCharacterSheet({
+          ...selectedCharacterSheet,
+          resources_current: updatedResources
+        });
         
         await supabase
           .from('characters')
@@ -1133,13 +1157,24 @@ export default function GameTablePage({ params }: { params: Params }) {
           </button>
 
           {userRole === 'MASTER' && (
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-2 hover:bg-purple-950/40 text-slate-400 hover:text-purple-400 rounded-lg border border-slate-800 transition-colors cursor-pointer"
-              title="Configurações da Mesa"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+            <>
+              <button
+                onClick={() => setIsNpcDrawerOpen(true)}
+                className="flex items-center gap-1.5 text-xs text-rose-300 bg-rose-950/20 hover:bg-rose-900/30 border border-rose-800/35 px-3 py-1.5 rounded-full transition-all cursor-pointer"
+                title="Ameaças & NPCs do Mestre"
+              >
+                <Skull className="w-3.5 h-3.5 text-rose-400" />
+                <span className="font-bold hidden sm:inline">Ameaças ({tableNpcs.length})</span>
+              </button>
+
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-2 hover:bg-purple-950/40 text-slate-400 hover:text-purple-400 rounded-lg border border-slate-800 transition-colors cursor-pointer"
+                title="Configurações da Mesa"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -2635,6 +2670,41 @@ export default function GameTablePage({ params }: { params: Params }) {
             </div>
           </div>
         </div>
+      )}
+
+      {userRole === 'MASTER' && (
+        <NpcTrackerDrawer
+          tableId={table.id}
+          npcs={tableNpcs}
+          isOpen={isNpcDrawerOpen}
+          onClose={() => setIsNpcDrawerOpen(false)}
+          onRollDice={(results, title, senderName) => {
+            setVirtualRoll({
+              results,
+              faces: 6,
+              title,
+              callback: async () => {
+                if (currentUser && table) {
+                  await supabase.from('chat_messages').insert({
+                    table_id: table.id,
+                    sender_id: currentUser.id,
+                    sender_name: senderName,
+                    content: title,
+                    type: 'ROLL',
+                    channel: 'ON',
+                  });
+                }
+              },
+            });
+          }}
+          onNpcsChange={async () => {
+            if (table) {
+              const data = await fetchTableNpcs(table.id);
+              setTableNpcs(data);
+            }
+          }}
+          showToast={showToast}
+        />
       )}
 
       {virtualRoll && (

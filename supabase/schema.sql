@@ -50,6 +50,8 @@ create table public.tables (
   rule_system_id uuid references public.rule_systems on delete set null,
   is_private boolean default false not null,
   password text,
+  max_players integer default 4 not null check (max_players >= 1 and max_players <= 20),
+  allow_spectators boolean default true not null,
   rules_mod jsonb default '{}'::jsonb not null,
   custom_damage_types jsonb default '[]'::jsonb not null,
   custom_unique_advantages jsonb default '[]'::jsonb not null,
@@ -62,6 +64,7 @@ create table public.tables (
 create table public.table_players (
   table_id uuid references public.tables on delete cascade not null,
   player_id uuid references auth.users on delete cascade not null,
+  role text default 'player' not null check (role in ('player', 'spectator')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   primary key (table_id, player_id)
 );
@@ -186,8 +189,9 @@ create policy "Usuários gerenciam seus próprios sistemas de regras" on public.
   for all using (auth.uid() = user_id);
 
 -- 3. Políticas de Mesas (tables)
-create policy "Membros da mesa e o mestre podem visualizar a mesa" on public.tables
+create policy "Mesas públicas visíveis para todos e privadas para membros" on public.tables
   for select using (
+    is_private = false or
     auth.uid() = master_id or 
     exists (
       select 1 from public.table_players 
@@ -204,16 +208,21 @@ create policy "Membros e mestre podem visualizar membros" on public.table_player
     auth.uid() is not null
   );
 
-create policy "Mestre ou convidado com convite pendente podem inserir membro" on public.table_players
+create policy "Mestre, convidados ou novos membros podem inserir registro" on public.table_players
   for insert with check (
     exists (
       select 1 from public.tables 
       where id = table_id and master_id = auth.uid()
     ) or (
-      auth.uid() = player_id and
-      exists (
-        select 1 from public.notifications
-        where table_id = table_id and user_id = auth.uid() and type = 'INVITE' and is_read = false
+      auth.uid() = player_id and (
+        exists (
+          select 1 from public.notifications
+          where table_id = table_id and user_id = auth.uid() and type = 'INVITE' and is_read = false
+        ) or
+        exists (
+          select 1 from public.tables
+          where id = table_id and is_private = false
+        )
       )
     )
   );
@@ -226,8 +235,9 @@ create policy "Apenas o mestre pode atualizar membros" on public.table_players
     )
   );
 
-create policy "Apenas o mestre pode deletar membros" on public.table_players
+create policy "Mestre pode deletar membro ou o próprio membro pode sair" on public.table_players
   for delete using (
+    auth.uid() = player_id or
     exists (
       select 1 from public.tables 
       where id = table_id and master_id = auth.uid()
@@ -242,7 +252,7 @@ create policy "Usuários gerenciam seus próprios personagens" on public.charact
   for all using (auth.uid() = user_id);
 
 -- 6. Políticas de Chat (chat_messages)
-create policy "Membros da mesa podem ler mensagens" on public.chat_messages
+create policy "Membros e espectadores podem ler mensagens do chat" on public.chat_messages
   for select using (
     exists (
       select 1 from public.tables 
@@ -251,10 +261,14 @@ create policy "Membros da mesa podem ler mensagens" on public.chat_messages
     exists (
       select 1 from public.table_players 
       where table_id = table_id and player_id = auth.uid()
+    ) or
+    exists (
+      select 1 from public.tables 
+      where id = table_id and is_private = false and allow_spectators = true
     )
   );
 
-create policy "Membros da mesa podem enviar mensagens" on public.chat_messages
+create policy "Apenas mestre e jogadores ativos podem enviar mensagens no chat" on public.chat_messages
   for insert with check (
     auth.uid() = sender_id and (
       exists (
@@ -263,7 +277,7 @@ create policy "Membros da mesa podem enviar mensagens" on public.chat_messages
       ) or
       exists (
         select 1 from public.table_players 
-        where table_id = table_id and player_id = auth.uid()
+        where table_id = table_id and player_id = auth.uid() and role = 'player'
       )
     )
   );

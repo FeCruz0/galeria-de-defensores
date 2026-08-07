@@ -26,9 +26,12 @@ Galeria de Defensores is a fullstack web application designed for managing chara
 - **Status & Temporary Condition Modifiers**: Interactive toggle grid on quick sheet drawer supporting rules-integrated effects like *Defendendo* (doubles armor in defense rolls), *Indefeso* (sets H and A to 0, sets FD to 0), and *Paralisado* (sets H to 0 for tests and dodges).
 - **Equippable Inventory & Modifiers**: Supporting weapons, shields, and armor that dynamically modify attributes, PV/PM maximums, and active status indicators.
 - **Custom Status Conditions (CRUD)**: Table GMs can create and delete custom status conditions specific to their tables, selecting custom Lucide icons and Tailwind colors. Players can toggle these custom status indicators on their characters in real-time.
+- **Lobby Chat & Realtime Broadcast**: Global real-time lobby chat connected via Supabase Realtime with dynamic slowmode rate limits proportional to message size.
+- **Friends & Direct Messages (DMs)**: Friendships system (request, accept, decline, search users by ID/username) with private real-time direct messaging.
+- **Public Tables Explorer & Spectator Mode**: Global public tables exploration tab in Dashboard under "Mesas de Jogo", customizable player limits (`max_players`), passive read-only Spectator Mode in VTT session, real-time online presence tracking (Supabase Presence), and GM moderation controls (Promote, Demote, Kick/Ban).
 - **Ink-Saving A4 Print & PDF Export**: Highly optimized classic black-and-white high-contrast printable A4 sheet layout for characters, automatically hiding dark-themed interactive screen layouts (`print:hidden`) and displaying a cleanly structured printable view containing all attributes, bonuses, qualities, spells, and equipment list.
 - **Secure Row Level Security (RLS)**: Secure policies on all tables ensuring players can only see and write what they own.
-- **Unit Testing**: Suite of unit tests covering the rules calculation engine, validations, and custom roll constraints.
+- **Unit Testing**: Suite of unit tests covering the rules calculation engine, validations, custom roll constraints, and service layer abstractions.
 
 ## Tech Stack
 
@@ -210,6 +213,14 @@ Galeria de Defensores is a fullstack web application designed for managing chara
         END IF;
       END IF;
     END $$;
+
+    -- 10. Phase 11 Migrations: Social Tables, Spectator Roles, and Player Limits
+    ALTER TABLE public.tables 
+      ADD COLUMN IF NOT EXISTS max_players integer DEFAULT 4 NOT NULL CHECK (max_players >= 1 AND max_players <= 20),
+      ADD COLUMN IF NOT EXISTS allow_spectators boolean DEFAULT true NOT NULL;
+
+    ALTER TABLE public.table_players 
+      ADD COLUMN IF NOT EXISTS role text DEFAULT 'player' NOT NULL CHECK (role IN ('player', 'spectator'));
    ```
 
 ## Running Tests

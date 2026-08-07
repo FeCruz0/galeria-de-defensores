@@ -54,6 +54,8 @@ export interface Table {
   rule_systems?: { name: string } | null;
   is_private: boolean;
   password?: string;
+  max_players?: number;
+  allow_spectators?: boolean;
   rules_mod: Record<string, any>;
   custom_damage_types: string[];
   custom_unique_advantages: UniqueAdvantage[];
@@ -65,7 +67,12 @@ export interface Table {
 export interface TablePlayer {
   table_id: string;
   player_id: string;
+  role: 'player' | 'spectator';
   created_at: string;
+  profiles?: {
+    username: string;
+    avatar_url?: string;
+  } | null;
 }
 
 export interface ModifierOption {

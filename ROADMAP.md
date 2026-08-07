@@ -87,11 +87,11 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 👁️ 2. Espectadores e Visibilidade de Mesas
 * **Descrição**: Listagem global de todas as mesas criadas, gerenciamento dinâmico de limites/papéis pelo Mestre e modo espectador passivo.
 * **Checklist**:
-  - [ ] Modificar a criação/configuração da mesa (`tables`) para definir um limite máximo de jogadores (excluindo o Mestre) e permitir a edição livre de configurações básicas da mesa (nome, descrição, limite, permissão de espectadores) a qualquer momento pelo Mestre.
-  - [ ] Listar publicamente todas as mesas criadas no dashboard global de todos os usuários.
-  - [ ] Implementar modo "Espectador": usuários não vinculados como jogador ou mestre podem entrar em mesas públicas (caso permitido) e assistir a ficha, chat narrativo e rolagens em tempo real, com interações de escrita, envio de mensagens e rolagens desativadas.
-  - [ ] Criar ações de moderação do Mestre: promover um espectador para jogador (respeitando o limite configurado), rebaixar um jogador para espectador, banir espectadores e banir jogadores da mesa de forma definitiva.
-  - [ ] Exibir lista lateral de usuários online na mesa ativa com tags distintivas: **Mestre**, **Jogador** ou **Espectador** via canais de Presença Realtime do Supabase.
+  - [x] Modificar a criação/configuração da mesa (`tables`) para definir um limite máximo de jogadores (excluindo o Mestre) e permitir a edição livre de configurações básicas da mesa (nome, descrição, limite, permissão de espectadores) a qualquer momento pelo Mestre.
+  - [x] Listar publicamente todas as mesas criadas no dashboard global de todos os usuários.
+  - [x] Implementar modo "Espectador": usuários não vinculados como jogador ou mestre podem entrar em mesas públicas (caso permitido) e assistir a ficha, chat narrativo e rolagens em tempo real, com interações de escrita, envio de mensagens e rolagens desativadas.
+  - [x] Criar ações de moderação do Mestre: promover um espectador para jogador (respeitando o limite configurado), rebaixar um jogador para espectador, banir espectadores e banir jogadores da mesa de forma definitiva.
+  - [x] Exibir lista lateral de usuários online na mesa ativa com tags distintivas: **Mestre**, **Jogador** ou **Espectador** via canais de Presença Realtime do Supabase.
 
 ### 👺 3. Mini-Ficha Resumida do Mestre (Quick NPC Tracker)
 * **Descrição**: Painel compacto e simplificado de uso exclusivo do Mestre para gerenciar ameaças, capangas e NPCs diretamente na mesa.
@@ -113,7 +113,37 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 
 ---
 
-## 🛡️ Fase 10: Maturação de Arquitetura & Segurança Enterprise (Concluída)
+## ⚡ Fase 12: Excelência em Engenharia & Melhores Práticas de Arquitetura (Planejado)
+
+### 🗄️ 1. Versionamento de Migrações com Supabase CLI
+* **Descrição**: Transição do arquivo de script monolítico para versionamento nativo de migrações SQL através do Supabase CLI.
+* **Checklist**:
+  - [ ] Criar diretório `supabase/migrations/` e migrar a estrutura existente para arquivos numerados timestamped (ex: `20260807000000_schema.sql`).
+  - [ ] Integrar fluxo de execução de migrações nos ambientes de desenvolvimento local e docker.
+
+### 🧩 2. Decomposição de Componentes Monolíticos (Refatoração de Mesa VTT)
+* **Descrição**: Desmembrar telas extensas (especialmente `tables/[id]/page.tsx`) em subcomponentes modulares e focados.
+* **Checklist**:
+  - [ ] Extrair painel de chat e envio de mensagens para `TableChatPanel.tsx`.
+  - [ ] Extrair rolador de dados e visualizador 3D para `TableDiceRollerPanel.tsx`.
+  - [ ] Extrair modais do Mestre para `TableSettingsModal.tsx` e `TableMembersModal.tsx`.
+
+### 🚀 3. Otimização de Performance com React Server Components (RSC)
+* **Descrição**: Migrar buscas de dados estáticos do Dashboard e tabelas para o servidor antes de renderizar no cliente.
+* **Checklist**:
+  - [ ] Carregar dados de perfill, personagens e mesas em componentes Server-Side no Next.js (App Router).
+  - [ ] Reduzir payloads de transferência no cliente utilizando carregamento progressivo.
+
+### 🛡️ 4. Tratamento Global de Erros & Observabilidade (Error Boundaries)
+* **Descrição**: Implementação de tratamento gracioso de falhas de runtime e feedback de carregamento.
+* **Checklist**:
+  - [ ] Criar arquivos `error.tsx` e `loading.tsx` com Skeleton Loaders na estrutura de rotas do App Router.
+  - [ ] Adicionar capturador genérico de exceções não tratadas nas Server Actions.
+
+### 🚦 5. Proteção Anti-Abuse & Rate Limiting em Server Actions
+* **Descrição**: Proteção contra requisições abusivas e spam em ações mutáveis de banco.
+* **Checklist**:
+  - [ ] Configurar middleware ou biblioteca de rate-limiting (ex: `@upstash/ratelimit`) para Server Actions públicas e de chat.
 
 ### 🏗️ 1. Abstração da Camada de Serviços (Service Layer) — High Priority
 * **Descrição**: Desacoplar chamadas diretas do cliente Supabase (`supabase.from(...)`) dos componentes React `.tsx` para arquivos de serviço encapsulados, facilitando manutenibilidade e testes.

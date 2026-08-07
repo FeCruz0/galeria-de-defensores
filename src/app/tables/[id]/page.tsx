@@ -27,10 +27,17 @@ import {
   Heart,
   Zap,
   Snowflake,
-  Settings
+  Settings,
+  Eye,
+  Crown,
+  UserCheck,
+  UserMinus,
+  UserX,
+  Check
 } from 'lucide-react';
 import { STATUS_CONDITIONS, StatusCondition } from '@/lib/status';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
+import { updateMemberRoleAction, kickTableMemberAction, updateTableSettingsAction } from '@/actions/tableActions';
 
 type Params = Promise<{ id: string }>;
 
@@ -46,8 +53,18 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  // States Multiplayer (Drawer de Personagens / Jogadores)
+  // States Multiplayer (Drawer de Personagens / Jogadores / Espectadores)
   const [tablePlayers, setTablePlayers] = useState<any[]>([]);
+  const [userRole, setUserRole] = useState<'MASTER' | 'PLAYER' | 'SPECTATOR' | 'GUEST'>('GUEST');
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMembersOpen, setIsMembersOpen] = useState(false);
+  const [editTableName, setEditTableName] = useState('');
+  const [editTableDesc, setEditTableDesc] = useState('');
+  const [editMaxPlayers, setEditMaxPlayers] = useState(4);
+  const [editAllowSpectators, setEditAllowSpectators] = useState(true);
+  const [editIsPrivate, setEditIsPrivate] = useState(false);
+  const [editPassword, setEditPassword] = useState('');
   const [linkedCharacters, setLinkedCharacters] = useState<Character[]>([]);
   const [myCharacters, setMyCharacters] = useState<Character[]>([]);
   const [selectedCharacterSheet, setSelectedCharacterSheet] = useState<Character | null>(null);
@@ -148,6 +165,12 @@ export default function GameTablePage({ params }: { params: Params }) {
           return;
         }
         setTable(tblData);
+        setEditTableName(tblData.name || '');
+        setEditTableDesc(tblData.description || '');
+        setEditMaxPlayers(tblData.max_players ?? 4);
+        setEditAllowSpectators(tblData.allow_spectators ?? true);
+        setEditIsPrivate(tblData.is_private ?? false);
+        setEditPassword(tblData.password || '');
 
         // Histórico de Mensagens
         const { data: msgData } = await supabase
@@ -161,12 +184,27 @@ export default function GameTablePage({ params }: { params: Params }) {
           setMessages(msgData);
         }
 
-        // Jogadores da mesa
+        // Jogadores e Espectadores da mesa
         const { data: playersData } = await supabase
           .from('table_players')
-          .select('player_id, profiles(username)')
+          .select('player_id, role, profiles(username, avatar_url)')
           .eq('table_id', id);
-        if (playersData) setTablePlayers(playersData);
+
+        if (playersData) {
+          setTablePlayers(playersData);
+        }
+
+        // Determinar o cargo do usuário logado
+        if (user.id === tblData.master_id) {
+          setUserRole('MASTER');
+        } else {
+          const myMembership = playersData?.find((p: any) => p.player_id === user.id);
+          if (myMembership) {
+            setUserRole(myMembership.role === 'spectator' ? 'SPECTATOR' : 'PLAYER');
+          } else {
+            setUserRole('GUEST');
+          }
+        }
 
         // Personagens vinculados a esta mesa
         const { data: linkedChars } = await supabase
@@ -327,14 +365,77 @@ export default function GameTablePage({ params }: { params: Params }) {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'table_players',
+          filter: `table_id=eq.${id}`,
+        },
+        async () => {
+          // Recarregar lista de membros ao alterar cargos ou novos membros
+          const { data: updatedPlayers } = await supabase
+            .from('table_players')
+            .select('player_id, role, profiles(username, avatar_url)')
+            .eq('table_id', id);
+
+          if (updatedPlayers) {
+            setTablePlayers(updatedPlayers);
+            if (currentUser && table && currentUser.id !== table.master_id) {
+              const myMem = updatedPlayers.find((p: any) => p.player_id === currentUser.id);
+              if (myMem) {
+                setUserRole(myMem.role === 'spectator' ? 'SPECTATOR' : 'PLAYER');
+              } else {
+                setUserRole('GUEST');
+              }
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tables',
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          if (payload.new) {
+            setTable(prev => prev ? { ...prev, ...(payload.new as Table) } : (payload.new as Table));
+          }
+        }
+      )
       .subscribe((status) => {
         console.log('Realtime channel subscription status:', status);
       });
 
+    // Realtime Presence para usuários online na mesa
+    const presenceChannel = supabase.channel(`presence-table-${id}`, {
+      config: { presence: { key: currentUser?.id || `guest-${Date.now()}` } }
+    })
+    .on('presence', { event: 'sync' }, () => {
+      const state = presenceChannel.presenceState();
+      const onlineIds = Object.keys(state);
+      setOnlineUserIds(onlineIds);
+    });
+
+    presenceChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED' && currentUser) {
+        await presenceChannel.track({
+          user_id: currentUser.id,
+          username: profile?.username || 'Usuário',
+          online_at: new Date().toISOString()
+        });
+      }
+    });
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(presenceChannel);
     };
-  }, [id, loading, supabase, currentUser]);
+  }, [id, loading, supabase, currentUser, table, profile]);
 
   // 3. Scroll Automático no Chat
   useEffect(() => {
@@ -427,6 +528,11 @@ export default function GameTablePage({ params }: { params: Params }) {
     e.preventDefault();
     if (!messageText.trim() || !currentUser) return;
 
+    if (userRole === 'SPECTATOR' || userRole === 'GUEST') {
+      showToast('Espectadores estão no modo somente leitura.');
+      return;
+    }
+
     const content = messageText.trim();
     setMessageText('');
 
@@ -492,6 +598,11 @@ export default function GameTablePage({ params }: { params: Params }) {
   // Realizar Rolagem de Dados na Mesa
   async function handleRollDice() {
     if (!currentUser || !table) return;
+
+    if (userRole === 'SPECTATOR' || userRole === 'GUEST') {
+      showToast('Espectadores estão em modo somente leitura.');
+      return;
+    }
 
     if (rollMode === 'QUICK') {
       const diceValues: number[] = [];
@@ -976,30 +1087,72 @@ export default function GameTablePage({ params }: { params: Params }) {
         <div className="flex items-center gap-4">
           <button 
             onClick={() => router.push('/dashboard')}
-            className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+            className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="font-bold text-base text-white leading-tight">{table.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-base text-white leading-tight">{table.name}</h1>
+              {userRole === 'MASTER' && (
+                <span className="text-[10px] bg-purple-950/60 text-purple-300 border border-purple-800/40 px-2 py-0.5 rounded-full font-extrabold uppercase flex items-center gap-1">
+                  <Crown className="w-3 h-3 text-amber-400" /> Mestre
+                </span>
+              )}
+              {userRole === 'PLAYER' && (
+                <span className="text-[10px] bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 px-2 py-0.5 rounded-full font-extrabold uppercase flex items-center gap-1">
+                  <Sword className="w-3 h-3 text-cyan-400" /> Jogador
+                </span>
+              )}
+              {(userRole === 'SPECTATOR' || userRole === 'GUEST') && (
+                <span className="text-[10px] bg-slate-800/80 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full font-extrabold uppercase flex items-center gap-1">
+                  <Eye className="w-3 h-3 text-purple-400" /> Espectador
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-400 truncate max-w-md">{table.description || 'Sem descrição'}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           {table.rule_systems?.name && (
-            <div className="flex items-center gap-1.5 text-xs text-slate-350 bg-purple-950/20 border border-purple-800/35 px-3 py-1.5 rounded-full">
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-350 bg-purple-950/20 border border-purple-800/35 px-3 py-1.5 rounded-full">
               <BookOpen className="w-3.5 h-3.5 text-purple-400" />
               <span className="font-semibold">{table.rule_systems.name}</span>
             </div>
           )}
 
-          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/30 border border-slate-800/80 px-3 py-1.5 rounded-full">
-            <Users className="w-3.5 h-3.5 text-cyan-400" />
-            Mesa ID: {table.id.slice(0, 8)}
-          </div>
+          <button
+            onClick={() => setIsMembersOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/30 border border-emerald-800/35 px-3 py-1.5 rounded-full transition-all cursor-pointer"
+            title="Ver Membros & Status Online"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+            <Users className="w-3.5 h-3.5" />
+            <span className="font-bold">{onlineUserIds.length} Online</span>
+          </button>
+
+          {userRole === 'MASTER' && (
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 hover:bg-purple-950/40 text-slate-400 hover:text-purple-400 rounded-lg border border-slate-800 transition-colors cursor-pointer"
+              title="Configurações da Mesa"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </header>
+
+      {/* Banner de Aviso do Modo Espectador */}
+      {(userRole === 'SPECTATOR' || userRole === 'GUEST') && (
+        <div className="bg-purple-950/30 border-b border-purple-800/40 px-6 py-2 flex items-center justify-between text-xs text-purple-300">
+          <div className="flex items-center gap-2">
+            <Eye className="w-4 h-4 text-purple-400 animate-pulse" />
+            <span>Modo Espectador: Você está assistindo a esta partida em tempo real (Somente Leitura).</span>
+          </div>
+        </div>
+      )}
 
       {/* Main Workspace */}
       <div className="flex-1 flex overflow-hidden">
@@ -2203,6 +2356,282 @@ export default function GameTablePage({ params }: { params: Params }) {
               >
                 Distribuir
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Configurações da Mesa (Apenas Mestre) */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-6 animate-fade-in">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Settings className="w-5 h-5 text-purple-400" />
+                Configurações da Mesa (Mestre)
+              </h3>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="text-slate-400 hover:text-white text-xs font-semibold uppercase tracking-wider bg-slate-800/40 border border-slate-700/30 px-2 py-1 rounded-lg cursor-pointer"
+              >
+                Fechar ×
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const res = await updateTableSettingsAction(table.id, {
+                  name: editTableName.trim(),
+                  description: editTableDesc.trim(),
+                  max_players: editMaxPlayers,
+                  allow_spectators: editAllowSpectators,
+                  is_private: editIsPrivate,
+                  password: editIsPrivate && editPassword ? editPassword : null,
+                });
+                if (res.success) {
+                  showToast('Configurações da mesa atualizadas com sucesso!');
+                  setIsSettingsOpen(false);
+                } else {
+                  showToast(res.error || 'Erro ao atualizar mesa.');
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                  Nome da Mesa
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTableName}
+                  onChange={(e) => setEditTableName(e.target.value)}
+                  className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm text-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                  Descrição
+                </label>
+                <textarea
+                  value={editTableDesc}
+                  onChange={(e) => setEditTableDesc(e.target.value)}
+                  rows={2}
+                  className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm text-slate-200"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                    Limite de Jogadores
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={editMaxPlayers}
+                    onChange={(e) => setEditMaxPlayers(parseInt(e.target.value) || 4)}
+                    className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm text-slate-200"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-slate-800/20 border border-slate-800/80 rounded-xl">
+                  <span className="text-xs font-semibold text-slate-300">Espectadores</span>
+                  <input
+                    type="checkbox"
+                    checked={editAllowSpectators}
+                    onChange={(e) => setEditAllowSpectators(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-800/20 border border-slate-800/80 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300">Mesa Privada (Requer Senha)</span>
+                  <input
+                    type="checkbox"
+                    checked={editIsPrivate}
+                    onChange={(e) => setEditIsPrivate(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-purple-500"
+                  />
+                </div>
+                {editIsPrivate && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                      Senha de Acesso
+                    </label>
+                    <input
+                      type="password"
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      placeholder="Senha para entrar"
+                      className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-2 px-3 text-sm text-slate-200"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-xl text-xs font-semibold shadow-lg shadow-purple-600/20 cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal / Drawer de Membros, Presença Realtime & Moderação */}
+      {isMembersOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-fade-in">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-emerald-400" />
+                Membros & Presença Realtime
+              </h3>
+              <button
+                onClick={() => setIsMembersOpen(false)}
+                className="text-slate-400 hover:text-white text-xs font-semibold uppercase tracking-wider bg-slate-800/40 border border-slate-700/30 px-2 py-1 rounded-lg cursor-pointer"
+              >
+                Fechar ×
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
+              {/* Seção Mestre */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" /> Mestre da Mesa
+                </span>
+                <div className="bg-purple-950/20 border border-purple-900/30 p-3 rounded-xl flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">Mestre</span>
+                  <span className="text-[10px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    Online
+                  </span>
+                </div>
+              </div>
+
+              {/* Lista de Membros (Jogadores e Espectadores) */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-cyan-400" /> Membros Conectados ({tablePlayers.length})
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Limite: {tablePlayers.filter(p => p.role === 'player').length}/{table?.max_players ?? 4} Jogadores
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {tablePlayers.map((member) => {
+                    const isOnline = onlineUserIds.includes(member.player_id);
+                    const username = member.profiles?.username || 'Usuário';
+                    const roleLabel = member.role === 'player' ? 'Jogador' : 'Espectador';
+
+                    return (
+                      <div
+                        key={member.player_id}
+                        className="bg-[#070b19]/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`}></span>
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-slate-200 block truncate">{username}</span>
+                            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.2 rounded border ${
+                              member.role === 'player'
+                                ? 'text-cyan-400 border-cyan-800/30 bg-cyan-950/30'
+                                : 'text-purple-400 border-purple-800/30 bg-purple-950/30'
+                            }`}>
+                              {roleLabel}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Ações do Mestre */}
+                        {userRole === 'MASTER' && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            {member.role === 'spectator' ? (
+                              <button
+                                onClick={async () => {
+                                  const res = await updateMemberRoleAction({
+                                    table_id: table.id,
+                                    player_id: member.player_id,
+                                    role: 'player'
+                                  });
+                                  if (res.success) {
+                                    showToast(`Promovido ${username} a Jogador!`);
+                                  } else {
+                                    showToast(res.message || 'Erro ao promover.');
+                                  }
+                                }}
+                                className="p-1.5 bg-cyan-950/40 hover:bg-cyan-900/40 text-cyan-400 border border-cyan-800/40 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                title="Promover a Jogador"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                Promover
+                              </button>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  const res = await updateMemberRoleAction({
+                                    table_id: table.id,
+                                    player_id: member.player_id,
+                                    role: 'spectator'
+                                  });
+                                  if (res.success) {
+                                    showToast(`Rebaixado ${username} a Espectador.`);
+                                  } else {
+                                    showToast(res.message || 'Erro ao rebaixar.');
+                                  }
+                                }}
+                                className="p-1.5 bg-purple-950/40 hover:bg-purple-900/40 text-purple-400 border border-purple-800/40 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                title="Rebaixar a Espectador"
+                              >
+                                <UserMinus className="w-3.5 h-3.5" />
+                                Rebaixar
+                              </button>
+                            )}
+
+                            <button
+                              onClick={async () => {
+                                const res = await kickTableMemberAction(table.id, member.player_id);
+                                if (res.success) {
+                                  showToast(`Membro ${username} removido da mesa.`);
+                                } else {
+                                  showToast('Erro ao remover membro.');
+                                }
+                              }}
+                              className="p-1.5 bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 border border-rose-800/40 rounded-lg transition-all cursor-pointer"
+                              title="Expulsar da Mesa"
+                            >
+                              <UserX className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {tablePlayers.length === 0 && (
+                    <p className="text-xs text-slate-500 italic py-2">Nenhum jogador ou espectador nesta mesa além do mestre.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

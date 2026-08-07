@@ -47,3 +47,11 @@
 # ------------------------------------------------------------------------------
 - DO NOT use native browser alert(), confirm(), or prompt() dialogs.
 - Implement inline interactive confirmations, beautiful glassmorphic toasts, or custom UI modals/drawers to preserve design aesthetics and premium user experience.
+
+# 7. ENGINEERING BEST PRACTICES & ARCHITECTURE
+# ------------------------------------------------------------------------------
+- Modular Component Breakdown: Keep React components focused. Decompose pages exceeding 300 lines into sub-components.
+- Server-Side First (RSC): Prefer React Server Components for initial data fetching over client-side useEffect queries where applicable.
+- Schema Versioning: Manage database mutations through numbered SQL migration files under `supabase/migrations/`.
+- Error Boundaries: Implement route-level `error.tsx` and `loading.tsx` boundary handlers to ensure fault-tolerant UI states.
+- Type Safety & Server Validation: Ensure all Server Actions validate incoming payloads using Zod schemas before touching database services.

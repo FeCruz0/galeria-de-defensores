@@ -25,7 +25,10 @@ import {
   Check,
   Palette,
   Bell,
-  MessageSquare
+  MessageSquare,
+  Eye,
+  Compass,
+  Lock
 } from 'lucide-react';
 import PreferencesModal from '@/components/PreferencesModal';
 import PdfImportModal from '@/components/PdfImportModal';
@@ -35,6 +38,7 @@ import FriendsDrawer from '@/components/FriendsDrawer';
 import { exportRuleSystemToPdf, ExtractedPayload } from '@/lib/pdfPayload';
 import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
+import { fetchAllPublicTables, joinTable } from '@/services/tableService';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -44,6 +48,8 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
+  const [publicTables, setPublicTables] = useState<any[]>([]);
+  const [tablesSubTab, setTablesSubTab] = useState<'my_tables' | 'explore'>('my_tables');
   const [activeTab, setActiveTab] = useState<'characters' | 'tables' | 'rule_systems'>('characters');
   const [ruleSystems, setRuleSystems] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -133,6 +139,10 @@ export default function DashboardPage() {
         );
 
         setTables(allTables);
+
+        // 3.5. Carregar todas as mesas públicas para exploração
+        const pubTables = await fetchAllPublicTables();
+        setPublicTables(pubTables);
 
         // 4. Carregar Sistemas de Regras
         const { data: systemsData } = await supabase
@@ -800,7 +810,7 @@ export default function DashboardPage() {
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            Minhas Mesas ({tables.length})
+            Mesas de Jogo ({tables.length})
           </button>
           <button
             onClick={() => setActiveTab('rule_systems')}
@@ -873,80 +883,222 @@ export default function DashboardPage() {
             </div>
           )
         ) : activeTab === 'tables' ? (
-          tables.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tables.map((table) => (
-                <div
-                  key={table.id}
-                  onClick={() => router.push(`/tables/${table.id}`)}
-                  className="bg-[#0f172a]/40 border border-slate-800 hover:border-cyan-500/40 rounded-2xl p-5 cursor-pointer shadow-md hover:shadow-cyan-500/5 active:scale-[0.99] transition-all flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-semibold text-cyan-400 bg-cyan-950/40 border border-cyan-800/30 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                        <Users className="w-3 h-3" />
-                        Multiplayer
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {table.is_private && (
-                          <span className="text-[10px] text-amber-400 bg-amber-950/30 border border-amber-800/20 px-1.5 py-0.5 rounded-full">
-                            Privada
-                          </span>
-                        )}
-                        {table.master_id === profile?.id ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteTable(table.id);
-                            }}
-                            className="p-1 hover:bg-rose-950/40 text-slate-500 hover:text-rose-455 rounded-lg transition-colors cursor-pointer"
-                            title="Excluir Mesa (Mestre)"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleLeaveTable(table.id);
-                            }}
-                            className="p-1 hover:bg-amber-950/40 text-slate-500 hover:text-amber-450 rounded-lg transition-colors cursor-pointer"
-                            title="Sair da Mesa"
-                          >
-                            <LogOut className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-200 mb-2 truncate">
-                      {table.name}
-                    </h3>
-                    <p className="text-slate-400 text-sm line-clamp-2">
-                      {table.description || 'Sem descrição.'}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 pt-4 border-t border-slate-800/60 flex justify-between text-xs text-slate-500">
-                    <span>Mesa ID: {table.id.slice(0, 8)}...</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-16 bg-[#0f172a]/20 border border-slate-800/40 rounded-2xl">
-              <ShieldAlert className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-              <h3 className="text-lg font-semibold text-slate-300">Nenhuma mesa encontrada</h3>
-              <p className="text-slate-500 text-sm max-w-sm mx-auto mt-1 mb-6">
-                Você ainda não criou ou foi convidado para nenhuma mesa de jogo multiplayer.
-              </p>
+          <div className="space-y-6">
+            {/* Sub-bar para alternar entre Minhas Mesas e Explorar Mesas */}
+            <div className="flex items-center gap-3 bg-[#0f172a]/20 border border-slate-800/40 p-1.5 rounded-xl w-fit">
               <button
-                onClick={() => router.push('/tables/new')}
-                className="bg-cyan-600/10 hover:bg-cyan-600/20 text-cyan-400 border border-cyan-500/20 px-5 py-2 rounded-xl font-medium text-sm transition-all"
+                onClick={() => setTablesSubTab('my_tables')}
+                className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                  tablesSubTab === 'my_tables'
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
               >
-                Criar Mesa
+                <Users className="w-3.5 h-3.5" />
+                Mesas de Jogo ({tables.length})
+              </button>
+              <button
+                onClick={() => setTablesSubTab('explore')}
+                className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                  tablesSubTab === 'explore'
+                    ? 'bg-cyan-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5" />
+                Explorar Mesas Públicas ({publicTables.length})
               </button>
             </div>
-          )
+
+            {tablesSubTab === 'my_tables' ? (
+              tables.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {tables.map((table) => (
+                    <div
+                      key={table.id}
+                      onClick={() => router.push(`/tables/${table.id}`)}
+                      className="bg-[#0f172a]/40 border border-slate-800 hover:border-cyan-500/40 rounded-2xl p-5 cursor-pointer shadow-md hover:shadow-cyan-500/5 active:scale-[0.99] transition-all flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-semibold text-cyan-400 bg-cyan-950/40 border border-cyan-800/30 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                            <Users className="w-3 h-3" />
+                            {table.master_id === profile?.id ? 'Mestre' : 'Jogador'}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {table.is_private && (
+                              <span className="text-[10px] text-amber-400 bg-amber-950/30 border border-amber-800/20 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                                <Lock className="w-2.5 h-2.5" />
+                                Privada
+                              </span>
+                            )}
+                            {table.master_id === profile?.id ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteTable(table.id);
+                                }}
+                                className="p-1 hover:bg-rose-950/40 text-slate-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                                title="Excluir Mesa (Mestre)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLeaveTable(table.id);
+                                }}
+                                className="p-1 hover:bg-amber-950/40 text-slate-500 hover:text-amber-400 rounded-lg transition-colors cursor-pointer"
+                                title="Sair da Mesa"
+                              >
+                                <LogOut className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-200 mb-2 truncate">
+                          {table.name}
+                        </h3>
+                        <p className="text-slate-400 text-sm line-clamp-2">
+                          {table.description || 'Sem descrição.'}
+                        </p>
+
+                        <div className="flex flex-wrap gap-2 mt-4 text-[10px] text-slate-400">
+                          <span className="bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/50 flex items-center gap-1">
+                            <Users className="w-3 h-3 text-cyan-400" />
+                            Máx {table.max_players ?? 4} Jogadores
+                          </span>
+                          <span className="bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/50 flex items-center gap-1">
+                            <Eye className="w-3 h-3 text-purple-400" />
+                            {table.allow_spectators ?? true ? 'Espectadores OK' : 'Sem Espectadores'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-slate-800/60 flex justify-between items-center text-xs text-slate-500">
+                        <span>Mesa ID: {table.id.slice(0, 8)}...</span>
+                        <span className="text-cyan-400 font-semibold hover:underline">Entrar na Mesa &rarr;</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-[#0f172a]/20 border border-slate-800/40 rounded-2xl">
+                  <ShieldAlert className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-slate-300">Nenhuma mesa própria ou vinculada</h3>
+                  <p className="text-slate-500 text-sm max-w-sm mx-auto mt-1 mb-6">
+                    Você ainda não criou ou não é jogador ativo em nenhuma mesa.
+                  </p>
+                  <button
+                    onClick={() => router.push('/tables/new')}
+                    className="bg-cyan-600/10 hover:bg-cyan-600/20 text-cyan-400 border border-cyan-500/20 px-5 py-2 rounded-xl font-medium text-sm transition-all"
+                  >
+                    Criar Mesa
+                  </button>
+                </div>
+              )
+            ) : (
+              /* Aba Explorar Mesas Públicas */
+              publicTables.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {publicTables.map((pubTable) => {
+                    const isMemberOrMaster = tables.some(t => t.id === pubTable.id);
+                    const activePlayers = pubTable.player_count ?? 0;
+                    const maxLimit = pubTable.max_players ?? 4;
+                    const isFull = activePlayers >= maxLimit;
+
+                    return (
+                      <div
+                        key={pubTable.id}
+                        className="bg-[#0f172a]/40 border border-slate-800 hover:border-cyan-500/40 rounded-2xl p-5 shadow-md hover:shadow-cyan-500/5 transition-all flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-800/30 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                              <Compass className="w-3 h-3" />
+                              Mesa Pública
+                            </span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                              isFull ? 'bg-rose-950/40 border border-rose-800/30 text-rose-400' : 'bg-cyan-950/40 border border-cyan-800/30 text-cyan-400'
+                            }`}>
+                              {activePlayers}/{maxLimit} Jogadores
+                            </span>
+                          </div>
+
+                          <h3 className="text-lg font-bold text-slate-200 mb-2 truncate">
+                            {pubTable.name}
+                          </h3>
+                          <p className="text-slate-400 text-sm line-clamp-2">
+                            {pubTable.description || 'Sem descrição fornecida.'}
+                          </p>
+
+                          <div className="flex flex-wrap gap-2 mt-4 text-[10px] text-slate-400">
+                            <span className="bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/50 flex items-center gap-1">
+                              <BookOpen className="w-3 h-3 text-purple-400" />
+                              {pubTable.rule_systems?.name || '3D&T Alpha'}
+                            </span>
+                            <span className="bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/50 flex items-center gap-1">
+                              <Eye className="w-3 h-3 text-purple-400" />
+                              {pubTable.allow_spectators ?? true ? 'Espectadores OK' : 'Sem Espectadores'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 pt-4 border-t border-slate-800/60 flex gap-2">
+                          {isMemberOrMaster ? (
+                            <button
+                              onClick={() => router.push(`/tables/${pubTable.id}`)}
+                              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              Entrar na Mesa (Membro)
+                            </button>
+                          ) : (
+                            <>
+                              {!isFull && (
+                                <button
+                                  onClick={async () => {
+                                    if (!profile) return;
+                                    const res = await joinTable(pubTable.id, profile.id, 'player');
+                                    if (res.success) {
+                                      showSystemModal({ type: 'success', title: 'Sucesso', message: 'Você ingressou na mesa como jogador!' });
+                                      router.push(`/tables/${pubTable.id}`);
+                                    } else {
+                                      showSystemModal({ type: 'alert', title: 'Erro', message: res.message || 'Erro ao ingressar.' });
+                                    }
+                                  }}
+                                  className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                >
+                                  Entrar como Jogador
+                                </button>
+                              )}
+                              {(pubTable.allow_spectators ?? true) && (
+                                <button
+                                  onClick={() => router.push(`/tables/${pubTable.id}`)}
+                                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/30 font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  Assistir Espectador
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-[#0f172a]/20 border border-slate-800/40 rounded-2xl">
+                  <Compass className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-slate-300">Nenhuma mesa pública encontrada</h3>
+                  <p className="text-slate-500 text-sm max-w-sm mx-auto mt-1">
+                    Não existem mesas públicas ativas no momento. Seja o primeiro a criar uma!
+                  </p>
+                </div>
+              )
+            )}
+          </div>
         ) : (
           <div className="space-y-6 animate-fade-in">
             <div className="flex justify-between items-center bg-[#0f172a]/20 border border-slate-800/40 p-5 rounded-2xl">

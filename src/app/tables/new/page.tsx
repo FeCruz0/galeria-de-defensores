@@ -30,6 +30,8 @@ export default function NewTablePage() {
   const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [password, setPassword] = useState('');
+  const [maxPlayers, setMaxPlayers] = useState(4);
+  const [allowSpectators, setAllowSpectators] = useState(true);
   const [hasSeparatedChat, setHasSeparatedChat] = useState(true);
   const [systems, setSystems] = useState<RuleSystem[]>([]);
   const [ruleSystemId, setRuleSystemId] = useState<string>('');
@@ -81,6 +83,8 @@ export default function NewTablePage() {
           rule_system_id: ruleSystemId || null,
           is_private: isPrivate,
           password: isPrivate && password ? password : null,
+          max_players: maxPlayers,
+          allow_spectators: allowSpectators,
           has_separated_chat: hasSeparatedChat,
           rules_mod: {},
           custom_damage_types: [],
@@ -190,6 +194,38 @@ export default function NewTablePage() {
               <p className="text-[10px] text-slate-400">
                 Apenas fichas criadas com este mesmo sistema poderão ser vinculadas a esta mesa.
               </p>
+            </div>
+
+            {/* Configurações de Capacidade & Espectadores */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                  Limite Máximo de Jogadores
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  required
+                  value={maxPlayers}
+                  onChange={(e) => setMaxPlayers(parseInt(e.target.value) || 4)}
+                  className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-3 px-4 text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+                <p className="text-[10px] text-slate-400">Exclui o Mestre. Ex: 4 jogadores + 1 mestre.</p>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-slate-800/20 border border-slate-800/80 rounded-xl">
+                <div>
+                  <span className="font-semibold text-slate-200 text-sm block">Permitir Espectadores</span>
+                  <span className="text-[11px] text-slate-400">Outros usuários poderão assistir à partida</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={allowSpectators}
+                  onChange={(e) => setAllowSpectators(e.target.checked)}
+                  className="w-5 h-5 rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-purple-500"
+                />
+              </div>
             </div>
 
             {/* Configurações de Chat & Privacidade */}

@@ -50,10 +50,10 @@ export interface Table {
   name: string;
   description: string;
   master_id: string;
-  rule_system_id?: string;
+  rule_system_id?: string | null;
   rule_systems?: { name: string } | null;
   is_private: boolean;
-  password?: string;
+  password?: string | null;
   max_players?: number;
   allow_spectators?: boolean;
   rules_mod: Record<string, any>;
@@ -72,7 +72,10 @@ export interface TablePlayer {
   profiles?: {
     username: string;
     avatar_url?: string;
-  } | null;
+  } | {
+    username: string;
+    avatar_url?: string;
+  }[] | null;
 }
 
 export interface ModifierOption {

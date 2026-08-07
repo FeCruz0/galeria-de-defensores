@@ -61,7 +61,7 @@ export async function fetchTableMembers(tableId: string): Promise<TablePlayer[]>
     return [];
   }
 
-  return (data || []) as TablePlayer[];
+  return (data || []) as unknown as TablePlayer[];
 }
 
 export async function createTable(tableData: Partial<Table>): Promise<Table | null> {

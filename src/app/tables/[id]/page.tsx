@@ -2393,7 +2393,7 @@ export default function GameTablePage({ params }: { params: Params }) {
                   showToast('Configurações da mesa atualizadas com sucesso!');
                   setIsSettingsOpen(false);
                 } else {
-                  showToast(res.error || 'Erro ao atualizar mesa.');
+                  showToast(res.message || 'Erro ao atualizar mesa.');
                 }
               }}
               className="space-y-4"
@@ -2541,7 +2541,7 @@ export default function GameTablePage({ params }: { params: Params }) {
                 <div className="space-y-2">
                   {tablePlayers.map((member) => {
                     const isOnline = onlineUserIds.includes(member.player_id);
-                    const username = member.profiles?.username || 'Usuário';
+                    const username = (Array.isArray(member.profiles) ? member.profiles[0]?.username : member.profiles?.username) || 'Usuário';
                     const roleLabel = member.role === 'player' ? 'Jogador' : 'Espectador';
 
                     return (

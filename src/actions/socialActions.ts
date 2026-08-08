@@ -10,7 +10,9 @@ import {
   sendFriendRequest, 
   updateFriendshipStatus, 
   deleteFriendship, 
-  sendDirectMessage 
+  sendDirectMessage,
+  Friendship,
+  DirectMessage 
 } from '../services/socialService';
 import { createClient } from '../utils/supabase/server';
 
@@ -20,7 +22,7 @@ export interface ActionResult<T = unknown> {
   error?: string;
 }
 
-export async function sendFriendRequestAction(currentUserId: string, rawPayload: unknown): Promise<ActionResult> {
+export async function sendFriendRequestAction(currentUserId: string, rawPayload: unknown): Promise<ActionResult<Friendship>> {
   const parsed = sendFriendRequestSchema.safeParse(rawPayload);
   if (!parsed.success) {
     const errorMsg = parsed.error.issues.map((i) => i.message).join(', ');
@@ -73,7 +75,7 @@ export async function respondFriendRequestAction(rawPayload: unknown): Promise<A
   return { success: true };
 }
 
-export async function sendDirectMessageAction(senderId: string, rawPayload: unknown): Promise<ActionResult> {
+export async function sendDirectMessageAction(senderId: string, rawPayload: unknown): Promise<ActionResult<DirectMessage>> {
   const parsed = sendDirectMessageSchema.safeParse(rawPayload);
   if (!parsed.success) {
     const errorMsg = parsed.error.issues.map((i) => i.message).join(', ');

@@ -111,6 +111,14 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
   - [ ] Ajustar espaçamento, quebras de página e margens no CSS `@media print` para garantir impressão perfeita em A4.
   - [ ] Otimizar a criação/edição de atributos e recursos customizados no Sandbox do sistema de regras com um construtor de formulários mais visual.
 
+### 👤 6. Menu de Edição de Perfil & Dados Pessoais
+* **Descrição**: Menu ou modal dedicado para o usuário gerenciar suas informações de perfil (username, avatar, about) e dados pessoais adicionais de localização (CEP, país, estado, cidade).
+* **Checklist**:
+  - [ ] Criar modal/tela de edição de perfil "Meu Perfil" no Dashboard com validação Zod.
+  - [ ] Implementar upload de imagem de avatar integrado ao Supabase Storage.
+  - [ ] Adicionar campos CEP, país, estado e cidade no formulário com preenchimento automático de endereço via ViaCEP.
+  - [ ] Implementar Server Action e RLS para atualizar com segurança a tabela `profiles` no banco.
+
 ---
 
 ## ⚡ Fase 12: Excelência em Engenharia & Melhores Práticas de Arquitetura (Planejado)

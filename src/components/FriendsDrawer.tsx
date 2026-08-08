@@ -172,7 +172,8 @@ export default function FriendsDrawer({
     });
 
     if (res.success && res.data) {
-      setDirectMessages((prev) => [...prev, res.data]);
+      const newMsg = res.data;
+      setDirectMessages((prev) => [...prev, newMsg]);
     } else {
       setModalConfig({
         isOpen: true,

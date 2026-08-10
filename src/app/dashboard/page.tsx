@@ -39,6 +39,7 @@ import { exportRuleSystemToPdf, ExtractedPayload } from '@/lib/pdfPayload';
 import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
 import { fetchAllPublicTables, joinTable } from '@/services/tableService';
+import ProfileEditModal from '@/components/ProfileEditModal';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -72,6 +73,7 @@ export default function DashboardPage() {
   const [currentTheme, setCurrentTheme] = useState<ThemeId>('dark');
   const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
   const [avatarUrl, setAvatarUrl] = useState<string>('');
+  const [isProfileEditOpen, setIsProfileEditOpen] = useState(false);
 
   // States do Sandbox de Sistemas de Regras
   const [editingSystem, setEditingSystem] = useState<any>(null);
@@ -637,7 +639,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setIsProfileEditOpen(true)} title="Configurações de Perfil">
               <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-purple-400 font-semibold text-sm overflow-hidden">
                 {avatarUrl || profile?.avatar_url ? (
                   <img src={avatarUrl || profile?.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
@@ -1254,6 +1256,18 @@ export default function DashboardPage() {
           isOpen={isFriendsOpen}
           onClose={() => setIsFriendsOpen(false)}
           currentUserId={profile.id}
+        />
+      )}
+
+      {profile && (
+        <ProfileEditModal
+          isOpen={isProfileEditOpen}
+          onClose={() => setIsProfileEditOpen(false)}
+          profile={profile}
+          onSave={(updated) => {
+            setProfile(updated);
+            if (updated.avatar_url) setAvatarUrl(updated.avatar_url);
+          }}
         />
       )}
 

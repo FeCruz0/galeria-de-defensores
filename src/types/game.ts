@@ -7,11 +7,11 @@ export interface Profile {
   username: string;
   email?: string;
   avatar_url?: string;
-  about: string;
-  cep: string;
-  country: string;
-  state: string;
-  city: string;
+  about?: string;
+  cep?: string;
+  country?: string;
+  state?: string;
+  city?: string;
   created_at: string;
   updated_at: string;
 }

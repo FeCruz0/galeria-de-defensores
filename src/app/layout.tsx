@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   description: "Gerencie suas fichas de personagem, customize seus próprios sistemas de regras (Sandbox) e jogue RPG 3D&T online em tempo real com dados físicos e chat integrado.",
 };
 
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,7 +29,10 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${outfit.variable} ${geistMono.variable} h-full antialiased font-sans`}
     >
-      <body className="min-h-full flex flex-col bg-[#070b19] font-sans text-slate-100">{children}</body>
+      <body className="min-h-full flex flex-col bg-[#070b19] font-sans text-slate-100">
+        <ServiceWorkerRegister />
+        {children}
+      </body>
     </html>
   );
 }

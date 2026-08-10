@@ -44,17 +44,18 @@ export default function SystemEditorModal({
   const [newModCostPt, setNewModCostPt] = useState(1);
   const [isEditingCatalogItem, setIsEditingCatalogItem] = useState(false);
 
+  // Controlled state for Attribute, Resource and Damage Type forms
+  const [attrForm, setAttrForm] = useState({ key: '', name: '', color: 'purple' });
+  const [resForm, setResForm] = useState({ key: '', name: '', formula: 'R * 5', color: 'rose' });
+  const [damageTypeInput, setDamageTypeInput] = useState('');
+
   if (!isOpen || !editingSystem) return null;
 
   // Handlers para Atributos
   const handleAddAttribute = () => {
-    const keyInput = document.getElementById('editor-attr-key') as HTMLInputElement;
-    const nameInput = document.getElementById('editor-attr-name') as HTMLInputElement;
-    const colorSelect = document.getElementById('editor-attr-color') as HTMLSelectElement;
-
-    const key = keyInput?.value?.trim();
-    const name = nameInput?.value?.trim();
-    const color = colorSelect?.value || 'purple';
+    const key = attrForm.key.trim().toUpperCase();
+    const name = attrForm.name.trim();
+    const color = attrForm.color;
 
     if (!key || !name) {
       showSystemModal({ type: 'alert', title: 'Campos Incompletos', message: 'Preencha chave e nome do atributo.' });
@@ -78,8 +79,7 @@ export default function SystemEditorModal({
       }
     });
 
-    keyInput.value = '';
-    nameInput.value = '';
+    setAttrForm({ key: '', name: '', color: 'purple' });
   };
 
   const handleRemoveAttribute = (key: string) => {
@@ -90,15 +90,10 @@ export default function SystemEditorModal({
 
   // Handlers para Recursos
   const handleAddResource = () => {
-    const keyInput = document.getElementById('editor-res-key') as HTMLInputElement;
-    const nameInput = document.getElementById('editor-res-name') as HTMLInputElement;
-    const formulaInput = document.getElementById('editor-res-formula') as HTMLInputElement;
-    const colorSelect = document.getElementById('editor-res-color') as HTMLSelectElement;
-
-    const key = keyInput?.value?.trim();
-    const name = nameInput?.value?.trim();
-    const formula = formulaInput?.value?.trim() || 'R * 5';
-    const color = colorSelect?.value || 'rose';
+    const key = resForm.key.trim().toUpperCase();
+    const name = resForm.name.trim();
+    const formula = resForm.formula.trim() || 'R * 5';
+    const color = resForm.color;
 
     if (!key || !name) {
       showSystemModal({ type: 'alert', title: 'Campos Incompletos', message: 'Preencha chave e nome do recurso.' });
@@ -130,9 +125,7 @@ export default function SystemEditorModal({
       }
     });
 
-    keyInput.value = '';
-    nameInput.value = '';
-    formulaInput.value = '';
+    setResForm({ key: '', name: '', formula: 'R * 5', color: 'rose' });
   };
 
   const handleRemoveResource = (key: string) => {
@@ -143,8 +136,8 @@ export default function SystemEditorModal({
 
   // Handlers para Tipos de Dano
   const handleAddDamageType = () => {
-    const input = document.getElementById('editor-damage-type-input') as HTMLInputElement;
-    const val = input?.value || '';
+    const val = damageTypeInput.trim();
+    if (!val) return;
     const check = validateDamageType(editingSystem.damage_types || [], val);
     if (!check.valid) {
       showSystemModal({ type: 'alert', title: 'Validação', message: check.error || 'Tipo de dano inválido.' });
@@ -152,9 +145,9 @@ export default function SystemEditorModal({
     }
     setEditingSystem({
       ...editingSystem,
-      damage_types: [...(editingSystem.damage_types || []), val.trim()]
+      damage_types: [...(editingSystem.damage_types || []), val]
     });
-    input.value = '';
+    setDamageTypeInput('');
   };
 
   const handleRemoveDamageType = (index: number) => {
@@ -367,23 +360,26 @@ export default function SystemEditorModal({
               )}
             </div>
 
-            <div className="border-t border-slate-800/60 pt-4 mt-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-2">Novo Atributo</span>
+            <div className="border-t border-slate-800/60 pt-4 mt-2 space-y-3">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Novo Atributo</span>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <input
-                  id="editor-attr-key"
                   type="text"
+                  value={attrForm.key}
+                  onChange={(e) => setAttrForm({ ...attrForm, key: e.target.value.toUpperCase() })}
                   placeholder="Chave (ex: F, H)"
-                  className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                  className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 uppercase font-mono"
                 />
                 <input
-                  id="editor-attr-name"
                   type="text"
+                  value={attrForm.name}
+                  onChange={(e) => setAttrForm({ ...attrForm, name: e.target.value })}
                   placeholder="Nome (ex: Força)"
                   className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
                 />
                 <select
-                  id="editor-attr-color"
+                  value={attrForm.color}
+                  onChange={(e) => setAttrForm({ ...attrForm, color: e.target.value })}
                   className="bg-slate-850 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-300"
                 >
                   <option value="purple">Roxo</option>
@@ -401,6 +397,16 @@ export default function SystemEditorModal({
                   Adicionar
                 </button>
               </div>
+
+              {/* Live Preview de Atributo */}
+              {(attrForm.key || attrForm.name) && (
+                <div className="bg-slate-900/60 border border-slate-800 p-2.5 rounded-xl flex items-center gap-3 animate-fade-in">
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Preview:</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                  <span className="font-semibold text-xs text-slate-200 uppercase font-mono">{attrForm.key || 'CHAVE'}</span>
+                  <span className="text-xs text-slate-400">{attrForm.name || 'Nome do Atributo'}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -435,29 +441,34 @@ export default function SystemEditorModal({
               )}
             </div>
 
-            <div className="border-t border-slate-800/60 pt-4 mt-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-2">Novo Recurso</span>
+            <div className="border-t border-slate-800/60 pt-4 mt-2 space-y-3">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Novo Recurso</span>
+              
               <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                 <input
-                  id="editor-res-key"
                   type="text"
+                  value={resForm.key}
+                  onChange={(e) => setResForm({ ...resForm, key: e.target.value.toUpperCase() })}
                   placeholder="Chave (ex: PV, PM)"
-                  className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                  className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 uppercase font-mono"
                 />
                 <input
-                  id="editor-res-name"
                   type="text"
+                  value={resForm.name}
+                  onChange={(e) => setResForm({ ...resForm, name: e.target.value })}
                   placeholder="Nome (ex: Vida)"
                   className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
                 />
                 <input
-                  id="editor-res-formula"
                   type="text"
+                  value={resForm.formula}
+                  onChange={(e) => setResForm({ ...resForm, formula: e.target.value })}
                   placeholder="Fórmula (ex: R * 5)"
                   className="bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 font-mono"
                 />
                 <select
-                  id="editor-res-color"
+                  value={resForm.color}
+                  onChange={(e) => setResForm({ ...resForm, color: e.target.value })}
                   className="bg-slate-850 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-300"
                 >
                   <option value="rose">Rosa/Vermelho</option>
@@ -473,6 +484,52 @@ export default function SystemEditorModal({
                   <Plus className="w-3.5 h-3.5" />
                   Adicionar
                 </button>
+              </div>
+
+              {/* Assistente de Fórmula Interativo */}
+              <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl space-y-2">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="font-bold text-slate-400 uppercase tracking-wider">Atalhos para Fórmula:</span>
+                  {resForm.formula && (
+                    <span className={`font-semibold ${
+                      validateFormula(resForm.formula, Object.keys(editingSystem.attributes || {})).valid
+                        ? 'text-emerald-400'
+                        : 'text-rose-400'
+                    }`}>
+                      {validateFormula(resForm.formula, Object.keys(editingSystem.attributes || {})).valid
+                        ? '✓ Fórmula Válida'
+                        : `✕ ${validateFormula(resForm.formula, Object.keys(editingSystem.attributes || {})).error}`}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.keys(editingSystem.attributes || {}).map((attrKey) => (
+                    <button
+                      key={attrKey}
+                      type="button"
+                      onClick={() => setResForm(prev => ({
+                        ...prev,
+                        formula: prev.formula ? `${prev.formula} + ${attrKey}` : attrKey
+                      }))}
+                      className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-purple-300 font-mono text-[10px] rounded transition-colors"
+                    >
+                      + {attrKey}
+                    </button>
+                  ))}
+                  {['* 5', '* 10', '+ 5', '+ 10', '/ 2'].map((op) => (
+                    <button
+                      key={op}
+                      type="button"
+                      onClick={() => setResForm(prev => ({
+                        ...prev,
+                        formula: prev.formula ? `${prev.formula} ${op}` : op
+                      }))}
+                      className="px-2 py-0.5 bg-slate-850 hover:bg-slate-800 border border-slate-700/60 text-slate-300 font-mono text-[10px] rounded transition-colors"
+                    >
+                      {op}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -503,8 +560,9 @@ export default function SystemEditorModal({
 
             <div className="border-t border-slate-800/60 pt-3 flex gap-2">
               <input
-                id="editor-damage-type-input"
                 type="text"
+                value={damageTypeInput}
+                onChange={(e) => setDamageTypeInput(e.target.value)}
                 placeholder="Novo tipo de dano..."
                 className="flex-1 bg-slate-800/30 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
                 onKeyDown={(e) => {

@@ -17,3 +17,39 @@ body {
   min-height: 100vh;
 }
 
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 10mm 12mm 10mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    min-height: auto !important;
+    height: auto !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  .space-y-2 > div,
+  .space-y-3 > div,
+  .p-2,
+  .border,
+  .grid > div {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+

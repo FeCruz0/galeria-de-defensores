@@ -1,4 +1,28 @@
-# 📝 Tasks - Galeria de Defensores
+## ✅ Concluído: Fase 11, Item 6 - Menu de Edição de Perfil & Dados Pessoais
+- [x] Migração SQL `20260810000000_profile_details_and_location.sql` estendendo a tabela `profiles` e registrando o bucket de armazenamento `avatars`.
+- [x] Atualizada interface `Profile` no arquivo `types/game.ts`.
+- [x] Validações do formulário via Zod no arquivo `lib/validations/profile.ts`.
+- [x] Camada de serviços (`profileService.ts`) e Server Actions (`profileActions.ts`) implementadas.
+- [x] Modal de edição de perfil `ProfileEditModal.tsx` com envio de foto e auto-complete de endereço via ViaCEP.
+- [x] Integração e atalho clicável no cabeçalho do Dashboard em `dashboard/page.tsx`.
+- [x] Suíte de testes unitários `profileService.test.ts` (62/62 testes aprovados no projeto).
+
+## ✅ Concluído: Fase 11, Item 5 - Aprimoramento da Exportação de PDF & Editor de Sistemas
+- [x] Regras de mídia `@media print` no `globals.css` com tamanho A4, margens exatas e prevenção de quebra interna.
+- [x] Cabeçalho e diagramação de alto contraste para a ficha imprimível em `src/app/characters/[id]/page.tsx`.
+- [x] Refatoração do `SystemEditorModal.tsx` para eliminação de acessos DOM direct (`document.getElementById`) usando estados reativos `useState`.
+- [x] Card de Live Preview em tempo real de atributos e recursos no Sandbox.
+- [x] Assistente visual interativo de fórmulas para recursos com validação instantânea (`validateFormula`).
+- [x] Suíte de testes (56/56 aprovados) e build do Next.js verificado.
+
+## ✅ Concluído: Fase 11, Item 4 - PWA (Progressive Web App) & Suporte a Acesso Offline
+- [x] Gerador dinâmico de manifesto PWA `src/app/manifest.ts` e ícones `icon-192x192.png` / `icon-512x512.png` em `public/`.
+- [x] Service Worker nativo `public/sw.js` com estratégia *Stale-While-Revalidate* e pre-caching.
+- [x] Componente de registro client-side `<ServiceWorkerRegister />` em `src/app/layout.tsx`.
+- [x] Módulo IndexedDB `src/lib/offlineDb.ts` com stores `characters` e `sync_queue`.
+- [x] Fallback de carregamento, autosave híbrido e engine de auto-sincronização no `page.tsx` da ficha.
+- [x] Indicadores visuais de conectividade offline e status de sincronização.
+- [x] Suíte de testes unitários `offlineDb.test.ts` (56/56 testes aprovados no projeto).
 
 ## ✅ Concluído: Fase 11, Item 3 - Mini-Ficha Resumida do Mestre (Quick NPC Tracker)
 - [x] Tabela `table_npcs` no Supabase com RLS exclusivo para o Mestre.

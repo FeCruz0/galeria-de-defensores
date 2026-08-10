@@ -102,22 +102,22 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 📱 4. PWA (Progressive Web App) & Suporte a Acesso Offline
 * **Descrição**: Transformação da aplicação em um Web App instalável com cache local e sincronização offline de fichas.
 * **Checklist**:
-  - [ ] Configurar Manifest do PWA (`manifest.json`) e Service Worker com estratégia de cache para permitir o uso e carregamento do app offline.
-  - [ ] Armazenar fichas e dados locais via `IndexedDB` para edição e rolagens sem conexão com sincronização automática ao reconectar ao Supabase.
+  - [x] Configurar Manifest do PWA (`manifest.ts`) e Service Worker com estratégia de cache para permitir o uso e carregamento do app offline.
+  - [x] Armazenar fichas e dados locais via `IndexedDB` para edição e rolagens sem conexão com sincronização automática ao reconectar ao Supabase.
 
 ### 📝 5. Aprimoramento da Exportação de PDF & Editor de Sistemas
 * **Descrição**: Melhorias incrementais na formatação do PDF da ficha para impressão e otimizações na UX do editor de sistemas customizados.
 * **Checklist**:
-  - [ ] Ajustar espaçamento, quebras de página e margens no CSS `@media print` para garantir impressão perfeita em A4.
-  - [ ] Otimizar a criação/edição de atributos e recursos customizados no Sandbox do sistema de regras com um construtor de formulários mais visual.
+  - [x] Ajustar espaçamento, quebras de página e margens no CSS `@media print` para garantir impressão perfeita em A4.
+  - [x] Otimizar a criação/edição de atributos e recursos customizados no Sandbox do sistema de regras com um construtor de formulários mais visual.
 
 ### 👤 6. Menu de Edição de Perfil & Dados Pessoais
 * **Descrição**: Menu ou modal dedicado para o usuário gerenciar suas informações de perfil (username, avatar, about) e dados pessoais adicionais de localização (CEP, país, estado, cidade).
 * **Checklist**:
-  - [ ] Criar modal/tela de edição de perfil "Meu Perfil" no Dashboard com validação Zod.
-  - [ ] Implementar upload de imagem de avatar integrado ao Supabase Storage.
-  - [ ] Adicionar campos CEP, país, estado e cidade no formulário com preenchimento automático de endereço via ViaCEP.
-  - [ ] Implementar Server Action e RLS para atualizar com segurança a tabela `profiles` no banco.
+  - [x] Criar modal/tela de edição de perfil "Meu Perfil" no Dashboard com validação Zod.
+  - [x] Implementar upload de imagem de avatar integrado ao Supabase Storage.
+  - [x] Adicionar campos CEP, país, estado e cidade no formulário com preenchimento automático de endereço via ViaCEP.
+  - [x] Implementar Server Action e RLS para atualizar com segurança a tabela `profiles` no banco.
 
 ---
 

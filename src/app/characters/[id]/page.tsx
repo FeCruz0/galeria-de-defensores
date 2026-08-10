@@ -26,7 +26,9 @@ import {
   Palette,
   Download,
   Upload,
-  Dices
+  Dices,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import DiceRollOverlay from '@/components/DiceRollOverlay';
 import EditAbilityModal from '@/components/EditAbilityModal';
@@ -35,6 +37,7 @@ import PreferencesModal from '@/components/PreferencesModal';
 import SystemEditorModal from '@/components/SystemEditorModal';
 import { exportCharacterToPdf } from '@/lib/pdfPayload';
 import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
+import { saveLocalCharacter, getLocalCharacter, queuePendingSync, getPendingSyncs, clearPendingSync } from '@/lib/offlineDb';
 
 type Params = Promise<{ id: string }>;
 
@@ -145,7 +148,8 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
   const [character, setCharacter] = useState<Character | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [systemDef, setSystemDef] = useState<any>(STANDARD_SYSTEMS);
-  const [savingStatus, setSavingStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo');
+  const [savingStatus, setSavingStatus] = useState<'salvo' | 'salvando' | 'erro' | 'offline'>('salvo');
+  const [isOnline, setIsOnline] = useState<boolean>(true);
 
   // Modal State para Alertas e Confirmações
   const [modalConfig, setModalConfig] = useState<SystemModalOptions>({
@@ -430,13 +434,27 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser) setCurrentUser(authUser);
 
-        const { data: charData, error } = await supabase
-          .from('characters')
-          .select('*')
-          .eq('id', id)
-          .single();
+        let charData: Character | null = null;
 
-        if (error || !charData) {
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+          const { data, error } = await supabase
+            .from('characters')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+          if (data && !error) {
+            charData = data;
+            await saveLocalCharacter(data);
+          }
+        }
+
+        // Fallback local se estiver offline ou se Supabase falhou
+        if (!charData) {
+          charData = await getLocalCharacter(id);
+        }
+
+        if (!charData) {
           router.push('/dashboard');
           return;
         }
@@ -522,32 +540,47 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
         // Calcular pontos gastos no momento de salvar
         const currentScore = calculateScore(character);
 
+        const updatesPayload = {
+          name: character.name.trim(),
+          concept: character.concept,
+          scale: character.scale || 0,
+          attributes_values: character.attributes_values,
+          resources_current: character.resources_current,
+          advantages: character.advantages,
+          disadvantages: character.disadvantages,
+          skills: character.skills,
+          specializations: character.specializations,
+          spells: character.spells,
+          inventory: character.inventory,
+          damage_type_forca: character.damage_type_forca,
+          damage_type_pdf: character.damage_type_pdf,
+          points_spent: currentScore,
+          saved_points: character.saved_points,
+          experience: character.experience,
+          annotations: character.annotations,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Salvar sempre localmente no IndexedDB
+        await saveLocalCharacter({ ...character, ...updatesPayload });
+
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          await queuePendingSync(character.id, updatesPayload);
+          setSavingStatus('offline');
+          return;
+        }
+
         const { error } = await supabase
           .from('characters')
-          .update({
-            name: character.name.trim(),
-            concept: character.concept,
-            scale: character.scale || 0,
-            attributes_values: character.attributes_values,
-            resources_current: character.resources_current,
-            advantages: character.advantages,
-            disadvantages: character.disadvantages,
-            skills: character.skills,
-            specializations: character.specializations,
-            spells: character.spells,
-            inventory: character.inventory,
-            damage_type_forca: character.damage_type_forca,
-            damage_type_pdf: character.damage_type_pdf,
-            points_spent: currentScore,
-            saved_points: character.saved_points,
-            experience: character.experience,
-            annotations: character.annotations,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatesPayload)
           .eq('id', character.id);
 
-        if (error) throw error;
-        setSavingStatus('salvo');
+        if (error) {
+          await queuePendingSync(character.id, updatesPayload);
+          setSavingStatus('offline');
+        } else {
+          setSavingStatus('salvo');
+        }
       } catch (err) {
         console.error('Erro no autosave:', err);
         setSavingStatus('erro');
@@ -556,6 +589,45 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
 
     return () => clearTimeout(delayDebounceFn);
   }, [character, loading, supabase]);
+
+  // Efeito de escuta da rede para auto-sincronização offline -> online
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsOnline(navigator.onLine);
+
+    const syncPendingOfflineData = async () => {
+      setIsOnline(true);
+      const pendingList = await getPendingSyncs();
+      for (const item of pendingList) {
+        try {
+          const { error } = await supabase
+            .from('characters')
+            .update(item.updates)
+            .eq('id', item.charId);
+
+          if (!error) {
+            await clearPendingSync(item.charId);
+          }
+        } catch (err) {
+          console.warn('Erro ao sincronizar dados offline:', err);
+        }
+      }
+      setSavingStatus('salvo');
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      setSavingStatus('offline');
+    };
+
+    window.addEventListener('online', syncPendingOfflineData);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', syncPendingOfflineData);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [supabase]);
 
   async function handleSavePreferences(newPrefs: { theme: ThemeId; avatar_url: string }) {
     setCurrentTheme(newPrefs.theme);
@@ -1315,6 +1387,9 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                 {savingStatus === 'salvo' && (
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 )}
+                {savingStatus === 'offline' && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="Salvo Localmente (Offline)" />
+                )}
                 {savingStatus === 'erro' && (
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
                 )}
@@ -1486,6 +1561,12 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                   <>
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
                     <span className="text-slate-400 font-medium">Alterações salvas</span>
+                  </>
+                )}
+                {savingStatus === 'offline' && (
+                  <>
+                    <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-amber-400 font-medium">Salvo Localmente (Offline)</span>
                   </>
                 )}
                 {savingStatus === 'erro' && (
@@ -3167,22 +3248,28 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
       </div>
 
       {/* Printable Sheet Version (A4 High Contrast) */}
-      <div className="hidden print:block bg-white text-black p-8 font-sans min-h-screen text-xs leading-relaxed">
+      <div className="hidden print:block bg-white text-black p-4 font-sans text-xs leading-relaxed">
         {/* Print Header */}
-        <div className="border-b-2 border-black pb-4 mb-6 flex justify-between items-end">
-          <div>
-            <h1 className="text-2xl font-black uppercase tracking-tight">{character.name}</h1>
-            <p className="text-sm font-semibold text-slate-600 mt-1">
-              {character.concept || 'Sem Classe'} • {systemDef.name}
-            </p>
+        <div className="border-b-2 border-black pb-3 mb-4">
+          <div className="flex justify-between items-center bg-slate-900 text-white px-3 py-1.5 rounded mb-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-purple-300">Galeria de Defensores — Ficha de Personagem</span>
+            <span className="text-[9px] font-mono text-slate-300">{systemDef.name}</span>
           </div>
-          <div className="text-right">
-            <span className="text-xl font-mono font-black">{scoreSpent} / {character.points_total} PTs</span>
-            <p className="text-[9px] uppercase font-bold text-slate-500 mt-1">Escala: {
-              character.scale === 1 ? 'Sugoi (x10)' :
-              character.scale === 2 ? 'Kiodai (x100)' :
-              character.scale === 3 ? 'Kami (x1000)' : 'Ningen (x1)'
-            }</p>
+          <div className="flex justify-between items-end">
+            <div>
+              <h1 className="text-2xl font-black uppercase tracking-tight text-slate-900">{character.name}</h1>
+              <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                {character.concept || 'Sem Conceito'}
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-lg font-mono font-black text-slate-900">{scoreSpent} / {character.points_total} PTs</span>
+              <p className="text-[9px] uppercase font-bold text-slate-600 mt-0.5">Escala: {
+                character.scale === 1 ? 'Sugoi (x10)' :
+                character.scale === 2 ? 'Kiodai (x100)' :
+                character.scale === 3 ? 'Kami (x1000)' : 'Ningen (x1)'
+              }</p>
+            </div>
           </div>
         </div>
 

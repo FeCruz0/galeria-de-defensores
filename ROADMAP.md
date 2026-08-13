@@ -4,6 +4,36 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 
 ---
 
+## 🛡️ Medidas de Segurança para Teste Alfa (Prioridade Máxima)
+
+### 🔑 1. Autenticação e Registro Seguro (`/register`)
+* **Descrição**: Prevenção de falhas no registro, cadastros inválidos e vazamento de exceções.
+* **Checklist**:
+  - [x] Implementar validação estrita no formulário de registro (`/register`) com Zod exigindo de 3 a 30 caracteres alfanuméricos (`/^[a-zA-Z0-9_\-]+$/`) no nome de usuário, evitando falhas na trigger do banco (`check_username_min_length`).
+  - [x] Adicionar pré-checagem de disponibilidade do nome de usuário antes de invocar `supabase.auth.signUp()`.
+  - [x] Traduzir todas as exceções de autenticação do Supabase para mensagens amigáveis em português sem expor detalhes internos da infraestrutura.
+
+### 🔒 2. Defesa em Profundidade nas Server Actions (Server-Side Auth Enforcement)
+* **Descrição**: Garantia de autorização estrita no servidor sem confiar em IDs de usuários passados pelo payload do cliente.
+* **Checklist**:
+  - [x] Substituir o recebimento de `userId`, `senderId` ou `currentUserId` via payload do cliente pela extração direta e segura no servidor via `const { data: { user } } = await supabase.auth.getUser()` em todas as Server Actions (`socialActions.ts`, `tableActions.ts`, `profileActions.ts`, `gameActions.ts`).
+  - [x] Rejeitar a execução imediatamente no servidor caso o usuário autenticado na sessão não seja válido ou não seja o proprietário do recurso mutado.
+
+### ⚡ 3. Proteção Anti-Abuso & Cooldown no Chat (Realtime & Payloads)
+* **Descrição**: Evitar estouro de cotas, spam e consumo excessivo no banco de dados e nos canais do Supabase Realtime durante os testes alfa.
+* **Checklist**:
+  - [x] Adicionar trava de cooldown (*throttle*) de 500ms a 1s no envio de mensagens de chat e rolagens para evitar sobrecarga no Supabase Realtime.
+  - [x] Aplicar limites rígidos de tamanho (`maxLength`) em todas as áreas de entrada de texto (mensagens de chat, notas de diário de campanha e biografia).
+
+### 🗄️ 4. Endurecimento do Supabase Storage & Políticas RLS
+* **Descrição**: Isolamento total de arquivos de upload e reforço de auditoria no banco relacional.
+* **Checklist**:
+  - [x] Garantir que as políticas RLS do bucket `avatars` restrinjam o upload para que o usuário só consiga salvar/substituir arquivos dentro do seu próprio subdiretório (`auth.uid()::text = (storage.foldername(name))[1]`).
+  - [x] Ajustar a política RLS da tabela `audit_logs` trocando `WITH CHECK (true)` por `WITH CHECK (auth.uid() = user_id)`.
+  - [x] Caso a tabela `tables` utilize senhas para proteger acesso a mesas privadas, armazenar o hash ou validar via função RPC isolada sem expor a coluna `password` em queries `SELECT`.
+
+---
+
 ## 🚦 Regras & Restrições de Ficha (Alta Prioridade)
 
 ### 📊 Limitação de Distribuição por Pontos Disponíveis
@@ -133,9 +163,9 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 🧩 2. Decomposição de Componentes Monolíticos (Refatoração de Mesa VTT)
 * **Descrição**: Desmembrar telas extensas (especialmente `tables/[id]/page.tsx`) em subcomponentes modulares e focados.
 * **Checklist**:
-  - [ ] Extrair painel de chat e envio de mensagens para `TableChatPanel.tsx`.
-  - [ ] Extrair rolador de dados e visualizador 3D para `TableDiceRollerPanel.tsx`.
-  - [ ] Extrair modais do Mestre para `TableSettingsModal.tsx` e `TableMembersModal.tsx`.
+  - [x] Extrair painel de chat e envio de mensagens para `TableChatPanel.tsx`.
+  - [x] Extrair rolador de dados e visualizador 3D para `TableDiceRollerPanel.tsx`.
+  - [x] Extrair modais do Mestre para `TableSettingsModal.tsx` e `TableMembersModal.tsx`.
 
 ### 🚀 3. Otimização de Performance com React Server Components (RSC)
 * **Descrição**: Migrar buscas de dados estáticos do Dashboard e tabelas para o servidor antes de renderizar no cliente.
@@ -146,13 +176,13 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 🛡️ 4. Tratamento Global de Erros & Observabilidade (Error Boundaries)
 * **Descrição**: Implementação de tratamento gracioso de falhas de runtime e feedback de carregamento.
 * **Checklist**:
-  - [ ] Criar arquivos `error.tsx` e `loading.tsx` com Skeleton Loaders na estrutura de rotas do App Router.
-  - [ ] Adicionar capturador genérico de exceções não tratadas nas Server Actions.
+  - [x] Criar arquivos `error.tsx` e `loading.tsx` com Skeleton Loaders na estrutura de rotas do App Router.
+  - [x] Adicionar capturador genérico de exceções não tratadas nas Server Actions.
 
 ### 🚦 5. Proteção Anti-Abuse & Rate Limiting em Server Actions
 * **Descrição**: Proteção contra requisições abusivas e spam em ações mutáveis de banco.
 * **Checklist**:
-  - [ ] Configurar middleware ou biblioteca de rate-limiting (ex: `@upstash/ratelimit`) para Server Actions públicas e de chat.
+  - [x] Configurar middleware ou biblioteca de rate-limiting (ex: `@upstash/ratelimit`) para Server Actions públicas e de chat.
 
 ### 🏗️ 1. Abstração da Camada de Serviços (Service Layer) — High Priority
 * **Descrição**: Desacoplar chamadas diretas do cliente Supabase (`supabase.from(...)`) dos componentes React `.tsx` para arquivos de serviço encapsulados, facilitando manutenibilidade e testes.

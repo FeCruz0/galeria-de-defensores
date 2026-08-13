@@ -4,6 +4,7 @@ import { updateProfileSchema } from '../lib/validations/profile';
 import { updateProfile, uploadAvatar } from '../services/profileService';
 import { createClient } from '../utils/supabase/server';
 import { Profile } from '../types/game';
+import { checkActionRateLimit } from '../lib/rateLimit';
 
 export interface ActionResult<T = unknown> {
   success: boolean;
@@ -11,7 +12,7 @@ export interface ActionResult<T = unknown> {
   error?: string;
 }
 
-export async function updateProfileAction(userId: string, rawPayload: unknown): Promise<ActionResult<Profile>> {
+export async function updateProfileAction(rawPayload: unknown): Promise<ActionResult<Profile>> {
   const parsed = updateProfileSchema.safeParse(rawPayload);
   if (!parsed.success) {
     const errorMsg = parsed.error.issues.map((i) => i.message).join(', ');
@@ -20,13 +21,23 @@ export async function updateProfileAction(userId: string, rawPayload: unknown): 
 
   const supabase = await createClient();
 
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, error: 'Usuário não autenticado.' };
+  }
+
+  // Rate Limiting
+  if (!(await checkActionRateLimit(user.id, 'profile-actions', 10, 60000))) {
+    return { success: false, error: 'Muitas requisições em pouco tempo. Por favor, aguarde alguns instantes.' };
+  }
+
   // Check if username is already taken by someone else
   if (parsed.data.username) {
     const { data: existingUser } = await supabase
       .from('profiles')
       .select('id')
       .eq('username', parsed.data.username)
-      .neq('id', userId)
+      .neq('id', user.id)
       .maybeSingle();
 
     if (existingUser) {
@@ -34,7 +45,7 @@ export async function updateProfileAction(userId: string, rawPayload: unknown): 
     }
   }
 
-  const updated = await updateProfile(userId, parsed.data, supabase);
+  const updated = await updateProfile(user.id, parsed.data, supabase);
   if (!updated) {
     return { success: false, error: 'Não foi possível atualizar as informações do perfil.' };
   }
@@ -44,10 +55,21 @@ export async function updateProfileAction(userId: string, rawPayload: unknown): 
 
 export async function uploadAvatarAction(formData: FormData): Promise<ActionResult<{ publicUrl: string }>> {
   const file = formData.get('avatar') as File | null;
-  const userId = formData.get('userId') as string | null;
 
-  if (!file || !userId) {
-    return { success: false, error: 'Arquivo ou ID do usuário não fornecidos.' };
+  if (!file) {
+    return { success: false, error: 'Arquivo não fornecido.' };
+  }
+
+  const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, error: 'Usuário não autenticado.' };
+  }
+
+  // Rate Limiting
+  if (!(await checkActionRateLimit(user.id, 'profile-actions', 10, 60000))) {
+    return { success: false, error: 'Muitas requisições em pouco tempo. Por favor, aguarde alguns instantes.' };
   }
 
   // Validate file size and type
@@ -59,8 +81,7 @@ export async function uploadAvatarAction(formData: FormData): Promise<ActionResu
     return { success: false, error: 'O arquivo enviado deve ser uma imagem.' };
   }
 
-  const supabase = await createClient();
-  const publicUrl = await uploadAvatar(userId, file, supabase);
+  const publicUrl = await uploadAvatar(user.id, file, supabase);
 
   if (!publicUrl) {
     return { success: false, error: 'Falha ao salvar a imagem no servidor.' };

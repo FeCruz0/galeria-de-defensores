@@ -164,6 +164,7 @@ export default function NewTablePage() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Uma breve introdução para os jogadores..."
                 rows={3}
+                maxLength={500}
                 className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-3 px-4 text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
               />
             </div>

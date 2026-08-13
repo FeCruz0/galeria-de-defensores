@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
-import { Mail, Lock, Shield, User, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, Lock, Shield, User, ArrowRight, Loader2, Check, AlertCircle } from 'lucide-react';
+import { registerSchema } from '@/lib/validations/auth';
+import { translateAuthError } from '@/lib/authErrors';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -17,33 +19,139 @@ export default function RegisterPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Live validation states
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameValid, setUsernameValid] = useState<boolean | null>(null);
+
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailValid, setEmailValid] = useState<boolean | null>(null);
+
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordValid, setPasswordValid] = useState<boolean | null>(null);
+
+  // Debounced check for Username availability
+  useEffect(() => {
+    if (!username) {
+      setUsernameError(null);
+      setUsernameValid(null);
+      setUsernameChecking(false);
+      return;
+    }
+
+    const parsed = registerSchema.shape.username.safeParse(username);
+    if (!parsed.success) {
+      setUsernameError(parsed.error.issues[0]?.message || 'Nome de usuário inválido.');
+      setUsernameValid(false);
+      setUsernameChecking(false);
+      return;
+    } else {
+      setUsernameError(null);
+    }
+
+    setUsernameChecking(true);
+
+    const checkAvailability = setTimeout(async () => {
+      try {
+        const { data: existingUser } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', username.trim())
+          .maybeSingle();
+
+        if (existingUser) {
+          setUsernameError('Este nome de usuário já está sendo utilizado por outra conta.');
+          setUsernameValid(false);
+        } else {
+          setUsernameError(null);
+          setUsernameValid(true);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setUsernameChecking(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(checkAvailability);
+  }, [username, supabase]);
+
+  // Live Email check
+  useEffect(() => {
+    if (!email) {
+      setEmailError(null);
+      setEmailValid(null);
+      return;
+    }
+
+    const parsed = registerSchema.shape.email.safeParse(email);
+    if (!parsed.success) {
+      setEmailError(parsed.error.issues[0]?.message || 'Endereço de e-mail inválido.');
+      setEmailValid(false);
+    } else {
+      setEmailError(null);
+      setEmailValid(true);
+    }
+  }, [email]);
+
+  // Live Password check
+  useEffect(() => {
+    if (!password) {
+      setPasswordError(null);
+      setPasswordValid(null);
+      return;
+    }
+
+    const parsed = registerSchema.shape.password.safeParse(password);
+    if (!parsed.success) {
+      setPasswordError(parsed.error.issues[0]?.message || 'A senha deve ter pelo menos 6 caracteres.');
+      setPasswordValid(false);
+    } else {
+      setPasswordError(null);
+      setPasswordValid(true);
+    }
+  }, [password]);
+
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
+    if (!usernameValid || !emailValid || !passwordValid) {
+      setErrorMsg('Por favor, corrija os erros antes de cadastrar.');
+      return;
+    }
+
     setLoading(true);
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          username,
-        },
-      },
-    });
+    const trimmedUsername = username.trim();
+    const trimmedEmail = email.trim();
 
-    if (error) {
-      setErrorMsg(error.message);
+    try {
+      // Supabase SignUp
+      const { error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+        options: {
+          data: {
+            username: trimmedUsername,
+          },
+        },
+      });
+
+      if (error) {
+        setErrorMsg(translateAuthError(error));
+        setLoading(false);
+      } else {
+        setSuccessMsg('Cadastro realizado com sucesso! Redirecionando...');
+        setLoading(false);
+        setTimeout(() => {
+          router.push('/dashboard');
+          router.refresh();
+        }, 1500);
+      }
+    } catch (err) {
+      setErrorMsg('Ocorreu um erro inesperado ao realizar o cadastro.');
       setLoading(false);
-    } else {
-      setSuccessMsg('Cadastro realizado com sucesso! Verifique seu e-mail se necessário.');
-      setLoading(false);
-      // Opcionalmente redireciona para o dashboard após breve delay
-      setTimeout(() => {
-        router.push('/dashboard');
-        router.refresh();
-      }, 2000);
     }
   }
 
@@ -80,7 +188,7 @@ export default function RegisterPage() {
             {successMsg}
           </div>
         )}
-
+ 
         {/* Formulário */}
         <form onSubmit={handleRegister} className="space-y-5">
           <div className="space-y-2">
@@ -97,11 +205,31 @@ export default function RegisterPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="nome_do_jogador"
-                className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                className={`w-full bg-[#1e293b]/50 border rounded-xl py-3 pl-10 pr-10 text-slate-200 placeholder-slate-500 focus:outline-none transition-colors ${
+                  usernameChecking ? 'border-purple-500/50' :
+                  usernameValid === true ? 'border-emerald-500/50 focus:border-emerald-500' :
+                  usernameValid === false ? 'border-rose-500/50 focus:border-rose-500' :
+                  'border-slate-700/50 focus:border-purple-500'
+                }`}
               />
+              <span className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                {usernameChecking && <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />}
+                {!usernameChecking && usernameValid === true && <Check className="w-4 h-4 text-emerald-400" />}
+                {!usernameChecking && usernameValid === false && <AlertCircle className="w-4 h-4 text-rose-400" />}
+              </span>
             </div>
+            {usernameError && (
+              <p className="text-rose-400 text-[11px] mt-1 ml-1 leading-normal animate-fade-in font-medium">
+                {usernameError}
+              </p>
+            )}
+            {!usernameError && usernameValid === true && (
+              <p className="text-emerald-400 text-[11px] mt-1 ml-1 leading-normal animate-fade-in font-medium">
+                Nome de usuário disponível!
+              </p>
+            )}
           </div>
-
+ 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
               E-mail
@@ -116,11 +244,24 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="exemplo@gmail.com"
-                className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                className={`w-full bg-[#1e293b]/50 border rounded-xl py-3 pl-10 pr-10 text-slate-200 placeholder-slate-500 focus:outline-none transition-colors ${
+                  emailValid === true ? 'border-emerald-500/50 focus:border-emerald-500' :
+                  emailValid === false ? 'border-rose-500/50 focus:border-rose-500' :
+                  'border-slate-700/50 focus:border-purple-500'
+                }`}
               />
+              <span className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                {emailValid === true && <Check className="w-4 h-4 text-emerald-400" />}
+                {emailValid === false && <AlertCircle className="w-4 h-4 text-rose-400" />}
+              </span>
             </div>
+            {emailError && (
+              <p className="text-rose-400 text-[11px] mt-1 ml-1 leading-normal animate-fade-in font-medium">
+                {emailError}
+              </p>
+            )}
           </div>
-
+ 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
               Senha
@@ -135,15 +276,27 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Mínimo 6 caracteres"
-                minLength={6}
-                className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                className={`w-full bg-[#1e293b]/50 border rounded-xl py-3 pl-10 pr-10 text-slate-200 placeholder-slate-500 focus:outline-none transition-colors ${
+                  passwordValid === true ? 'border-emerald-500/50 focus:border-emerald-500' :
+                  passwordValid === false ? 'border-rose-500/50 focus:border-rose-500' :
+                  'border-slate-700/50 focus:border-purple-500'
+                }`}
               />
+              <span className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                {passwordValid === true && <Check className="w-4 h-4 text-emerald-400" />}
+                {passwordValid === false && <AlertCircle className="w-4 h-4 text-rose-400" />}
+              </span>
             </div>
+            {passwordError && (
+              <p className="text-rose-400 text-[11px] mt-1 ml-1 leading-normal animate-fade-in font-medium">
+                {passwordError}
+              </p>
+            )}
           </div>
-
+ 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !usernameValid || !emailValid || !passwordValid}
             className="w-full mt-2 bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-[0.98] disabled:opacity-55 disabled:cursor-not-allowed"
           >
             {loading ? (

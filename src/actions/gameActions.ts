@@ -10,6 +10,7 @@ import { updateCharacter } from '../services/characterService';
 import { distributeExperience } from '../services/tableService';
 import { createClient } from '../utils/supabase/server';
 import { Character } from '../types/game';
+import { checkActionRateLimit } from '../lib/rateLimit';
 
 export interface ActionResult<T = unknown> {
   success: boolean;
@@ -36,6 +37,33 @@ export async function saveCharacterAction(rawPayload: unknown): Promise<ActionRe
   }
 
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, error: 'Usuário não autenticado.' };
+  }
+
+  // Rate Limiting
+  if (!(await checkActionRateLimit(user.id, 'game-actions', 10, 60000))) {
+    return { success: false, error: 'Muitas requisições em pouco tempo. Por favor, aguarde alguns instantes.' };
+  }
+
+  // Security check: Verify character owner or linked table master
+  if (charData.user_id !== user.id) {
+    if (charData.table_id) {
+      const { data: table } = await supabase
+        .from('tables')
+        .select('master_id')
+        .eq('id', charData.table_id)
+        .maybeSingle();
+
+      if (!table || table.master_id !== user.id) {
+        return { success: false, error: 'Acesso não autorizado a este personagem.' };
+      }
+    } else {
+      return { success: false, error: 'Acesso não autorizado a este personagem.' };
+    }
+  }
+
   const updated = await updateCharacter(charData.id, {
     ...charData,
     points_spent: computedScore
@@ -55,7 +83,37 @@ export async function rollDiceServerAction(rawPayload: unknown): Promise<ActionR
     return { success: false, error: `Parâmetros de rolagem inválidos: ${errorMsg}` };
   }
 
-  const { tableId, senderId, senderName, diceCount, diceFaces, attributeBonus, channel, characterId } = parsed.data;
+  const { tableId, senderName, diceCount, diceFaces, attributeBonus, channel, characterId } = parsed.data;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, error: 'Usuário não autenticado.' };
+  }
+
+  // Rate Limiting
+  if (!(await checkActionRateLimit(user.id, 'game-actions', 10, 60000))) {
+    return { success: false, error: 'Muitas requisições em pouco tempo. Por favor, aguarde alguns instantes.' };
+  }
+
+  // Security check: Verify that user is a player or master of the table
+  const { data: isMember } = await supabase
+    .from('table_players')
+    .select('role')
+    .eq('table_id', tableId)
+    .eq('player_id', user.id)
+    .maybeSingle();
+
+  const { data: isMaster } = await supabase
+    .from('tables')
+    .select('master_id')
+    .eq('id', tableId)
+    .eq('master_id', user.id)
+    .maybeSingle();
+
+  if (!isMember && !isMaster) {
+    return { success: false, error: 'Acesso não autorizado a esta mesa.' };
+  }
 
   // Server-side random dice roll generation (Cryptographically secure / Tamper-proof)
   const dices: number[] = [];
@@ -77,13 +135,12 @@ export async function rollDiceServerAction(rawPayload: unknown): Promise<ActionR
 
   const messageContent = `rolou ${diceCount}d${diceFaces}${attributeBonus !== 0 ? ` (${attributeBonus >= 0 ? '+' : ''}${attributeBonus})` : ''} 🎲 Resultado: ${total}`;
 
-  const supabase = await createClient();
   const { data: insertedMessage, error } = await supabase
     .from('chat_messages')
     .insert([
       {
         table_id: tableId,
-        sender_id: senderId,
+        sender_id: user.id,
         sender_name: senderName,
         character_id: characterId || null,
         content: messageContent,
@@ -112,6 +169,16 @@ export async function distributeXpServerAction(rawPayload: unknown): Promise<Act
 
   const { characterIds, xpAmount } = parsed.data;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, error: 'Usuário não autenticado.' };
+  }
+
+  // Rate Limiting
+  if (!(await checkActionRateLimit(user.id, 'game-actions', 10, 60000))) {
+    return { success: false, error: 'Muitas requisições em pouco tempo. Por favor, aguarde alguns instantes.' };
+  }
+
   const ok = await distributeExperience(characterIds, xpAmount, supabase);
   if (!ok) {
     return { success: false, error: 'Falha ao distribuir XP no servidor' };

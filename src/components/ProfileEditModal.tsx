@@ -94,7 +94,7 @@ export default function ProfileEditModal({
     };
 
     try {
-      const res = await updateProfileAction(profile.id, payload);
+      const res = await updateProfileAction(payload);
       if (res.success && res.data) {
         onSave(res.data);
         setSuccessMsg('Perfil atualizado com sucesso!');

@@ -109,7 +109,6 @@ export async function joinTable(
   tableId: string,
   userId: string,
   preferredRole: 'player' | 'spectator' = 'player',
-  password?: string,
   customClient?: SupabaseClient
 ): Promise<{ success: boolean; role: 'player' | 'spectator'; message?: string }> {
   const supabase = getSupabase(customClient);
@@ -123,14 +122,6 @@ export async function joinTable(
   const existingMember = members.find(m => m.player_id === userId);
   if (existingMember) {
     return { success: true, role: existingMember.role, message: 'Você já faz parte desta mesa.' };
-  }
-
-  // 2. Se a mesa for privada e o usuário não for o mestre, verificar senha via RPC
-  if (table.is_private && table.master_id !== userId) {
-    const isPasswordValid = await verifyTablePassword(tableId, password || '', customClient);
-    if (!isPasswordValid) {
-      return { success: false, role: preferredRole, message: 'Senha incorreta para ingressar na mesa privada.' };
-    }
   }
 
   const activePlayersCount = members.filter(m => m.role === 'player').length;
@@ -235,29 +226,6 @@ export async function distributeExperience(characterIds: string[], xpAmount: num
     return true;
   } catch (err) {
     console.error('RPC distribution error:', err);
-    return false;
-  }
-}
-
-export async function verifyTablePassword(
-  tableId: string,
-  passwordProvided: string,
-  customClient?: SupabaseClient
-): Promise<boolean> {
-  const supabase = getSupabase(customClient);
-  try {
-    const { data, error } = await supabase.rpc('verify_table_password', {
-      p_table_id: tableId,
-      p_password: passwordProvided
-    });
-
-    if (error) {
-      console.error('Error verifying table password via RPC:', error);
-      return false;
-    }
-    return Boolean(data);
-  } catch (err) {
-    console.error('Table password RPC error:', err);
     return false;
   }
 }

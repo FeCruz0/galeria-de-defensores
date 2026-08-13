@@ -40,10 +40,6 @@ import DiceRollOverlay from '@/components/DiceRollOverlay';
 import { updateMemberRoleAction, kickTableMemberAction, updateTableSettingsAction } from '@/actions/tableActions';
 import { fetchTableNpcs } from '@/services/npcService';
 import { NpcTrackerDrawer } from '@/components/NpcTrackerDrawer';
-import TableChatPanel from '@/components/TableChatPanel';
-import TableDiceRollerPanel from '@/components/TableDiceRollerPanel';
-import TableSettingsModal from '@/components/TableSettingsModal';
-import TableMembersModal from '@/components/TableMembersModal';
 
 type Params = Promise<{ id: string }>;
 
@@ -67,12 +63,28 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [isNpcDrawerOpen, setIsNpcDrawerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMembersOpen, setIsMembersOpen] = useState(false);
+  const [editTableName, setEditTableName] = useState('');
+  const [editTableDesc, setEditTableDesc] = useState('');
+  const [editMaxPlayers, setEditMaxPlayers] = useState(4);
+  const [editAllowSpectators, setEditAllowSpectators] = useState(true);
+  const [editIsPrivate, setEditIsPrivate] = useState(false);
+  const [editPassword, setEditPassword] = useState('');
   const [linkedCharacters, setLinkedCharacters] = useState<Character[]>([]);
   const [myCharacters, setMyCharacters] = useState<Character[]>([]);
   const [selectedCharacterSheet, setSelectedCharacterSheet] = useState<Character | null>(null);
 
+  const [messageText, setMessageText] = useState('');
   const [chatChannel, setChatChannel] = useState<'ON' | 'OFF'>('ON');
   const [selectedSenderIdentity, setSelectedSenderIdentity] = useState<string>('MASTER'); // 'MASTER' ou ID de um personagem
+  const [diceCount, setDiceCount] = useState(1);
+  const [diceFaces, setDiceFaces] = useState(6);
+  const [diceModifier, setDiceModifier] = useState(0);
+  const [rollMode, setRollMode] = useState<'QUICK' | 'ADVANCED'>('QUICK');
+  const [rollActionName, setRollActionName] = useState('Rolagem de Mesa');
+  const [rollCategory, setRollCategory] = useState<'ATTACK' | 'DEFENSE' | 'MAGIC' | 'TEST' | 'INITIATIVE' | 'OTHER'>('OTHER');
+  const [selectedPrimaryAttr, setSelectedPrimaryAttr] = useState<string>('none');
+  const [selectedSecondaryAttr, setSelectedSecondaryAttr] = useState<string>('none');
+  const [selectedCharForRoll, setSelectedCharForRoll] = useState<string>('none');
   const [inviteUsername, setInviteUsername] = useState('');
   const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; faces?: number; title: string; callback: () => void } | null>(null);
   const [activeTab, setActiveTab] = useState<'mesa' | 'chat' | 'journal'>('mesa');
@@ -92,10 +104,6 @@ export default function GameTablePage({ params }: { params: Params }) {
   const [privateJournal, setPrivateJournal] = useState<string>('');
   const [savingPublic, setSavingPublic] = useState(false);
   const [savingPrivate, setSavingPrivate] = useState(false);
-
-  // States de Cooldown de Anti-Abuso
-  const [chatCooldownRemaining, setChatCooldownRemaining] = useState<number>(0);
-  const [rollCooldownRemaining, setRollCooldownRemaining] = useState<number>(0);
 
   function getIconComponent(iconName: string) {
     switch (iconName) {
@@ -130,23 +138,6 @@ export default function GameTablePage({ params }: { params: Params }) {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  // Timers para Cooldown de Anti-Abuso
-  useEffect(() => {
-    if (chatCooldownRemaining <= 0) return;
-    const interval = setInterval(() => {
-      setChatCooldownRemaining((prev) => (prev > 0.1 ? Number((prev - 0.1).toFixed(1)) : 0));
-    }, 100);
-    return () => clearInterval(interval);
-  }, [chatCooldownRemaining]);
-
-  useEffect(() => {
-    if (rollCooldownRemaining <= 0) return;
-    const interval = setInterval(() => {
-      setRollCooldownRemaining((prev) => (prev > 0.1 ? Number((prev - 0.1).toFixed(1)) : 0));
-    }, 100);
-    return () => clearInterval(interval);
-  }, [rollCooldownRemaining]);
-
   // 1. Carregar Mesa, Usuário e Histórico de Chat
   useEffect(() => {
     async function loadTableData() {
@@ -178,6 +169,12 @@ export default function GameTablePage({ params }: { params: Params }) {
           return;
         }
         setTable(tblData);
+        setEditTableName(tblData.name || '');
+        setEditTableDesc(tblData.description || '');
+        setEditMaxPlayers(tblData.max_players ?? 4);
+        setEditAllowSpectators(tblData.allow_spectators ?? true);
+        setEditIsPrivate(tblData.is_private ?? false);
+        setEditPassword(tblData.password || '');
 
         // Histórico de Mensagens
         const { data: msgData } = await supabase
@@ -548,20 +545,17 @@ export default function GameTablePage({ params }: { params: Params }) {
   }, [privateJournal, privateJournalId, id, currentUser, table, supabase]);
 
   // Enviar Mensagem de Texto
-  async function handleSendMessage(content: string) {
-    if (!content.trim() || !currentUser || chatCooldownRemaining > 0) return;
+  async function handleSendMessage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!messageText.trim() || !currentUser) return;
 
     if (userRole === 'SPECTATOR' || userRole === 'GUEST') {
       showToast('Espectadores estão no modo somente leitura.');
       return;
     }
 
-    if (content.length > 1000) {
-      showToast('A mensagem excedeu o limite de 1000 caracteres.');
-      return;
-    }
-
-    setChatCooldownRemaining(1);
+    const content = messageText.trim();
+    setMessageText('');
 
     let senderName = profile?.username || 'Jogador';
     let senderAvatar = profile?.avatar_url || null;
@@ -623,54 +617,30 @@ export default function GameTablePage({ params }: { params: Params }) {
   }
 
   // Realizar Rolagem de Dados na Mesa
-  async function handleRollDice(params: {
-    rollMode: 'QUICK' | 'ADVANCED';
-    diceFaces: number;
-    diceCount: number;
-    diceModifier: number;
-    rollActionName: string;
-    rollCategory: 'OTHER' | 'ATTACK' | 'DEFENSE' | 'MAGIC' | 'TEST' | 'INITIATIVE';
-    selectedCharForRoll: string;
-    selectedPrimaryAttr: string;
-    selectedSecondaryAttr: string;
-  }) {
-    if (!currentUser || !table || rollCooldownRemaining > 0) return;
- 
+  async function handleRollDice() {
+    if (!currentUser || !table) return;
+
     if (userRole === 'SPECTATOR' || userRole === 'GUEST') {
       showToast('Espectadores estão em modo somente leitura.');
       return;
     }
 
-    const {
-      rollMode,
-      diceFaces,
-      diceCount,
-      diceModifier,
-      rollActionName,
-      rollCategory,
-      selectedCharForRoll,
-      selectedPrimaryAttr,
-      selectedSecondaryAttr,
-    } = params;
- 
-    setRollCooldownRemaining(1);
- 
     if (rollMode === 'QUICK') {
       const diceValues: number[] = [];
       let rollSum = 0;
       let isCritical = false;
- 
+
       for (let i = 0; i < diceCount; i++) {
         const val = Math.floor(Math.random() * diceFaces) + 1;
         diceValues.push(val);
         rollSum += val;
         if (val === diceFaces) isCritical = true;
       }
- 
+
       const total = rollSum + diceModifier;
       const modifierText = diceModifier !== 0 ? ` ${diceModifier >= 0 ? '+' : '-'} ${Math.abs(diceModifier)}` : '';
       const content = `rolou ${diceCount}d${diceFaces}${modifierText} 🎲`;
- 
+
       const rollPayload: RollResult = {
         total,
         dices: diceValues,
@@ -678,7 +648,7 @@ export default function GameTablePage({ params }: { params: Params }) {
         isCrit: isCritical,
         componentsText: `${diceCount}d${diceFaces} [${diceValues.join(', ')}]${modifierText} = ${total}`
       };
- 
+
       setVirtualRoll({
         results: diceValues,
         faces: diceFaces,
@@ -694,7 +664,7 @@ export default function GameTablePage({ params }: { params: Params }) {
               roll_result: rollPayload,
               is_edited: false
             }).select().single();
- 
+
             if (error) {
               console.error('Erro ao salvar rolagem:', error);
             } else if (data) {
@@ -712,7 +682,7 @@ export default function GameTablePage({ params }: { params: Params }) {
       // Modo Avançado (CustomRoll)
       const selectedChar = linkedCharacters.find(c => c.id === selectedCharForRoll);
       const actionTitle = rollActionName.trim() || 'Rolagem Customizada';
- 
+
       const customRollObj: any = {
         id: crypto.randomUUID(),
         name: actionTitle,
@@ -733,7 +703,7 @@ export default function GameTablePage({ params }: { params: Params }) {
         secondaryAttribute: selectedSecondaryAttr,
         accumulateCrit: true
       };
- 
+
       const equippedMods = getEquippedItemsModifiers(selectedChar?.inventory);
       const testResult = executeCustomRoll(
         customRollObj,
@@ -742,10 +712,10 @@ export default function GameTablePage({ params }: { params: Params }) {
         selectedChar?.status_effects || [],
         equippedMods
       );
- 
+
       const senderDisplayName = selectedChar ? selectedChar.name : (profile?.username || 'Jogador');
       const content = `realizou ${actionTitle} 🎲`;
- 
+
       setVirtualRoll({
         results: testResult.dices.length > 0 ? testResult.dices : [1],
         faces: diceFaces,
@@ -762,7 +732,7 @@ export default function GameTablePage({ params }: { params: Params }) {
               roll_result: testResult,
               is_edited: false
             }).select().single();
- 
+
             if (error) {
               console.error('Erro ao salvar rolagem:', error);
             } else if (data) {
@@ -895,9 +865,7 @@ export default function GameTablePage({ params }: { params: Params }) {
 
   // Realizar rolagem a partir da Ficha Rápida
   async function handleRollFromQuickSheet(name: string, value: number, isAttribute: boolean, rollObj?: any) {
-    if (!currentUser || !profile || !selectedCharacterSheet || rollCooldownRemaining > 0) return;
-
-    setRollCooldownRemaining(1);
+    if (!currentUser || !profile || !selectedCharacterSheet) return;
 
     let rollResultPayload: any = null;
     let content = '';
@@ -1231,13 +1199,237 @@ export default function GameTablePage({ params }: { params: Params }) {
           <div className="space-y-6">
             
             {/* Rolador de Dados Card */}
-            <TableDiceRollerPanel
-              linkedCharacters={linkedCharacters}
-              currentUser={currentUser}
-              userRole={userRole}
-              rollCooldownRemaining={rollCooldownRemaining}
-              onTriggerRoll={handleRollDice}
-            />
+            <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800/80 pb-3">
+                <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <Dice5 className="w-5 h-5 text-purple-400" />
+                  Rolador de Dados da Mesa
+                </h2>
+
+                {/* Alternador de Modo: Rápido vs Avançado */}
+                <div className="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setRollMode('QUICK')}
+                    className={`py-1 px-3 rounded-lg transition-all ${
+                      rollMode === 'QUICK'
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    ⚡ Rápido
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRollMode('ADVANCED')}
+                    className={`py-1 px-3 rounded-lg transition-all ${
+                      rollMode === 'ADVANCED'
+                        ? 'bg-cyan-600/30 text-cyan-300 border border-cyan-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    ⚙️ Customizado
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {/* Seleção de Lados do Dado (Faces) */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                    Lados do Dado (Faces)
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[4, 6, 8, 10, 12, 20, 100].map((faces) => (
+                      <button
+                        key={faces}
+                        type="button"
+                        onClick={() => setDiceFaces(faces)}
+                        className={`py-1.5 px-3 rounded-xl text-xs font-bold font-mono transition-all border cursor-pointer ${
+                          diceFaces === faces
+                            ? 'bg-purple-600/20 text-purple-300 border-purple-500/40 shadow-sm shadow-purple-500/10'
+                            : 'bg-slate-800/30 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800/50'
+                        }`}
+                      >
+                        d{faces}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Quantidade e Modificador Geral em Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Qtd Dados */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                      Quantidade
+                    </label>
+                    <div className="flex items-center gap-2 bg-slate-800/30 border border-slate-800/80 rounded-xl p-1.5">
+                      <button 
+                        type="button"
+                        onClick={() => setDiceCount(prev => Math.max(1, prev - 1))}
+                        className="w-8 h-8 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold shrink-0 cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="flex-1 text-center font-bold text-sm font-mono">{diceCount}d{diceFaces}</span>
+                      <button 
+                        type="button"
+                        onClick={() => setDiceCount(prev => Math.min(10, prev + 1))}
+                        className="w-8 h-8 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold shrink-0 cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Modificador Geral */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                      Modificador Geral
+                    </label>
+                    <div className="flex items-center gap-2 bg-slate-800/30 border border-slate-800/80 rounded-xl p-1.5">
+                      <button 
+                        type="button"
+                        onClick={() => setDiceModifier(prev => prev - 1)}
+                        className="w-8 h-8 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold shrink-0 cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="flex-1 text-center font-bold text-sm font-mono">
+                        {diceModifier >= 0 ? `+${diceModifier}` : diceModifier}
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => setDiceModifier(prev => prev + 1)}
+                        className="w-8 h-8 bg-slate-850 hover:bg-slate-700 rounded-lg text-slate-200 font-bold shrink-0 cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Parâmetros do Modo Avançado */}
+                {rollMode === 'ADVANCED' && (
+                  <div className="space-y-4 pt-3 border-t border-slate-800/60 animate-fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Nome da Ação */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Nome da Ação / Rótulo
+                        </label>
+                        <input
+                          type="text"
+                          value={rollActionName}
+                          onChange={(e) => setRollActionName(e.target.value)}
+                          placeholder="Ex: Ataque com Espada"
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
+                        />
+                      </div>
+
+                      {/* Categoria */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Categoria da Rolagem
+                        </label>
+                        <select
+                          value={rollCategory}
+                          onChange={(e) => setRollCategory(e.target.value as any)}
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 cursor-pointer"
+                        >
+                          <option value="OTHER">Outro</option>
+                          <option value="ATTACK">⚔️ Ataque</option>
+                          <option value="DEFENSE">🛡️ Defesa</option>
+                          <option value="MAGIC">✨ Magia</option>
+                          <option value="TEST">🎲 Teste de Atributo</option>
+                          <option value="INITIATIVE">⚡ Iniciativa</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Seleção de Personagem e Atributos */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* Personagem que Fornece os Atributos */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Personagem
+                        </label>
+                        <select
+                          value={selectedCharForRoll}
+                          onChange={(e) => setSelectedCharForRoll(e.target.value)}
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 cursor-pointer"
+                        >
+                          <option value="none">Nenhum (Sem Ficha)</option>
+                          {linkedCharacters.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Atributo Primário */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Atributo Primário
+                        </label>
+                        <select
+                          value={selectedPrimaryAttr}
+                          onChange={(e) => setSelectedPrimaryAttr(e.target.value)}
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-purple-300 font-semibold cursor-pointer"
+                        >
+                          <option value="none">Nenhum</option>
+                          <option value="F">Força (F)</option>
+                          <option value="H">Habilidade (H)</option>
+                          <option value="R">Resistência (R)</option>
+                          <option value="A">Armadura (A)</option>
+                          <option value="PdF">Poder de Fogo (PdF)</option>
+                        </select>
+                      </div>
+
+                      {/* Atributo Secundário */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                          Atributo Secundário
+                        </label>
+                        <select
+                          value={selectedSecondaryAttr}
+                          onChange={(e) => setSelectedSecondaryAttr(e.target.value)}
+                          className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-cyan-300 font-semibold cursor-pointer"
+                        >
+                          <option value="none">Nenhum</option>
+                          <option value="F">Força (F)</option>
+                          <option value="H">Habilidade (H)</option>
+                          <option value="R">Resistência (R)</option>
+                          <option value="A">Armadura (A)</option>
+                          <option value="PdF">Poder de Fogo (PdF)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Preview da Fórmula */}
+                <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl text-xs text-slate-400 flex items-center justify-between">
+                  <span className="text-slate-500 font-mono text-[11px]">Fórmula:</span>
+                  <span className="font-mono text-purple-300 font-semibold">
+                    {diceCount}d{diceFaces}
+                    {rollMode === 'ADVANCED' && selectedPrimaryAttr !== 'none' && ` + ${selectedPrimaryAttr}`}
+                    {rollMode === 'ADVANCED' && selectedSecondaryAttr !== 'none' && ` + ${selectedSecondaryAttr}`}
+                    {diceModifier !== 0 && ` ${diceModifier >= 0 ? '+' : '-'} ${Math.abs(diceModifier)}`}
+                  </span>
+                </div>
+
+                {/* Botão Rolar */}
+                <button
+                  type="button"
+                  onClick={handleRollDice}
+                  className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-purple-500/25 active:scale-[0.98] cursor-pointer"
+                >
+                  <Dice5 className="w-5 h-5 animate-bounce" />
+                  Rolar Dados na Mesa
+                </button>
+              </div>
+            </div>
 
             {/* Regras e Dicas do Legado */}
             <div className="p-4 bg-slate-800/10 border border-slate-800/80 rounded-xl text-xs text-slate-400 space-y-2">
@@ -1448,18 +1640,12 @@ export default function GameTablePage({ params }: { params: Params }) {
                   </div>
 
                   {currentUser?.id === table?.master_id ? (
-                    <>
-                      <textarea
-                        value={publicJournal}
-                        onChange={(e) => setPublicJournal(e.target.value)}
-                        placeholder="Escreva as notas públicas da campanha aqui (NPCs, história, rumores)... Todos os jogadores verão em tempo real."
-                        maxLength={5000}
-                        className="w-full h-44 bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 text-xs focus:outline-none focus:border-purple-500/50 text-slate-200 resize-none font-sans leading-relaxed animate-fade-in"
-                      />
-                      <div className="flex justify-end text-[10px] text-slate-500 font-mono mt-1 pr-1">
-                        {publicJournal.length} / 5000
-                      </div>
-                    </>
+                    <textarea
+                      value={publicJournal}
+                      onChange={(e) => setPublicJournal(e.target.value)}
+                      placeholder="Escreva as notas públicas da campanha aqui (NPCs, história, rumores)... Todos os jogadores verão em tempo real."
+                      className="w-full h-44 bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 text-xs focus:outline-none focus:border-purple-500/50 text-slate-200 resize-none font-sans leading-relaxed animate-fade-in"
+                    />
                   ) : (
                     <div className="w-full min-h-24 max-h-56 overflow-y-auto bg-slate-900/40 border border-slate-850 rounded-xl p-4 text-xs text-slate-300 leading-relaxed font-sans whitespace-pre-wrap">
                       {publicJournal.trim() !== '' 
@@ -1487,37 +1673,144 @@ export default function GameTablePage({ params }: { params: Params }) {
                       <span className="text-[10px] text-slate-500 font-mono">Salvo</span>
                     )}
                   </div>
-                  <>
-                    <textarea
-                      value={privateJournal}
-                      onChange={(e) => setPrivateJournal(e.target.value)}
-                      placeholder="Escreva suas anotações secretas e lembretes aqui... Apenas você tem acesso a estas notas."
-                      maxLength={5000}
-                      className="w-full h-56 bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 text-xs focus:outline-none focus:border-purple-500/50 text-slate-200 resize-none font-sans leading-relaxed animate-fade-in"
-                    />
-                    <div className="flex justify-end text-[10px] text-slate-500 font-mono mt-1 pr-1">
-                      {privateJournal.length} / 5000
-                    </div>
-                  </>
+                  <textarea
+                    value={privateJournal}
+                    onChange={(e) => setPrivateJournal(e.target.value)}
+                    placeholder="Escreva suas anotações secretas e lembretes aqui... Apenas você tem acesso a estas notas."
+                    className="w-full h-56 bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 text-xs focus:outline-none focus:border-purple-500/50 text-slate-200 resize-none font-sans leading-relaxed animate-fade-in"
+                  />
                 </div>
 
               </div>
             </div>
           ) : (
-            <TableChatPanel
-              table={table}
-              chatChannel={chatChannel}
-              setChatChannel={setChatChannel}
-              messages={messages}
-              currentUser={currentUser}
-              profile={profile}
-              linkedCharacters={linkedCharacters}
-              selectedSenderIdentity={selectedSenderIdentity}
-              setSelectedSenderIdentity={setSelectedSenderIdentity}
-              chatCooldownRemaining={chatCooldownRemaining}
-              onSendMessage={handleSendMessage}
-              userRole={userRole}
-            />
+            <>
+              {/* Sub-abas de Canal se o Chat Separado estiver Ativo na Mesa */}
+              {table?.has_separated_chat && (
+                <div className="flex border-b border-slate-800/80 bg-slate-900/40 px-3 py-1.5 gap-2">
+                  <button
+                    onClick={() => setChatChannel('ON')}
+                    className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+                      chatChannel === 'ON'
+                        ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    ⚔️ Narrativa (ON)
+                  </button>
+                  <button
+                    onClick={() => setChatChannel('OFF')}
+                    className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+                      chatChannel === 'OFF'
+                        ? 'bg-slate-700/40 text-slate-200 border border-slate-600/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    💬 Conversa Livre (OFF)
+                  </button>
+                </div>
+              )}
+
+              {/* Feed de Mensagens */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {messages
+                  .filter(msg => !table?.has_separated_chat || (msg.channel || 'ON') === chatChannel)
+                  .map((msg) => {
+                  const isMe = msg.sender_id === currentUser?.id;
+                  
+                  if (msg.type === 'ROLL') {
+                    return (
+                      <div key={msg.id} className="p-3 bg-purple-950/20 border border-purple-800/30 rounded-xl space-y-2">
+                        <div className="flex justify-between items-center text-xs text-purple-400">
+                          <span className="font-bold">{msg.sender_name}</span>
+                          <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <p className="text-xs text-slate-300">{msg.content}</p>
+                        {msg.roll_result && (
+                          <div className="bg-slate-900/60 p-2.5 rounded-lg flex items-center justify-between border border-slate-800">
+                            <span className="text-xs font-mono text-slate-400">{msg.roll_result.componentsText}</span>
+                            <div className="text-right">
+                              <span className={`text-lg font-black ${msg.roll_result.isCrit ? 'text-amber-400 animate-pulse' : 'text-white'}`}>
+                                {msg.roll_result.total}
+                              </span>
+                              {msg.roll_result.isCrit && (
+                                <span className="text-[10px] text-amber-400 block font-bold">CRÍTICO!</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={msg.id} className={`flex flex-col max-w-[85%] ${isMe ? 'self-end ml-auto' : 'mr-auto'}`}>
+                      <div className="flex items-center justify-between gap-2 mb-1 px-1">
+                        <span className="text-[11px] font-bold text-slate-400 truncate flex items-center gap-1">
+                          {msg.sender_avatar && (
+                            <img src={msg.sender_avatar} alt="" className="w-3.5 h-3.5 rounded-full object-cover inline-block" />
+                          )}
+                          {msg.sender_name}
+                        </span>
+                        <span className="text-[9px] text-slate-500">
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className={`p-3 rounded-2xl text-sm ${
+                        isMe 
+                          ? 'bg-purple-600 text-white rounded-tr-none' 
+                          : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-800/60'
+                      }`}>
+                        <p className="leading-relaxed break-words">{msg.content}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input Form com Seletor de Identidade */}
+              <div className="p-3 border-t border-slate-800 bg-[#0c1224] space-y-2 flex-shrink-0">
+                {/* Seletor de Identidades se for Chat ON e a mesa tiver chats separados */}
+                {table?.has_separated_chat && chatChannel === 'ON' && (
+                  <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
+                    <span>Falando como:</span>
+                    {currentUser?.id === table.master_id ? (
+                      <select
+                        value={selectedSenderIdentity}
+                        onChange={(e) => setSelectedSenderIdentity(e.target.value)}
+                        className="bg-slate-900 border border-slate-700/60 rounded px-2 py-0.5 text-[11px] text-amber-300 font-bold focus:outline-none cursor-pointer"
+                      >
+                        <option value="MASTER">🛡️ Mestre</option>
+                        {linkedCharacters.map(c => (
+                          <option key={c.id} value={c.id}>👤 {c.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="font-bold text-purple-300">
+                        👤 {linkedCharacters.find(c => c.user_id === currentUser?.id)?.name || `${profile?.username} (Sem Ficha)`}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    placeholder={table?.has_separated_chat && chatChannel === 'OFF' ? "Mensagem no chat livre (OFF)..." : "Mensagem no chat narrativo (ON)..."}
+                    className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-purple-600 hover:bg-purple-500 text-white p-2.5 rounded-xl transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-95"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            </>
           )}
 
         </div>
@@ -1615,10 +1908,9 @@ export default function GameTablePage({ params }: { params: Params }) {
                         <button
                           key={attrKey}
                           onClick={() => handleRollFromQuickSheet(attrLabels[attrKey] || attrKey, baseVal, true)}
-                          disabled={rollCooldownRemaining > 0}
-                          className={`flex flex-col items-center p-3 rounded-xl border text-center transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                          className={`flex flex-col items-center p-3 rounded-xl border text-center transition-all duration-200 active:scale-95 cursor-pointer ${
                             colors[attrKey] || 'border-slate-700 text-slate-200'
-                          }` }
+                          }`}
                         >
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             {attrLabels[attrKey] || attrKey}
@@ -1720,8 +2012,7 @@ export default function GameTablePage({ params }: { params: Params }) {
                   <button
                     key={roll.id || index}
                     onClick={() => handleRollFromQuickSheet(roll.name, 0, false, roll)}
-                    disabled={rollCooldownRemaining > 0}
-                    className="w-full flex justify-between items-center bg-[#1e293b]/30 hover:bg-[#1e293b]/50 border border-slate-800/80 p-3 rounded-xl transition-all duration-200 text-left active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full flex justify-between items-center bg-[#1e293b]/30 hover:bg-[#1e293b]/50 border border-slate-800/80 p-3 rounded-xl transition-all duration-200 text-left active:scale-[0.98]"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -2106,27 +2397,279 @@ export default function GameTablePage({ params }: { params: Params }) {
       )}
 
       {/* Modal de Configurações da Mesa (Apenas Mestre) */}
-      {table && (
-        <TableSettingsModal
-          table={table}
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          onSuccess={(updatedTable) => setTable(updatedTable)}
-          showToast={showToast}
-        />
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-6 animate-fade-in">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Settings className="w-5 h-5 text-purple-400" />
+                Configurações da Mesa (Mestre)
+              </h3>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="text-slate-400 hover:text-white text-xs font-semibold uppercase tracking-wider bg-slate-800/40 border border-slate-700/30 px-2 py-1 rounded-lg cursor-pointer"
+              >
+                Fechar ×
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const res = await updateTableSettingsAction(table.id, {
+                  name: editTableName.trim(),
+                  description: editTableDesc.trim(),
+                  max_players: editMaxPlayers,
+                  allow_spectators: editAllowSpectators,
+                  is_private: editIsPrivate,
+                  password: editIsPrivate && editPassword ? editPassword : null,
+                });
+                if (res.success) {
+                  showToast('Configurações da mesa atualizadas com sucesso!');
+                  setIsSettingsOpen(false);
+                } else {
+                  showToast(res.message || 'Erro ao atualizar mesa.');
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                  Nome da Mesa
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTableName}
+                  onChange={(e) => setEditTableName(e.target.value)}
+                  className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm text-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                  Descrição
+                </label>
+                <textarea
+                  value={editTableDesc}
+                  onChange={(e) => setEditTableDesc(e.target.value)}
+                  rows={2}
+                  className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm text-slate-200"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                    Limite de Jogadores
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={editMaxPlayers}
+                    onChange={(e) => setEditMaxPlayers(parseInt(e.target.value) || 4)}
+                    className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm text-slate-200"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-slate-800/20 border border-slate-800/80 rounded-xl">
+                  <span className="text-xs font-semibold text-slate-300">Espectadores</span>
+                  <input
+                    type="checkbox"
+                    checked={editAllowSpectators}
+                    onChange={(e) => setEditAllowSpectators(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-800/20 border border-slate-800/80 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300">Mesa Privada (Requer Senha)</span>
+                  <input
+                    type="checkbox"
+                    checked={editIsPrivate}
+                    onChange={(e) => setEditIsPrivate(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-purple-500"
+                  />
+                </div>
+                {editIsPrivate && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                      Senha de Acesso
+                    </label>
+                    <input
+                      type="password"
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      placeholder="Senha para entrar"
+                      className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-2 px-3 text-sm text-slate-200"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-xl text-xs font-semibold shadow-lg shadow-purple-600/20 cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Modal / Drawer de Membros, Presença Realtime & Moderação */}
-      {table && (
-        <TableMembersModal
-          table={table}
-          isOpen={isMembersOpen}
-          onClose={() => setIsMembersOpen(false)}
-          tablePlayers={tablePlayers}
-          onlineUserIds={onlineUserIds}
-          userRole={userRole}
-          showToast={showToast}
-        />
+      {isMembersOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-fade-in">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-emerald-400" />
+                Membros & Presença Realtime
+              </h3>
+              <button
+                onClick={() => setIsMembersOpen(false)}
+                className="text-slate-400 hover:text-white text-xs font-semibold uppercase tracking-wider bg-slate-800/40 border border-slate-700/30 px-2 py-1 rounded-lg cursor-pointer"
+              >
+                Fechar ×
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
+              {/* Seção Mestre */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" /> Mestre da Mesa
+                </span>
+                <div className="bg-purple-950/20 border border-purple-900/30 p-3 rounded-xl flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">Mestre</span>
+                  <span className="text-[10px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    Online
+                  </span>
+                </div>
+              </div>
+
+              {/* Lista de Membros (Jogadores e Espectadores) */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-cyan-400" /> Membros Conectados ({tablePlayers.length})
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Limite: {tablePlayers.filter(p => p.role === 'player').length}/{table?.max_players ?? 4} Jogadores
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {tablePlayers.map((member) => {
+                    const isOnline = onlineUserIds.includes(member.player_id);
+                    const username = (Array.isArray(member.profiles) ? member.profiles[0]?.username : member.profiles?.username) || 'Usuário';
+                    const roleLabel = member.role === 'player' ? 'Jogador' : 'Espectador';
+
+                    return (
+                      <div
+                        key={member.player_id}
+                        className="bg-[#070b19]/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`}></span>
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-slate-200 block truncate">{username}</span>
+                            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.2 rounded border ${
+                              member.role === 'player'
+                                ? 'text-cyan-400 border-cyan-800/30 bg-cyan-950/30'
+                                : 'text-purple-400 border-purple-800/30 bg-purple-950/30'
+                            }`}>
+                              {roleLabel}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Ações do Mestre */}
+                        {userRole === 'MASTER' && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            {member.role === 'spectator' ? (
+                              <button
+                                onClick={async () => {
+                                  const res = await updateMemberRoleAction({
+                                    table_id: table.id,
+                                    player_id: member.player_id,
+                                    role: 'player'
+                                  });
+                                  if (res.success) {
+                                    showToast(`Promovido ${username} a Jogador!`);
+                                  } else {
+                                    showToast(res.message || 'Erro ao promover.');
+                                  }
+                                }}
+                                className="p-1.5 bg-cyan-950/40 hover:bg-cyan-900/40 text-cyan-400 border border-cyan-800/40 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                title="Promover a Jogador"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                Promover
+                              </button>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  const res = await updateMemberRoleAction({
+                                    table_id: table.id,
+                                    player_id: member.player_id,
+                                    role: 'spectator'
+                                  });
+                                  if (res.success) {
+                                    showToast(`Rebaixado ${username} a Espectador.`);
+                                  } else {
+                                    showToast(res.message || 'Erro ao rebaixar.');
+                                  }
+                                }}
+                                className="p-1.5 bg-purple-950/40 hover:bg-purple-900/40 text-purple-400 border border-purple-800/40 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                title="Rebaixar a Espectador"
+                              >
+                                <UserMinus className="w-3.5 h-3.5" />
+                                Rebaixar
+                              </button>
+                            )}
+
+                            <button
+                              onClick={async () => {
+                                const res = await kickTableMemberAction(table.id, member.player_id);
+                                if (res.success) {
+                                  showToast(`Membro ${username} removido da mesa.`);
+                                } else {
+                                  showToast('Erro ao remover membro.');
+                                }
+                              }}
+                              className="p-1.5 bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 border border-rose-800/40 rounded-lg transition-all cursor-pointer"
+                              title="Expulsar da Mesa"
+                            >
+                              <UserX className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {tablePlayers.length === 0 && (
+                    <p className="text-xs text-slate-500 italic py-2">Nenhum jogador ou espectador nesta mesa além do mestre.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {userRole === 'MASTER' && (

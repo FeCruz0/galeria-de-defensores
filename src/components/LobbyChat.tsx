@@ -169,7 +169,7 @@ export default function LobbyChat({
   const handleAddFriend = async (targetId: string, targetName: string) => {
     if (targetId === currentUserId) return;
 
-    const result = await sendFriendRequestAction({ targetInput: targetId });
+    const result = await sendFriendRequestAction(currentUserId, { targetInput: targetId });
     if (result.success) {
       setModalConfig({
         isOpen: true,

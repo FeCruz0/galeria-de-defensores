@@ -46,7 +46,6 @@ export default function FriendsDrawer({
   
   // Search & add input
   const [searchQuery, setSearchQuery] = useState('');
-  const [dmCooldownRemaining, setDmCooldownRemaining] = useState<number>(0);
 
   // Modal alert
   const [modalConfig, setModalConfig] = useState<{
@@ -114,14 +113,6 @@ export default function FriendsDrawer({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [directMessages]);
 
-  useEffect(() => {
-    if (dmCooldownRemaining <= 0) return;
-    const interval = setInterval(() => {
-      setDmCooldownRemaining((prev) => (prev > 0.1 ? Number((prev - 0.1).toFixed(1)) : 0));
-    }, 100);
-    return () => clearInterval(interval);
-  }, [dmCooldownRemaining]);
-
   if (!isOpen) return null;
 
   const acceptedFriends = friendsList.filter((f) => f.status === 'accepted');
@@ -133,7 +124,7 @@ export default function FriendsDrawer({
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    const res = await sendFriendRequestAction({ targetInput: searchQuery.trim() });
+    const res = await sendFriendRequestAction(currentUserId, { targetInput: searchQuery.trim() });
     if (res.success) {
       setModalConfig({
         isOpen: true,
@@ -169,24 +160,13 @@ export default function FriendsDrawer({
 
   const handleSendDM = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!dmInput.trim() || !activeFriend?.friend_profile?.id || dmCooldownRemaining > 0) return;
+    if (!dmInput.trim() || !activeFriend?.friend_profile?.id) return;
 
     const friendId = activeFriend.friend_profile.id;
     const content = dmInput.trim();
-    if (content.length > 1000) {
-      setModalConfig({
-        isOpen: true,
-        title: 'Aviso',
-        message: 'A mensagem excedeu o limite de 1000 caracteres.',
-        type: 'alert'
-      });
-      return;
-    }
-
-    setDmCooldownRemaining(1);
     setDmInput('');
 
-    const res = await sendDirectMessageAction({
+    const res = await sendDirectMessageAction(currentUserId, {
       receiverId: friendId,
       content
     });
@@ -414,38 +394,21 @@ export default function FriendsDrawer({
               </div>
 
               {/* DM Input */}
-              {dmInput.length > 0 && (
-                <div className="flex justify-between items-center px-4 py-1 text-[10px] bg-slate-950/45 border-t border-slate-900">
-                  <span className="text-slate-500">Tamanho da mensagem</span>
-                  <span className={`font-mono font-medium ${
-                    dmInput.length > 900 ? 'text-rose-400' :
-                    dmInput.length > 750 ? 'text-amber-400' :
-                    'text-slate-400'
-                  }`}>
-                    {dmInput.length} / 1000
-                  </span>
-                </div>
-              )}
-               <form onSubmit={handleSendDM} className="p-3 bg-slate-950/60 border-t border-slate-800 flex gap-2">
+              <form onSubmit={handleSendDM} className="p-3 bg-slate-950/60 border-t border-slate-800 flex gap-2">
                 <input
                   type="text"
-                  placeholder={dmCooldownRemaining > 0 ? `Aguarde ${dmCooldownRemaining}s...` : `Enviar mensagem privada para ${activeFriend.friend_profile?.username}...`}
+                  placeholder={`Enviar mensagem privada para ${activeFriend.friend_profile?.username}...`}
                   value={dmInput}
                   onChange={(e) => setDmInput(e.target.value)}
                   maxLength={1000}
-                  disabled={dmCooldownRemaining > 0}
-                  className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                  className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
                 />
                 <button
                   type="submit"
-                  disabled={!dmInput.trim() || dmCooldownRemaining > 0}
-                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer min-w-[44px]"
+                  disabled={!dmInput.trim()}
+                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs rounded-2xl transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  {dmCooldownRemaining > 0 ? (
-                    <span className="text-[10px] font-mono font-bold text-amber-300">{dmCooldownRemaining}s</span>
-                  ) : (
-                    <Send className="w-3.5 h-3.5" />
-                  )}
+                  <Send className="w-3.5 h-3.5" />
                 </button>
               </form>
             </>

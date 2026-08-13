@@ -2100,6 +2100,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                     value={newAdvName}
                     onChange={(e) => setNewAdvName(e.target.value)}
                     placeholder="Nome da habilidade"
+                    maxLength={100}
                     className="bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-purple-500"
                   />
                   <input
@@ -2126,6 +2127,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                   onChange={(e) => setNewAdvDesc(e.target.value)}
                   placeholder="Descrição curta do efeito..."
                   rows={2}
+                  maxLength={1000}
                   className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-purple-500 mb-4"
                 />
 
@@ -2367,6 +2369,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                       value={newRollName}
                       onChange={(e) => setNewRollName(e.target.value)}
                       placeholder="Nome do ataque/ação (ex: Espada Flamejante)"
+                      maxLength={100}
                       className="col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
                     />
                     
@@ -2375,6 +2378,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                       value={newRollDesc}
                       onChange={(e) => setNewRollDesc(e.target.value)}
                       placeholder="Descrição do efeito"
+                      maxLength={500}
                       className="col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
                     />
 
@@ -2868,6 +2872,7 @@ export default function CharacterSheetPage({ params }: { params: Params }) {
                   onChange={(e) => setCharacter({ ...character, annotations: e.target.value })}
                   placeholder="Escreva a história do personagem, notas de sessão, contatos, segredos..."
                   rows={6}
+                  maxLength={2000}
                   className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-purple-500/50 resize-y leading-relaxed font-sans"
                 />
               </div>

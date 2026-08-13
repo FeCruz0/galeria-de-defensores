@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
-import { Mail, Lock, Shield, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, Lock, Shield, ArrowRight, Loader2, Check, AlertCircle } from 'lucide-react';
+import { registerSchema } from '@/lib/validations/auth';
+import { translateAuthError } from '@/lib/authErrors';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,18 +17,66 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Live validation states
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailValid, setEmailValid] = useState<boolean | null>(null);
+
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordValid, setPasswordValid] = useState<boolean | null>(null);
+
+  // Live Email check
+  useEffect(() => {
+    if (!email) {
+      setEmailError(null);
+      setEmailValid(null);
+      return;
+    }
+
+    const parsed = registerSchema.shape.email.safeParse(email);
+    if (!parsed.success) {
+      setEmailError(parsed.error.issues[0]?.message || 'E-mail inválido.');
+      setEmailValid(false);
+    } else {
+      setEmailError(null);
+      setEmailValid(true);
+    }
+  }, [email]);
+
+  // Live Password check
+  useEffect(() => {
+    if (!password) {
+      setPasswordError(null);
+      setPasswordValid(null);
+      return;
+    }
+
+    const parsed = registerSchema.shape.password.safeParse(password);
+    if (!parsed.success) {
+      setPasswordError(parsed.error.issues[0]?.message || 'A senha deve ter pelo menos 6 caracteres.');
+      setPasswordValid(false);
+    } else {
+      setPasswordError(null);
+      setPasswordValid(true);
+    }
+  }, [password]);
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (!emailValid || !passwordValid) {
+      setErrorMsg('Por favor, preencha os campos de login corretamente.');
+      return;
+    }
+
     setLoading(true);
     setErrorMsg(null);
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 
     if (error) {
-      setErrorMsg(error.message);
+      setErrorMsg(translateAuthError(error));
       setLoading(false);
     } else {
       router.push('/dashboard');
@@ -77,11 +127,24 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="exemplo@gmail.com"
-                className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                className={`w-full bg-[#1e293b]/50 border rounded-xl py-3 pl-10 pr-10 text-slate-200 placeholder-slate-500 focus:outline-none transition-colors ${
+                  emailValid === true ? 'border-emerald-500/50 focus:border-emerald-500' :
+                  emailValid === false ? 'border-rose-500/50 focus:border-rose-500' :
+                  'border-slate-700/50 focus:border-purple-500'
+                }`}
               />
+              <span className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                {emailValid === true && <Check className="w-4 h-4 text-emerald-400" />}
+                {emailValid === false && <AlertCircle className="w-4 h-4 text-rose-400" />}
+              </span>
             </div>
+            {emailError && (
+              <p className="text-rose-400 text-[11px] mt-1 ml-1 leading-normal animate-fade-in font-medium">
+                {emailError}
+              </p>
+            )}
           </div>
-
+ 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
               Senha
@@ -96,14 +159,27 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-[#1e293b]/50 border border-slate-700/50 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                className={`w-full bg-[#1e293b]/50 border rounded-xl py-3 pl-10 pr-10 text-slate-200 placeholder-slate-500 focus:outline-none transition-colors ${
+                  passwordValid === true ? 'border-emerald-500/50 focus:border-emerald-500' :
+                  passwordValid === false ? 'border-rose-500/50 focus:border-rose-500' :
+                  'border-slate-700/50 focus:border-purple-500'
+                }`}
               />
+              <span className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                {passwordValid === true && <Check className="w-4 h-4 text-emerald-400" />}
+                {passwordValid === false && <AlertCircle className="w-4 h-4 text-rose-400" />}
+              </span>
             </div>
+            {passwordError && (
+              <p className="text-rose-400 text-[11px] mt-1 ml-1 leading-normal animate-fade-in font-medium">
+                {passwordError}
+              </p>
+            )}
           </div>
-
+ 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !emailValid || !passwordValid}
             className="w-full mt-2 bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-[0.98] disabled:opacity-55 disabled:cursor-not-allowed"
           >
             {loading ? (

@@ -205,4 +205,51 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
   - [x] Criar triggers PostgreSQL para atualização automática do campo `updated_at`.
   - [x] Realizar auditoria completa de políticas RLS em todas as tabelas.
 
+---
+
+## 🚀 Fase 13: Modularização Avançada, Realtime Presence & Testes E2E (Planejado)
+
+### 🧩 1. Sub-decomposição de Componentes Monolíticos de Ficha & VTT
+* **Descrição**: Extrair abas extensas do `CharacterClient.tsx` (~3.400 linhas) e painéis do `TableClient.tsx` (~2.200 linhas) para subcomponentes modulares e isolados em `src/components/character-sheet/` e `src/components/vtt/`.
+* **Checklist**:
+  - [ ] Extrair abas de Atributos, Vantagens, Inventário, Magias e Rolagens da ficha para componentes dedicados.
+  - [ ] Extrair gerenciador de NPCs do Mestre e diário de campanha da mesa VTT para componentes dedicados.
+  - [ ] Criar custom hooks (`useCharacterPoints`, `useVttSession`) para encapsular o estado e regras de negócio.
+
+### 👥 2. Supabase Realtime Presence & Experiência Otimista (React 19)
+* **Descrição**: Adicionar indicadores de presença de jogadores online na mesa em tempo real e atualizações instantâneas de interface com `useOptimistic`.
+* **Checklist**:
+  - [ ] Configurar canal de Presence do Supabase Realtime para exibir avatares de jogadores online/offline na mesa.
+  - [ ] Adicionar indicadores de "digitando no chat..." e "rolando dados...".
+  - [ ] Utilizar `useOptimistic` do React 19 para atualizações instantâneas de PV/PM e envio de chat sem lag de rede.
+
+### 🎭 3. Testes End-to-End (E2E) com Playwright
+* **Descrição**: Implementar suíte de testes de ponta a ponta simulando navegadores reais para validar a jornada completa do usuário.
+* **Checklist**:
+  - [ ] Configurar Playwright no projeto e integrar scripts de teste no `package.json`.
+  - [ ] Escrever teste E2E para o fluxo: Login -> Criar Personagem -> Entrar na Mesa -> Rolar Dados -> Baixar PDF.
+
+---
+
+## 🔮 Fase 14: Recursos VTT Next-Gen & Integração com IA (Futuro)
+
+### 🗺️ 1. Grid Tático Interativo & Tokens
+* **Descrição**: Canvas 2D/SVG opcional na Mesa VTT para movimentação de tokens em mapa de batalha com medição de distância.
+* **Checklist**:
+  - [ ] Implementar mapa de fundo com upload de imagem e grid personalizável (quadrados/hexágonos).
+  - [ ] Permitir arrastar tokens de personagens e NPCs sobre o mapa com atualização via Supabase Realtime.
+
+### 🔊 2. Gerenciador de Áudio & Efeitos Sonoros VTT
+* **Descrição**: Reprodução de efeitos sonoros locais (rolagem de dados) e músicas de ambiente controladas pelo Mestre.
+* **Checklist**:
+  - [ ] Adicionar efeitos sonoros Web Audio API para rolagens de dados (sucesso, crítico, falha).
+  - [ ] Criar painel de controle de música ambiente para o Mestre (batalha, taberna, mistério).
+
+### 🤖 3. Gerador de Fichas e NPCs com IA (Gemini API)
+* **Descrição**: Integração com IA para geração instantânea de histórico, atributos e ficha de NPCs para 3D&T Alpha.
+* **Checklist**:
+  - [ ] Criar Server Action integrada à API do Gemini para gerar NPCs com base em prompts curtos do Mestre.
+  - [ ] Permitir inserção direta do NPC gerado na mesa VTT com um único clique.
+
+
 

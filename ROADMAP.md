@@ -158,7 +158,7 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 * **Checklist**:
   - [x] Criar diretório `supabase/migrations/` e migrar a estrutura existente para arquivos numerados timestamped (`20260807000000_init_schema.sql`, `20260807000001_phase11_social_and_spectators.sql`, `20260807000002_future_npcs_audit_and_indexes.sql`).
   - [x] Criar os manuais de arquitetura e banco de dados ([DATABASE.md](DATABASE.md) e [ARCHITECTURE.md](ARCHITECTURE.md)).
-  - [ ] Integrar fluxo de execução de migrações nos ambientes de desenvolvimento local e docker.
+  - [x] Integrar fluxo de execução de migrações nos ambientes de desenvolvimento local e docker.
 
 ### 🧩 2. Decomposição de Componentes Monolíticos (Refatoração de Mesa VTT)
 * **Descrição**: Desmembrar telas extensas (especialmente `tables/[id]/page.tsx`) em subcomponentes modulares e focados.
@@ -170,8 +170,8 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 🚀 3. Otimização de Performance com React Server Components (RSC)
 * **Descrição**: Migrar buscas de dados estáticos do Dashboard e tabelas para o servidor antes de renderizar no cliente.
 * **Checklist**:
-  - [ ] Carregar dados de perfill, personagens e mesas em componentes Server-Side no Next.js (App Router).
-  - [ ] Reduzir payloads de transferência no cliente utilizando carregamento progressivo.
+  - [x] Carregar dados de perfill, personagens e mesas em componentes Server-Side no Next.js (App Router).
+  - [x] Reduzir payloads de transferência no cliente utilizando carregamento progressivo.
 
 ### 🛡️ 4. Tratamento Global de Erros & Observabilidade (Error Boundaries)
 * **Descrição**: Implementação de tratamento gracioso de falhas de runtime e feedback de carregamento.

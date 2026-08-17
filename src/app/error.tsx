@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import Link from 'next/link';
 import { AlertOctagon, RefreshCw, Home } from 'lucide-react';
 
 export default function GlobalError({
@@ -58,13 +57,13 @@ export default function GlobalError({
             Tentar Novamente
           </button>
           
-          <Link
+          <a
             href="/dashboard"
             className="flex-1 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-slate-200 font-medium py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
           >
             <Home className="w-4 h-4" />
             Ir para Início
-          </Link>
+          </a>
         </div>
 
       </div>

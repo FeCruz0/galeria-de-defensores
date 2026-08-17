@@ -13,3 +13,4 @@ services:
       - NODE_ENV=development
     env_file:
       - .env.local
+    command: sh -c "npm run db:migrate && npm run dev"

@@ -1,7 +1,13 @@
-import { supabase } from '../lib/supabase';
+import { supabase as staticSupabase } from '../lib/supabase';
 import { RuleSystem } from '../types/game';
+import { SupabaseClient } from '@supabase/supabase-js';
 
-export async function fetchActiveSystems(): Promise<RuleSystem[]> {
+function getSupabase(customClient?: SupabaseClient) {
+  return customClient || staticSupabase;
+}
+
+export async function fetchActiveSystems(customClient?: SupabaseClient): Promise<RuleSystem[]> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('rule_systems')
     .select('*')
@@ -15,7 +21,8 @@ export async function fetchActiveSystems(): Promise<RuleSystem[]> {
   return (data || []) as RuleSystem[];
 }
 
-export async function fetchSystemById(id: string): Promise<RuleSystem | null> {
+export async function fetchSystemById(id: string, customClient?: SupabaseClient): Promise<RuleSystem | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('rule_systems')
     .select('*')
@@ -29,7 +36,8 @@ export async function fetchSystemById(id: string): Promise<RuleSystem | null> {
   return data as RuleSystem;
 }
 
-export async function createCustomSystem(systemData: Partial<RuleSystem>): Promise<RuleSystem | null> {
+export async function createCustomSystem(systemData: Partial<RuleSystem>, customClient?: SupabaseClient): Promise<RuleSystem | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('rule_systems')
     .insert([systemData])
@@ -43,7 +51,8 @@ export async function createCustomSystem(systemData: Partial<RuleSystem>): Promi
   return data as RuleSystem;
 }
 
-export async function updateCustomSystem(id: string, updates: Partial<RuleSystem>): Promise<RuleSystem | null> {
+export async function updateCustomSystem(id: string, updates: Partial<RuleSystem>, customClient?: SupabaseClient): Promise<RuleSystem | null> {
+  const supabase = getSupabase(customClient);
   const { data, error } = await supabase
     .from('rule_systems')
     .update(updates)
@@ -58,7 +67,8 @@ export async function updateCustomSystem(id: string, updates: Partial<RuleSystem
   return data as RuleSystem;
 }
 
-export async function deleteCustomSystem(id: string): Promise<boolean> {
+export async function deleteCustomSystem(id: string, customClient?: SupabaseClient): Promise<boolean> {
+  const supabase = getSupabase(customClient);
   const { error } = await supabase
     .from('rule_systems')
     .delete()

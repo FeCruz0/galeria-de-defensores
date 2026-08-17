@@ -12,6 +12,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: "Galeria de Defensores — RPG Online 3D&T",
   description: "Gerencie suas fichas de personagem, customize seus próprios sistemas de regras (Sandbox) e jogue RPG 3D&T online em tempo real com dados físicos e chat integrado.",

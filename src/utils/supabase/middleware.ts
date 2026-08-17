@@ -47,8 +47,7 @@ export async function updateSession(request: NextRequest) {
     !user &&
     (path.startsWith('/dashboard') ||
       path.startsWith('/characters') ||
-      path.startsWith('/tables') ||
-      path === '/')
+      path.startsWith('/tables'))
   ) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
@@ -56,13 +55,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirecionamento se já autenticado para rotas públicas de auth
-  if (user && (path === '/login' || path === '/register' || path === '/')) {
-    // Se estiver na raiz, também joga para o dashboard
-    if (path === '/') {
-      const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
-      return NextResponse.redirect(url);
-    }
+  if (user && (path === '/login' || path === '/register')) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);

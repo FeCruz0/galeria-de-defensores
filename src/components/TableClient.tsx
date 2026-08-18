@@ -45,6 +45,7 @@ import TableDiceRollerPanel from '@/components/TableDiceRollerPanel';
 import TableSettingsModal from '@/components/TableSettingsModal';
 import TableMembersModal from '@/components/TableMembersModal';
 import CampaignJournalPanel from '@/components/vtt/CampaignJournalPanel';
+import { useVttSession } from '@/hooks/useVttSession';
 
 type Params = Promise<{ id: string }>;
 
@@ -93,7 +94,14 @@ export default function TableClient({
   const initialUserRole = initialCurrentUser.id === initialTable?.master_id
     ? 'MASTER'
     : (initialTablePlayers?.find((p: any) => p.player_id === initialCurrentUser.id)?.role === 'spectator' ? 'SPECTATOR' : 'PLAYER');
-  const [userRole, setUserRole] = useState<'MASTER' | 'PLAYER' | 'SPECTATOR' | 'GUEST'>(initialUserRole);
+  const {
+    userRole,
+    setUserRole,
+    chatCooldownRemaining,
+    setChatCooldownRemaining,
+    rollCooldownRemaining,
+    setRollCooldownRemaining,
+  } = useVttSession(initialUserRole);
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
   const [tableNpcs, setTableNpcs] = useState<TableNPC[]>(initialTableNpcs);
   const [isNpcDrawerOpen, setIsNpcDrawerOpen] = useState(false);
@@ -125,9 +133,7 @@ export default function TableClient({
   const [savingPublic, setSavingPublic] = useState(false);
   const [savingPrivate, setSavingPrivate] = useState(false);
 
-  // States de Cooldown de Anti-Abuso
-  const [chatCooldownRemaining, setChatCooldownRemaining] = useState<number>(0);
-  const [rollCooldownRemaining, setRollCooldownRemaining] = useState<number>(0);
+
 
   function getIconComponent(iconName: string) {
     switch (iconName) {
@@ -162,22 +168,7 @@ export default function TableClient({
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  // Timers para Cooldown de Anti-Abuso
-  useEffect(() => {
-    if (chatCooldownRemaining <= 0) return;
-    const interval = setInterval(() => {
-      setChatCooldownRemaining((prev) => (prev > 0.1 ? Number((prev - 0.1).toFixed(1)) : 0));
-    }, 100);
-    return () => clearInterval(interval);
-  }, [chatCooldownRemaining]);
 
-  useEffect(() => {
-    if (rollCooldownRemaining <= 0) return;
-    const interval = setInterval(() => {
-      setRollCooldownRemaining((prev) => (prev > 0.1 ? Number((prev - 0.1).toFixed(1)) : 0));
-    }, 100);
-    return () => clearInterval(interval);
-  }, [rollCooldownRemaining]);
 
 
 

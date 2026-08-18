@@ -44,6 +44,7 @@ import AdvantagesSection from '@/components/character-sheet/AdvantagesSection';
 import InventorySection from '@/components/character-sheet/InventorySection';
 import SpellsSection from '@/components/character-sheet/SpellsSection';
 import CustomRollsSection from '@/components/character-sheet/CustomRollsSection';
+import { useCharacterPoints } from '@/hooks/useCharacterPoints';
 
 type Params = Promise<{ id: string }>;
 
@@ -822,21 +823,15 @@ export default function CharacterClient({
     }
   }
 
-  const equippedModifiers = getEquippedItemsModifiers(character.inventory);
-  const modifiedAttrs = getModifiedAttributes(character.attributes_values, [], equippedModifiers);
-
-  const attributesSum = Object.values(character.attributes_values).reduce((sum, val) => sum + (val || 0), 0);
-  const advantagesSum = character.advantages.reduce((sum, item) => sum + computedCostPt(item), 0);
-  const disadvantagesSum = (character.disadvantages || []).reduce((sum, item) => sum + computedCostPt(item), 0);
-  const skillsSum = (character.skills || []).reduce((sum, item) => sum + computedCostPt(item), 0);
-  const specializationsSum = Math.floor((character.specializations?.length || 0) / 3);
-  const uniqueAdvantageCost = character.unique_advantage?.cost || 0;
-
-  const pointsSpent = attributesSum + advantagesSum + disadvantagesSum + skillsSum + specializationsSum + uniqueAdvantageCost;
-  const pointsAvailable = character.saved_points || 0;
-  const pointsTotal = pointsSpent + pointsAvailable; // Dinamicamente igual a calculateScore(character)
-  const scoreSpent = pointsTotal; // Para manter compatibilidade com outras partes do código
-  const isOverflow = pointsAvailable < 0;
+  const {
+    equippedModifiers,
+    modifiedAttrs,
+    pointsSpent,
+    pointsAvailable,
+    pointsTotal,
+    scoreSpent,
+    isOverflow
+  } = useCharacterPoints(character);
 
   const themeConfig = getTheme(currentTheme);
 

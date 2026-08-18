@@ -39,6 +39,12 @@ import { exportCharacterToPdf } from '@/lib/pdfPayload';
 import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 import { saveLocalCharacter, getLocalCharacter, queuePendingSync, getPendingSyncs, clearPendingSync } from '@/lib/offlineDb';
 
+import AttributesSection from '@/components/character-sheet/AttributesSection';
+import AdvantagesSection from '@/components/character-sheet/AdvantagesSection';
+import InventorySection from '@/components/character-sheet/InventorySection';
+import SpellsSection from '@/components/character-sheet/SpellsSection';
+import CustomRollsSection from '@/components/character-sheet/CustomRollsSection';
+
 type Params = Promise<{ id: string }>;
 
 const STANDARD_SYSTEMS = {
@@ -180,56 +186,60 @@ export default function CharacterClient({
   };
 
   // Catálogos e Busca
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCatalogItem, setSelectedCatalogItem] = useState<any>(null);
-  const [selectedModifiers, setSelectedModifiers] = useState<string[]>([]);
   const [activeDescriptionItem, setActiveDescriptionItem] = useState<{
     name: string;
     cost: string;
     description: string;
   } | null>(null);
-  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [expandedItemNameId, setExpandedItemNameId] = useState<string | null>(null);
-  const [isAddingAdvantageExpanded, setIsAddingAdvantageExpanded] = useState(false);
   const [editingAbilityItem, setEditingAbilityItem] = useState<{
     item: AdvantageItem;
     type: 'advantages' | 'disadvantages' | 'skills' | 'specializations';
   } | null>(null);
   const [showBaseSystemBlockModal, setShowBaseSystemBlockModal] = useState(false);
 
+
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Exibir um toast estético temporário
+  function showToast(msg: string) {
+    setToastMessage(msg);
+  }
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
+
+  const [activeRollResult, setActiveRollResult] = useState<any>(null);
+  const [isSelectingRace, setIsSelectingRace] = useState(false);
+  const [showRaceDetails, setShowRaceDetails] = useState(false);
+
+  // States de Preferências e Exibição
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>('dark');
+  const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
+  const [avatarUrl, setAvatarUrl] = useState<string>(initialProfile?.avatar_url || '');
+  const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; faces?: number; title: string; callback: () => void } | null>(null);
+
+  // Fechar detalhes da Vantagem Única ao clicar fora
+  useEffect(() => {
+    if (!showRaceDetails) return;
+
+    function handleOutsideClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.race-container')) {
+        setShowRaceDetails(false);
+      }
+    }
+
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [showRaceDetails]);
+
   const isGaiden = systemDef.name?.toLowerCase().includes('gaiden') || false;
-
-  const enrichAdvantages = (items: any[], isGai: boolean) => {
-    const baseCatalog = isGai ? gaidenAdvantages : alphaAdvantages;
-    return items.map(item => {
-      const baseItem = baseCatalog.find(b => b.name.toLowerCase() === item.name.toLowerCase());
-      if (baseItem && baseItem.isModular) {
-        return {
-          ...item,
-          isModular: true,
-          baseCostPt: item.baseCostPt !== undefined ? item.baseCostPt : (baseItem.baseCostPt || 0),
-          modifiers: item.modifiers?.length ? item.modifiers : (baseItem.modifiers || [])
-        };
-      }
-      return item;
-    });
-  };
-
-  const enrichDisadvantages = (items: any[], isGai: boolean) => {
-    const baseCatalog = isGai ? gaidenDisadvantages : alphaDisadvantages;
-    return items.map(item => {
-      const baseItem = baseCatalog.find(b => b.name.toLowerCase() === item.name.toLowerCase());
-      if (baseItem && baseItem.isModular) {
-        return {
-          ...item,
-          isModular: true,
-          baseCostPt: item.baseCostPt !== undefined ? item.baseCostPt : (baseItem.baseCostPt || 0),
-          modifiers: item.modifiers?.length ? item.modifiers : (baseItem.modifiers || [])
-        };
-      }
-      return item;
-    });
-  };
 
   const getEnrichedItem = (item: any, type: string) => {
     if (type === 'advantages') {
@@ -257,189 +267,6 @@ export default function CharacterClient({
     }
     return item;
   };
-
-  const currentCatalog = React.useMemo(() => {
-    if (systemDef.advantages?.length || systemDef.disadvantages?.length || systemDef.skills?.length) {
-      return {
-        advantages: enrichAdvantages(systemDef.advantages || [], isGaiden),
-        disadvantages: enrichDisadvantages(systemDef.disadvantages || [], isGaiden),
-        skills: systemDef.skills || [],
-        specializations: systemDef.specializations || alphaSpecializations
-      };
-    }
-    if (isGaiden) {
-      return {
-        advantages: gaidenAdvantages,
-        disadvantages: gaidenDisadvantages,
-        skills: gaidenSkills,
-        specializations: alphaSpecializations
-      };
-    }
-    return {
-      advantages: alphaAdvantages,
-      disadvantages: alphaDisadvantages,
-      skills: alphaSkills,
-      specializations: alphaSpecializations
-    };
-  }, [systemDef, isGaiden]);
-
-  const allCatalogItems = React.useMemo(() => {
-    const list: {
-      name: string;
-      description: string;
-      cost: string;
-      type: 'advantages' | 'disadvantages' | 'skills' | 'specializations' | 'unique_advantage';
-      originalItem: any;
-    }[] = [];
-
-    // Add advantages
-    (currentCatalog.advantages || []).forEach((item: any) => {
-      list.push({
-        name: item.name,
-        description: item.description || '',
-        cost: typeof item.cost === 'number' ? `${item.cost}pt` : String(item.cost || '0'),
-        type: 'advantages',
-        originalItem: item
-      });
-    });
-
-    // Add disadvantages
-    (currentCatalog.disadvantages || []).forEach((item: any) => {
-      list.push({
-        name: item.name,
-        description: item.description || '',
-        cost: typeof item.cost === 'number' ? `${item.cost}pt` : String(item.cost || '0'),
-        type: 'disadvantages',
-        originalItem: item
-      });
-    });
-
-    // Add skills
-    (currentCatalog.skills || []).forEach((item: any) => {
-      list.push({
-        name: item.name,
-        description: item.description || '',
-        cost: typeof item.cost === 'number' ? `${item.cost}pt` : String(item.cost || '0'),
-        type: 'skills',
-        originalItem: item
-      });
-    });
-
-    // Add specializations
-    (currentCatalog.specializations || []).forEach((item: any) => {
-      list.push({
-        name: item.name,
-        description: item.description || '',
-        cost: typeof item.cost === 'number' ? `${item.cost}pt` : String(item.cost || '0'),
-        type: 'specializations',
-        originalItem: item
-      });
-    });
-    // Add unique advantages (races)
-    const races = (systemDef as any).unique_advantages || (systemDef.name?.includes('Gaiden') ? gaidenRaces : alphaRaces) || [];
-    races.forEach((item: any) => {
-      list.push({
-        name: item.name,
-        description: `${item.benefits || ''}${item.drawbacks && item.drawbacks !== 'Não possui penalidades.' ? ' | Restrições: ' + item.drawbacks : ''}`,
-        cost: item.cost !== undefined ? `${item.cost}pt` : '0pt',
-        type: 'unique_advantage',
-        originalItem: item
-      });
-    });
-
-    return list;
-  }, [currentCatalog, systemDef]);
-
-  const typeLabels: Record<string, string> = {
-    advantages: 'Vantagem',
-    disadvantages: 'Desvantagem',
-    skills: 'Perícia',
-    specializations: 'Especialização',
-    unique_advantage: 'Vantagem Única'
-  };
-
-  const typeBadgeColors: Record<string, string> = {
-    advantages: 'text-purple-400 bg-purple-950/40 border-purple-800/20',
-    disadvantages: 'text-rose-400 bg-rose-950/40 border-rose-800/20',
-    skills: 'text-cyan-400 bg-cyan-950/40 border-cyan-800/20',
-    specializations: 'text-emerald-400 bg-emerald-950/40 border-emerald-800/20',
-    unique_advantage: 'text-amber-400 bg-amber-950/40 border-amber-800/20'
-  };
-
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Exibir um toast estético temporário
-  function showToast(msg: string) {
-    setToastMessage(msg);
-  }
-
-  useEffect(() => {
-    if (!toastMessage) return;
-    const timer = setTimeout(() => setToastMessage(null), 3000);
-    return () => clearTimeout(timer);
-  }, [toastMessage]);
-
-  // Input states for adding items
-  const [newAdvName, setNewAdvName] = useState('');
-  const [newAdvCost, setNewAdvCost] = useState('1');
-  const [newAdvDesc, setNewAdvDesc] = useState('');
-  const [advType, setAdvType] = useState<'advantages' | 'disadvantages' | 'skills' | 'specializations'>('advantages');
-
-  const [newSpellName, setNewSpellName] = useState('');
-  const [newSpellCost, setNewSpellCost] = useState('1 PM');
-  const [newSpellDesc, setNewSpellDesc] = useState('');
-
-  const [newInvName, setNewInvName] = useState('');
-  const [newInvQty, setNewInvQty] = useState(1);
-  const [newInvBonusAttr, setNewInvBonusAttr] = useState(''); // 'F' | 'H' | 'R' | 'A' | 'PdF' | ''
-  const [newInvBonusVal, setNewInvBonusVal] = useState(1);
-
-  // States de Rolagem Customizada
-  const [isAddingRoll, setIsAddingRoll] = useState(false);
-  const [newRollName, setNewRollName] = useState('');
-  const [newRollDesc, setNewRollDesc] = useState('');
-  const [newRollGlobalMod, setNewRollGlobalMod] = useState(0);
-  const [newRollPrimaryAttr, setNewRollPrimaryAttr] = useState('none');
-  const [newRollSecondaryAttr, setNewRollSecondaryAttr] = useState('none');
-  const [newRollAccumulateCrit, setNewRollAccumulateCrit] = useState(false);
-  const [newRollComponents, setNewRollComponents] = useState<any[]>([
-    {
-      id: crypto.randomUUID(),
-      count: 1,
-      faces: 6,
-      bonus: 0,
-      isNegative: false,
-      canCrit: true,
-      critMultiplier: 2
-    }
-  ]);
-  const [newRollType, setNewRollType] = useState<'ATTACK' | 'DEFENSE' | 'MAGIC' | 'TEST' | 'INITIATIVE' | 'OTHER'>('OTHER');
-  const [newRollPmCost, setNewRollPmCost] = useState(0);
-  const [activeRollResult, setActiveRollResult] = useState<any>(null);
-  const [isSelectingRace, setIsSelectingRace] = useState(false);
-  const [showRaceDetails, setShowRaceDetails] = useState(false);
-
-  // States de Preferências e Exibição
-  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState<ThemeId>('dark');
-  const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
-  const [avatarUrl, setAvatarUrl] = useState<string>(initialProfile?.avatar_url || '');
-  const [virtualRoll, setVirtualRoll] = useState<{ results: number[]; faces?: number; title: string; callback: () => void } | null>(null);
-
-  // Fechar detalhes da Vantagem Única ao clicar fora
-  useEffect(() => {
-    if (!showRaceDetails) return;
-
-    function handleOutsideClick(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.race-container')) {
-        setShowRaceDetails(false);
-      }
-    }
-
-    document.addEventListener('click', handleOutsideClick);
-    return () => document.removeEventListener('click', handleOutsideClick);
-  }, [showRaceDetails]);
 
 
 
@@ -679,122 +506,7 @@ export default function CharacterClient({
     });
   }
 
-  // Selecionar item do catálogo de vantagens/desvantagens/perícias/vantagens únicas
-  function handleSelectCatalogItem(item: any) {
-    if (!character) return;
-    setSearchQuery('');
-    
-    if (item.type === 'unique_advantage') {
-      const oldCost = character.unique_advantage?.cost || 0;
-      const newCost = parseInt(item.cost) || 0;
-      const diff = newCost - oldCost;
-      if (!canAffordCost(diff, character.saved_points || 0)) {
-        showToast("Saldo de Pontos Guardados insuficiente para esta Vantagem Única.");
-        return;
-      }
-      setCharacter({
-        ...character,
-        saved_points: (character.saved_points || 0) - diff,
-        unique_advantage: {
-          id: crypto.randomUUID(),
-          name: item.name,
-          description: item.description,
-          cost: newCost
-        }
-      });
-      return;
-    }
 
-    if (item.originalItem.isModular) {
-      setSelectedCatalogItem(item.originalItem);
-      setSelectedModifiers([]);
-      setAdvType('advantages');
-    } else {
-      setNewAdvName(item.name);
-      setNewAdvCost(item.cost.replace('pt', ''));
-      setNewAdvDesc(item.description);
-      setAdvType(item.type);
-    }
-  }
-
-  // Adicionar Vantagem Modular configurada na ficha
-  function handleAddModularItem() {
-    if (!character || !selectedCatalogItem) return;
-
-    const newItem: AdvantageItem = {
-      id: crypto.randomUUID(),
-      name: selectedCatalogItem.name,
-      description: selectedCatalogItem.description,
-      cost: 'Modular',
-      isModular: true,
-      baseCostPt: selectedCatalogItem.baseCostPt || 0,
-      modifiers: selectedCatalogItem.modifiers || [],
-      selectedModifiers: selectedModifiers
-    };
-
-    const costPt = computedCostPt(newItem);
-    if (!canAffordCost(costPt, character.saved_points || 0)) {
-      showToast("Saldo de Pontos Guardados insuficiente.");
-      return;
-    }
-
-    newItem.cost = `${costPt} ponto${Math.abs(costPt) !== 1 ? 's' : ''}`;
-
-    const targetList = character[advType] || [];
-    setCharacter({
-      ...character,
-      saved_points: (character.saved_points || 0) - costPt,
-      [advType]: [...targetList, newItem]
-    });
-
-    setSelectedCatalogItem(null);
-    setSelectedModifiers([]);
-  }
-
-  // Criar e adicionar uma nova rolagem customizada rápida
-  function handleCreateCustomRoll() {
-    if (!character || !newRollName.trim()) return;
-
-    const newRoll = {
-      id: crypto.randomUUID(),
-      name: newRollName.trim(),
-      description: newRollDesc.trim(),
-      components: newRollComponents,
-      globalModifier: newRollGlobalMod,
-      primaryAttribute: newRollPrimaryAttr,
-      secondaryAttribute: newRollSecondaryAttr,
-      accumulateCrit: newRollAccumulateCrit,
-      pmCost: newRollPmCost,
-      type: newRollType
-    };
-
-    setCharacter({
-      ...character,
-      custom_rolls: [...(character.custom_rolls || []), newRoll as any]
-    });
-
-    // Resetar formulário
-    setNewRollName('');
-    setNewRollDesc('');
-    setNewRollGlobalMod(0);
-    setNewRollPrimaryAttr('none');
-    setNewRollSecondaryAttr('none');
-    setNewRollAccumulateCrit(false);
-    setNewRollComponents([
-      {
-        id: crypto.randomUUID(),
-        count: 1,
-        faces: 6,
-        bonus: 0,
-        isNegative: false,
-        canCrit: true,
-        critMultiplier: 2
-      }
-    ]);
-    setNewRollType('OTHER');
-    setNewRollPmCost(0);
-    setIsAddingRoll(false);
-  }
 
   // Acionar rolagem customizada da ficha localmente
   function handleTriggerCustomRoll(roll: any) {
@@ -874,54 +586,7 @@ export default function CharacterClient({
     });
   }
 
-  // Adicionar Vantagem/Desvantagem/Perícia
-  function handleAddAdvantage() {
-    if (!character || !newAdvName.trim()) return;
 
-    const newItem: AdvantageItem = {
-      id: crypto.randomUUID(),
-      name: newAdvName.trim(),
-      cost: newAdvCost,
-      description: newAdvDesc.trim()
-    };
-
-    const costPt = computedCostPt(newItem);
-    if (!canAffordCost(costPt, character.saved_points || 0)) {
-      showToast("Saldo de Pontos Guardados insuficiente.");
-      return;
-    }
-
-    const targetList = character[advType] || [];
-
-    setCharacter({
-      ...character,
-      saved_points: (character.saved_points || 0) - costPt,
-      [advType]: [...targetList, newItem]
-    });
-
-    setNewAdvName('');
-    setNewAdvDesc('');
-  }
-
-  // Deletar item
-  function handleDeleteAdvantage(type: 'advantages' | 'disadvantages' | 'skills' | 'specializations', itemId: string) {
-    if (!character) return;
-    const targetList = character[type] || [];
-    const itemToDelete = targetList.find(item => item.id === itemId);
-    if (!itemToDelete) return;
-
-    const costPt = computedCostPt(itemToDelete);
-    if (costPt < 0 && (character.saved_points || 0) + costPt < 0) {
-      showToast("Saldo de Pontos Guardados insuficiente para remover esta desvantagem.");
-      return;
-    }
-
-    setCharacter({
-      ...character,
-      saved_points: (character.saved_points || 0) + costPt,
-      [type]: targetList.filter(item => item.id !== itemId)
-    });
-  }
 
   // Alterar tipo de dano do personagem
   function handleDamageTypeChange(field: 'damage_type_forca' | 'damage_type_pdf', value: string) {
@@ -1136,95 +801,6 @@ export default function CharacterClient({
       console.error('Erro ao duplicar sistema:', err);
       throw err;
     }
-  }
-
-  // Adicionar Magia
-  function handleAddSpell() {
-    if (!character || !newSpellName.trim()) return;
-
-    const newSpell: Spell = {
-      id: crypto.randomUUID(),
-      name: newSpellName.trim(),
-      cost: newSpellCost,
-      school: '',
-      requirements: '',
-      range: '',
-      duration: '',
-      description: newSpellDesc.trim()
-    };
-
-    setCharacter({
-      ...character,
-      spells: [...(character.spells || []), newSpell]
-    });
-
-    setNewSpellName('');
-    setNewSpellDesc('');
-  }
-
-  // Deletar Magia
-  function handleDeleteSpell(spellId: string) {
-    if (!character) return;
-    setCharacter({
-      ...character,
-      spells: character.spells.filter(s => s.id !== spellId)
-    });
-  }
-
-  // Adicionar Item ao Inventário
-  function handleAddInventory() {
-    if (!character || !newInvName.trim()) return;
-
-    const newItem: InventoryItem = {
-      id: crypto.randomUUID(),
-      name: newInvName.trim(),
-      description: '',
-      quantity: newInvQty,
-      is_equipped: false,
-      bonus_attribute: newInvBonusAttr || undefined,
-      bonus_value: newInvBonusAttr ? newInvBonusVal : undefined
-    };
-
-    setCharacter({
-      ...character,
-      inventory: [...(character.inventory || []), newItem]
-    });
-
-    setNewInvName('');
-    setNewInvQty(1);
-    setNewInvBonusAttr('');
-    setNewInvBonusVal(1);
-  }
-
-  // Equipar / Desequipar Item no Inventário
-  function handleToggleEquipInventory(itemId: string) {
-    if (!character) return;
-    setCharacter({
-      ...character,
-      inventory: character.inventory.map(item => 
-        item.id === itemId 
-          ? { ...item, is_equipped: !item.is_equipped } 
-          : item
-      )
-    });
-  }
-
-  // Deletar Item do Inventário
-  function handleDeleteInventory(itemId: string) {
-    if (!character) return;
-    setCharacter({
-      ...character,
-      inventory: character.inventory.filter(i => i.id !== itemId)
-    });
-  }
-
-  // Atualizar Quantidade de Item no Inventário
-  function handleUpdateInventoryQty(itemId: string, newQty: number) {
-    if (!character || newQty < 0) return;
-    setCharacter({
-      ...character,
-      inventory: character.inventory.map(i => i.id === itemId ? { ...i, quantity: newQty } : i)
-    });
   }
 
   // Exportar Ficha em PDF com Payload Embutido
@@ -1529,143 +1105,17 @@ export default function CharacterClient({
         
         {/* Coluna Esquerda: Estatísticas, Atributos & Recursos */}
         <div className="lg:col-span-4 flex flex-col gap-6">
-          {/* Section: Atributos & Estatísticas */}
-          <div className="flex flex-col gap-6">
-            <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-5 transition-colors duration-300`}>
-              <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Atributos</h2>
-              
-              <div className="space-y-4">
-                {sortAttributeKeys(Object.keys(systemDef.attributes), systemDef.attributes).map((key) => {
-                  const attr = systemDef.attributes[key];
-                  const value = character.attributes_values[key] ?? 0;
-                  const modValue = modifiedAttrs[key] ?? value;
-                  const bonus = modValue - value;
-                  return (
-                    <div key={key} className="flex justify-between items-center bg-slate-800/20 border border-slate-800/60 rounded-xl p-3">
-                      <button
-                        type="button"
-                        onClick={() => handleTriggerAttributeRoll(key, attr.name, modValue)}
-                        className="flex items-center gap-1.5 font-medium text-slate-300 hover:text-purple-400 group cursor-pointer transition-colors text-left"
-                        title={`Testar Atributo ${attr.name}`}
-                      >
-                        <Dices className="w-3.5 h-3.5 text-slate-500 group-hover:text-purple-400 transition-colors shrink-0" />
-                        <span>{attr.name}</span>
-                      </button>
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => handleAttributeChange(key, -1)}
-                          className="w-7 h-7 bg-slate-850 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm"
-                        >
-                          -
-                        </button>
-                        <span className="w-16 text-center font-bold text-slate-200 text-base flex justify-center items-center gap-1 font-mono">
-                          {value}
-                          {bonus > 0 && (
-                            <span className="text-[10px] text-emerald-400 font-bold font-sans shrink-0">(+{bonus})</span>
-                          )}
-                          {bonus < 0 && (
-                            <span className="text-[10px] text-rose-500 font-bold font-sans shrink-0">({bonus})</span>
-                          )}
-                        </span>
-                        <button
-                          onClick={() => {
-                            if (pointsAvailable < 1) {
-                              showToast("Saldo de Pontos Guardados insuficiente.");
-                            } else {
-                              handleAttributeChange(key, 1);
-                            }
-                          }}
-                          className={`w-7 h-7 border text-slate-300 font-bold rounded-lg flex items-center justify-center text-sm transition-all ${
-                            pointsAvailable < 1
-                              ? 'opacity-40 bg-slate-800/20 border-slate-850 cursor-not-allowed'
-                              : 'bg-slate-850 hover:bg-slate-700 border-slate-700 cursor-pointer active:scale-95'
-                          }`}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Section: Recursos (PV / PM) */}
-            <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl p-6 shadow-xl space-y-6 transition-colors duration-300`}>
-              <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">Recursos</h2>
-              
-              {Object.keys(systemDef.resources || {})
-                .sort((a, b) => {
-                  if (a === 'PV' && b === 'PM') return -1;
-                  if (a === 'PM' && b === 'PV') return 1;
-                  return a.localeCompare(b);
-                })
-                .map((key) => {
-                const res = systemDef.resources[key];
-                const maxVal = evaluateResourceFormula(res.formula, res.baseAttributeKey, modifiedAttrs, key, character.advantages);
-                const currentVal = character.resources_current[key] ?? maxVal;
-
-                let colorClass = "from-rose-600 to-rose-500";
-                let textColorClass = "text-rose-400";
-                let Icon = Heart;
-
-                if (key === 'PM' || res.name.toLowerCase().includes('magia') || res.name.toLowerCase().includes('mana')) {
-                  colorClass = "from-cyan-600 to-cyan-500";
-                  textColorClass = "text-cyan-400";
-                  Icon = Zap;
-                } else if (key !== 'PV') {
-                  colorClass = "from-emerald-600 to-emerald-500";
-                  textColorClass = "text-emerald-400";
-                  Icon = Shield;
-                }
-
-                return (
-                  <div key={key} className="space-y-2">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className={`flex items-center gap-1.5 ${textColorClass} font-semibold`}>
-                        <Icon className="w-4 h-4" />
-                        {res.name}
-                      </span>
-                      <span className="font-bold text-slate-200">
-                        {currentVal} / {maxVal}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full bg-gradient-to-r ${colorClass} transition-all duration-300`}
-                        style={{ width: `${Math.min(100, maxVal > 0 ? (currentVal / maxVal) * 100 : 0)}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-end gap-2 pt-1">
-                      <button 
-                        onClick={() => handleResourceChange(key, -5, maxVal)}
-                        className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
-                      >
-                        -5
-                      </button>
-                      <button 
-                        onClick={() => handleResourceChange(key, -1, maxVal)}
-                        className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
-                      >
-                        -1
-                      </button>
-                      <button 
-                        onClick={() => handleResourceChange(key, 1, maxVal)}
-                        className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
-                      >
-                        +1
-                      </button>
-                      <button 
-                        onClick={() => handleResourceChange(key, 5, maxVal)}
-                        className="w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 text-xs font-bold"
-                      >
-                        +5
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <AttributesSection
+            systemDef={systemDef}
+            character={character}
+            modifiedAttrs={modifiedAttrs}
+            pointsAvailable={pointsAvailable}
+            handleTriggerAttributeRoll={handleTriggerAttributeRoll}
+            handleAttributeChange={handleAttributeChange}
+            handleResourceChange={handleResourceChange}
+            showToast={showToast}
+            themeConfig={themeConfig}
+          />
 
           {/* Card de Tipos de Dano */}
           <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
@@ -1928,874 +1378,44 @@ export default function CharacterClient({
             </div>
           </div>
         </div>
-      </div>
 
         {/* Coluna Direita: Habilidades, Vantagens, Perícias, Magias, Inventário & Rolagens */}
         <div className="lg:col-span-8 flex flex-col gap-6">
-          {/* Section: Qualidades (Vantagens, Desvantagens, Perícias) */}
-          <div className="flex flex-col gap-6">
-          
-          {/* Adicionar Vantagem / Perícia */}
-          <div className={`${themeConfig.cardBgClass} border ${themeConfig.borderClass} rounded-2xl shadow-xl transition-all`}>
-            <button
-              onClick={() => setIsAddingAdvantageExpanded(!isAddingAdvantageExpanded)}
-              className="w-full flex justify-between items-center p-6 text-left focus:outline-none cursor-pointer"
-            >
-              <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                <Plus className={`w-4 h-4 text-purple-400 transition-transform duration-300 ${isAddingAdvantageExpanded ? 'rotate-45' : ''}`} />
-                Adicionar Habilidade / Vantagem
-              </h2>
-              <span className="text-xs font-semibold text-purple-400 bg-purple-950/40 border border-purple-800/20 px-2.5 py-1 rounded-lg hover:bg-purple-900/20 transition-all">
-                {isAddingAdvantageExpanded ? 'Minimizar' : 'Mostrar Opções'}
-              </span>
-            </button>
-            
-            {isAddingAdvantageExpanded && (
-              <div className="px-6 pb-6 pt-2 border-t border-slate-800/40 space-y-4 animate-fade-in">
-                {/* Campo de Busca no Catálogo */}
-                <div className="relative">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
-                    Buscar no Catálogo do Sistema
-                  </label>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Ex: Ataque Especial, Código de Honra..."
-                    className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-purple-500 text-slate-200"
-                  />
-                  {searchQuery && (
-                    <div className="absolute left-0 right-0 mt-1.5 bg-[#0f172a] border border-slate-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto z-50">
-                      {allCatalogItems
-                        .filter((item: any) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                        .map((item: any) => {
-                          let isCatalogItemTooExpensive = false;
-                          if (item.type === 'unique_advantage') {
-                            const oldCost = character.unique_advantage?.cost || 0;
-                            const newCost = parseInt(item.cost) || 0;
-                            const diff = newCost - oldCost;
-                            isCatalogItemTooExpensive = diff > 0 && pointsAvailable < diff;
-                          } else {
-                            const costVal = parseInt(item.cost) || 0;
-                            isCatalogItemTooExpensive = costVal > 0 && pointsAvailable < costVal;
-                          }
-                          return (
-                            <button
-                              key={`${item.type}-${item.name}`}
-                              onClick={() => {
-                                if (isCatalogItemTooExpensive) {
-                                  showToast("Saldo de Pontos Guardados insuficiente.");
-                                } else {
-                                  handleSelectCatalogItem(item);
-                                }
-                              }}
-                              className={`w-full text-left px-4 py-2.5 border-b border-slate-900/60 last:border-b-0 transition-colors ${
-                                isCatalogItemTooExpensive
-                                  ? 'opacity-40 hover:bg-rose-950/5'
-                                  : 'hover:bg-purple-950/20'
-                              }`}
-                            >
-                              <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                  <span className={`font-semibold text-sm ${isCatalogItemTooExpensive ? 'text-slate-500' : 'text-slate-200'}`}>{item.name}</span>
-                                  <span className={`text-[9px] border px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${typeBadgeColors[item.type]}`}>
-                                    {typeLabels[item.type]}
-                                  </span>
-                                </div>
-                                <span className={`text-xs px-2 py-0.5 rounded-full border font-mono ${
-                                  isCatalogItemTooExpensive
-                                    ? 'text-rose-400 bg-rose-950/30 border-rose-900/20'
-                                    : 'text-purple-400 bg-purple-950/40 border-purple-800/20'
-                                }`}>
-                                  {item.cost}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-400 truncate mt-0.5">{item.description}</p>
-                            </button>
-                          );
-                        })}
-                      {allCatalogItems.filter((item: any) => item.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-                        <div className="p-4 text-xs text-slate-500 italic text-center">Nenhum resultado encontrado no catálogo.</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="border-t border-slate-800/60 my-4 pt-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-3">
-                    Ou criar manualmente:
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                  <input
-                    type="text"
-                    value={newAdvName}
-                    onChange={(e) => setNewAdvName(e.target.value)}
-                    placeholder="Nome da habilidade"
-                    maxLength={100}
-                    className="bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-purple-500"
-                  />
-                  <input
-                    type="text"
-                    value={newAdvCost}
-                    onChange={(e) => setNewAdvCost(e.target.value)}
-                    placeholder="Custo (ex: 1, -1, 2)"
-                    className="bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-purple-500"
-                  />
-                  <select
-                    value={advType}
-                    onChange={(e: any) => setAdvType(e.target.value)}
-                    className="bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-purple-500 text-slate-300"
-                  >
-                    <option value="advantages">Vantagem</option>
-                    <option value="disadvantages">Desvantagem</option>
-                    <option value="skills">Perícia</option>
-                    <option value="specializations">Especialização</option>
-                  </select>
-                </div>
-
-                <textarea
-                  value={newAdvDesc}
-                  onChange={(e) => setNewAdvDesc(e.target.value)}
-                  placeholder="Descrição curta do efeito..."
-                  rows={2}
-                  maxLength={1000}
-                  className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-purple-500 mb-4"
-                />
-
-                <button
-                  onClick={() => {
-                    const parsedCost = parseInt(newAdvCost, 10) || 0;
-                    if (parsedCost > 0 && pointsAvailable < parsedCost) {
-                      showToast("Saldo de Pontos Guardados insuficiente.");
-                    } else {
-                      handleAddAdvantage();
-                    }
-                  }}
-                  className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1 transition-all border ${
-                    (parseInt(newAdvCost, 10) || 0) > 0 && pointsAvailable < (parseInt(newAdvCost, 10) || 0)
-                      ? 'opacity-40 bg-slate-800/20 border-slate-800 text-slate-400 cursor-not-allowed'
-                      : 'bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border-purple-500/20 cursor-pointer active:scale-[0.99]'
-                  }`}
-                >
-                  <Plus className="w-4 h-4" />
-                  Adicionar ao Personagem
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Listagem de Habilidades */}
-          <div className="flex flex-col gap-6">
-            
-            {/* Vantagens & Desvantagens */}
-            <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                <Shield className="w-4 h-4 text-purple-400" />
-                Vantagens & Desvantagens
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {[...(character.advantages || []), ...(character.disadvantages || [])].map((item) => (
-                  <div key={item.id} className="p-3 bg-slate-800/20 border border-slate-800/50 rounded-xl flex justify-between items-center gap-4">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-200 text-sm">
-                        {item.name}
-                        {item.isModular && item.selectedModifiers && item.selectedModifiers.length > 0 && (
-                          <span className="text-xs text-slate-400 font-normal">
-                            : {item.modifiers
-                              ?.filter((m: any) => item.selectedModifiers?.includes(m.id))
-                              .map((m: any) => m.name)
-                              .join(', ')}
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-[10px] text-purple-400 bg-purple-950/40 border border-purple-800/30 px-1.5 py-0.5 rounded-full font-bold">
-                        {item.cost}
-                      </span>
-                      {item.description && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveDescriptionItem({
-                            name: item.name,
-                            cost: item.cost,
-                            description: item.description
-                          })}
-                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-purple-400 rounded transition-all"
-                          title="Ver descrição completa"
-                        >
-                          <Info className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => setEditingAbilityItem({
-                          item,
-                          type: character.advantages.some(a => a.id === item.id) ? 'advantages' : 'disadvantages'
-                        })}
-                        className="p-1 hover:bg-purple-950/20 text-slate-500 hover:text-purple-400 rounded transition-all"
-                        title="Editar"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAdvantage(
-                          character.advantages.some(a => a.id === item.id) ? 'advantages' : 'disadvantages',
-                          item.id
-                        )}
-                        className="p-1 hover:bg-rose-950/20 text-slate-500 hover:text-rose-400 rounded transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {(!character.advantages?.length && !character.disadvantages?.length) && (
-                  <p className="text-xs text-slate-500 italic py-2 col-span-full">Nenhuma vantagem ou desvantagem adicionada.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Perícias */}
-            <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-cyan-400" />
-                Perícias
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {character.skills?.map((item) => (
-                  <div key={item.id} className="p-3 bg-slate-800/20 border border-slate-800/50 rounded-xl flex justify-between items-center gap-4">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-200 text-sm">{item.name}</span>
-                      <span className="text-[10px] text-cyan-400 bg-cyan-950/40 border border-cyan-800/30 px-1.5 py-0.5 rounded-full font-bold">
-                        {item.cost}
-                      </span>
-                      {item.description && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveDescriptionItem({
-                            name: item.name,
-                            cost: item.cost,
-                            description: item.description
-                          })}
-                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-cyan-400 rounded transition-all"
-                          title="Ver descrição completa"
-                        >
-                          <Info className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => setEditingAbilityItem({
-                          item,
-                          type: 'skills'
-                        })}
-                        className="p-1 hover:bg-cyan-950/20 text-slate-500 hover:text-cyan-400 rounded transition-all"
-                        title="Editar"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAdvantage('skills', item.id)}
-                        className="p-1 hover:bg-rose-950/20 text-slate-500 hover:text-rose-400 rounded transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {!character.skills?.length && (
-                  <p className="text-xs text-slate-500 italic py-2 col-span-full">Nenhuma perícia adicionada.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Especializações */}
-            <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-emerald-400" />
-                Especializações
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {character.specializations?.map((item) => (
-                  <div key={item.id} className="p-3 bg-slate-800/20 border border-slate-800/50 rounded-xl flex justify-between items-center gap-4">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-200 text-sm">{item.name}</span>
-                      <span className="text-[10px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/30 px-1.5 py-0.5 rounded-full font-bold">
-                        {item.cost}
-                      </span>
-                      {item.description && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveDescriptionItem({
-                            name: item.name,
-                            cost: item.cost,
-                            description: item.description
-                          })}
-                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-emerald-400 rounded transition-all"
-                          title="Ver descrição completa"
-                        >
-                          <Info className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => setEditingAbilityItem({
-                          item,
-                          type: 'specializations'
-                        })}
-                        className="p-1 hover:bg-emerald-950/20 text-slate-500 hover:text-emerald-400 rounded transition-all"
-                        title="Editar"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAdvantage('specializations', item.id)}
-                        className="p-1 hover:bg-rose-950/20 text-slate-500 hover:text-rose-400 rounded transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {!character.specializations?.length && (
-                  <p className="text-xs text-slate-500 italic py-2 col-span-full">Nenhuma especialização adicionada.</p>
-                )}
-              </div>
-            </div>
-
-          </div>
+          <AdvantagesSection
+            character={character}
+            setCharacter={setCharacter}
+            pointsAvailable={pointsAvailable}
+            systemDef={systemDef}
+            showToast={showToast}
+            setEditingAbilityItem={setEditingAbilityItem}
+            setActiveDescriptionItem={setActiveDescriptionItem}
+            themeConfig={themeConfig}
+          />
 
           {/* Nova Linha: Rolagens Customizadas & Magias / Inventário */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6">
             
-            {/* Card de Rolagens Customizadas */}
-            <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
-                  Rolagens Customizadas
-                </h3>
-                <button
-                  onClick={() => setIsAddingRoll(true)}
-                  className="text-xs text-amber-400 bg-amber-950/20 border border-amber-800/35 px-2.5 py-1 rounded-lg font-semibold hover:bg-amber-950/40 transition-all flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Nova Rolagem
-                </button>
-              </div>
-
-              {/* Formulário para Nova Rolagem */}
-              {isAddingRoll && (
-                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-4">
-                  <span className="text-xs font-bold text-slate-350 block">Nova Rolagem Avançada</span>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      value={newRollName}
-                      onChange={(e) => setNewRollName(e.target.value)}
-                      placeholder="Nome do ataque/ação (ex: Espada Flamejante)"
-                      maxLength={100}
-                      className="col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
-                    />
-                    
-                    <input
-                      type="text"
-                      value={newRollDesc}
-                      onChange={(e) => setNewRollDesc(e.target.value)}
-                      placeholder="Descrição do efeito"
-                      maxLength={500}
-                      className="col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
-                    />
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 uppercase font-semibold block">Tipo de Ação</label>
-                      <select
-                        value={newRollType}
-                        onChange={(e: any) => setNewRollType(e.target.value)}
-                        className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-300"
-                      >
-                        <option value="ATTACK">Ataque</option>
-                        <option value="DEFENSE">Defesa</option>
-                        <option value="MAGIC">Magia</option>
-                        <option value="TEST">Teste</option>
-                        <option value="INITIATIVE">Iniciativa</option>
-                        <option value="OTHER">Outros</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 uppercase font-semibold block">Custo de PM</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={newRollPmCost}
-                        onChange={(e) => setNewRollPmCost(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 uppercase font-semibold block">Atributo 1</label>
-                      <select
-                        value={newRollPrimaryAttr}
-                        onChange={(e) => setNewRollPrimaryAttr(e.target.value)}
-                        className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-350"
-                      >
-                        <option value="none">Nenhum</option>
-                        {sortAttributeKeys(Object.keys(systemDef.attributes), systemDef.attributes).map(k => (
-                          <option key={k} value={k}>{systemDef.attributes[k].name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 uppercase font-semibold block">Atributo 2</label>
-                      <select
-                        value={newRollSecondaryAttr}
-                        onChange={(e) => setNewRollSecondaryAttr(e.target.value)}
-                        className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-350"
-                      >
-                        <option value="none">Nenhum</option>
-                        {sortAttributeKeys(Object.keys(systemDef.attributes), systemDef.attributes).map(k => (
-                          <option key={k} value={k}>{systemDef.attributes[k].name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 uppercase font-semibold block">Mod. Global</label>
-                      <input
-                        type="number"
-                        value={newRollGlobalMod}
-                        onChange={(e) => setNewRollGlobalMod(parseInt(e.target.value, 10) || 0)}
-                        className="w-full bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-sm focus:outline-none text-slate-200"
-                      />
-                    </div>
-
-                    <div className="space-y-1 flex items-center justify-center pt-5">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={newRollAccumulateCrit}
-                          onChange={(e) => setNewRollAccumulateCrit(e.target.checked)}
-                          className="accent-amber-500"
-                        />
-                        <span className="text-xs text-slate-300">Acumular Críticos</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Componentes de Dados */}
-                  <div className="space-y-3 pt-2 border-t border-slate-800/80">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Componentes de Dados</span>
-                      <button
-                        onClick={() => setNewRollComponents([...newRollComponents, {
-                          id: crypto.randomUUID(),
-                          count: 1,
-                          faces: 6,
-                          bonus: 0,
-                          isNegative: false,
-                          canCrit: true,
-                          critMultiplier: 2
-                        }])}
-                        className="text-[10px] text-purple-400 hover:text-purple-300 font-bold"
-                      >
-                        + Add Dados
-                      </button>
-                    </div>
-
-                    <div className="space-y-2">
-                      {newRollComponents.map((comp, idx) => (
-                        <div key={comp.id} className="p-3 bg-slate-850/40 border border-slate-800 rounded-xl space-y-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-400">Grupo #{idx + 1}</span>
-                            {newRollComponents.length > 1 && (
-                              <button
-                                onClick={() => setNewRollComponents(newRollComponents.filter(c => c.id !== comp.id))}
-                                className="text-[10px] text-rose-500 hover:text-rose-450 ml-auto font-bold"
-                              >
-                                Remover
-                              </button>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <label className="text-[9px] text-slate-550 block">Qtd</label>
-                              <input
-                                type="number"
-                                min="1"
-                                value={comp.count}
-                                onChange={(e) => {
-                                  const updated = [...newRollComponents];
-                                  updated[idx].count = Math.max(1, parseInt(e.target.value, 10) || 1);
-                                  setNewRollComponents(updated);
-                                }}
-                                className="w-full bg-slate-800/40 border border-slate-700/50 rounded-lg py-1 px-2 text-xs text-slate-250"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[9px] text-slate-550 block">Lados</label>
-                              <input
-                                type="number"
-                                min="2"
-                                value={comp.faces}
-                                onChange={(e) => {
-                                  const updated = [...newRollComponents];
-                                  updated[idx].faces = Math.max(2, parseInt(e.target.value, 10) || 6);
-                                  setNewRollComponents(updated);
-                                }}
-                                className="w-full bg-slate-800/40 border border-slate-700/50 rounded-lg py-1 px-2 text-xs text-slate-250"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[9px] text-slate-550 block">Bônus</label>
-                              <input
-                                type="number"
-                                value={comp.bonus}
-                                onChange={(e) => {
-                                  const updated = [...newRollComponents];
-                                  updated[idx].bonus = parseInt(e.target.value, 10) || 0;
-                                  setNewRollComponents(updated);
-                                }}
-                                className="w-full bg-slate-800/40 border border-slate-700/50 rounded-lg py-1 px-2 text-xs text-slate-250"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex gap-4 pt-1">
-                            <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-slate-400">
-                              <input
-                                type="checkbox"
-                                checked={comp.isNegative}
-                                onChange={(e) => {
-                                  const updated = [...newRollComponents];
-                                  updated[idx].isNegative = e.target.checked;
-                                  setNewRollComponents(updated);
-                                }}
-                                className="accent-rose-500"
-                              />
-                              Subtrair
-                            </label>
-                            <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-slate-400">
-                              <input
-                                type="checkbox"
-                                checked={comp.canCrit}
-                                onChange={(e) => {
-                                  const updated = [...newRollComponents];
-                                  updated[idx].canCrit = e.target.checked;
-                                  setNewRollComponents(updated);
-                                }}
-                                className="accent-amber-500"
-                              />
-                              Pode Crítico
-                            </label>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setIsAddingRoll(false)}
-                      className="flex-1 bg-slate-850 hover:bg-slate-800 text-xs py-2 rounded-lg font-semibold transition-all"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleCreateCustomRoll}
-                      className="flex-1 bg-amber-600 hover:bg-amber-500 text-white text-xs py-2 rounded-lg font-semibold transition-all"
-                    >
-                      Criar Rolagem
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Lista de Rolagens */}
-              <div className="space-y-3">
-                {(character.custom_rolls || []).map((roll) => (
-                  <div key={roll.id} className="p-3 bg-slate-800/20 border border-slate-800/50 rounded-xl flex justify-between items-center hover:border-amber-500/20 transition-all">
-                    <button
-                      onClick={() => handleTriggerCustomRoll(roll)}
-                      className="flex-1 text-left"
-                    >
-                      <span className="font-semibold text-slate-200 text-sm block">{roll.name}</span>
-                      {roll.description && (
-                        <p className="text-xs text-slate-400">{roll.description}</p>
-                      )}
-                      <div className="flex gap-1.5 mt-1">
-                        <span className="text-[9px] bg-slate-900 px-2 py-0.5 rounded text-slate-400">
-                          {roll.components?.map(c => `${c.count}d${c.faces}`).join(' + ')}
-                        </span>
-                        {roll.primaryAttribute !== 'none' && (
-                          <span className="text-[9px] bg-purple-950/30 text-purple-400 px-2 py-0.5 rounded border border-purple-800/20 uppercase font-mono">
-                            +{roll.primaryAttribute}
-                          </span>
-                        )}
-                        {roll.secondaryAttribute !== 'none' && (
-                          <span className="text-[9px] bg-cyan-950/30 text-cyan-400 px-2 py-0.5 rounded border border-cyan-800/20 uppercase font-mono">
-                            +{roll.secondaryAttribute}
-                          </span>
-                        )}
-                        {roll.globalModifier !== 0 && (
-                          <span className="text-[9px] bg-emerald-950/30 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800/20 font-mono">
-                            {roll.globalModifier >= 0 ? `+${roll.globalModifier}` : roll.globalModifier}
-                          </span>
-                        )}
-                        {roll.pmCost !== undefined && roll.pmCost > 0 && (
-                          <span className="text-[9px] bg-blue-950/40 text-blue-400 px-2 py-0.5 rounded border border-blue-800/20 font-bold font-mono">
-                            {roll.pmCost} PM
-                          </span>
-                        )}
-                        {roll.type && roll.type !== 'OTHER' && (
-                          <span className="text-[9px] bg-amber-950/40 text-amber-400 px-2 py-0.5 rounded border border-amber-800/20 font-bold uppercase tracking-wider">
-                            {roll.type === 'ATTACK' ? 'Ataque' : 
-                             roll.type === 'DEFENSE' ? 'Defesa' : 
-                             roll.type === 'MAGIC' ? 'Magia' : 
-                             roll.type === 'TEST' ? 'Teste' : 
-                             roll.type === 'INITIATIVE' ? 'Iniciativa' : roll.type}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCustomRoll(roll.id)}
-                      className="p-1.5 hover:bg-rose-950/20 text-slate-500 hover:text-rose-400 rounded transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                {!character.custom_rolls?.length && (
-                  <p className="text-xs text-slate-500 italic py-2">Nenhuma rolagem customizada criada.</p>
-                )}
-              </div>
-            </div>
+            <CustomRollsSection
+              character={character}
+              setCharacter={setCharacter}
+              systemDef={systemDef}
+              handleTriggerCustomRoll={handleTriggerCustomRoll}
+            />
 
             {/* Card de Magias & Inventário */}
             <div className="flex flex-col gap-6">
-              
-              {/* Magias */}
-              <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                <span className="text-sm font-bold text-slate-300 uppercase tracking-wider block">Magias e Poderes</span>
-                
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newSpellName}
-                    onChange={(e) => setNewSpellName(e.target.value)}
-                    placeholder="Nome da magia"
-                    className="flex-1 min-w-0 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
-                  />
-                  <input
-                    type="text"
-                    value={newSpellCost}
-                    onChange={(e) => setNewSpellCost(e.target.value)}
-                    placeholder="Custo (ex: 2 PM)"
-                    className="w-20 sm:w-24 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 shrink-0"
-                  />
-                  <button
-                    onClick={handleAddSpell}
-                    className="bg-purple-600 hover:bg-purple-500 text-white p-2 rounded-xl shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
+              <SpellsSection
+                character={character}
+                setCharacter={setCharacter}
+                setActiveDescriptionItem={setActiveDescriptionItem}
+                themeConfig={themeConfig}
+              />
 
-                <div className="space-y-3">
-                  {(character.spells || []).map((spell) => (
-                    <div key={spell.id} className="p-3 bg-slate-800/20 border border-slate-800/50 rounded-xl flex justify-between items-center gap-4">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-slate-200 text-sm">{spell.name}</span>
-                        <span className="text-[10px] text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded-full font-bold">
-                          {spell.cost}
-                        </span>
-                        {spell.description && (
-                          <button
-                            type="button"
-                            onClick={() => setActiveDescriptionItem({
-                              name: spell.name,
-                              cost: spell.cost,
-                              description: spell.description
-                            })}
-                            className="p-1 hover:bg-slate-800 text-slate-400 hover:text-cyan-400 rounded transition-all"
-                            title="Ver descrição completa"
-                          >
-                            <Info className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => handleDeleteSpell(spell.id)}
-                        className="p-1 hover:bg-rose-950/20 text-slate-500 hover:text-rose-400 rounded transition-all shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                  {!character.spells?.length && (
-                    <p className="text-xs text-slate-500 italic py-1">Nenhuma magia aprendida.</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Inventário */}
-              <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                <span className="text-sm font-bold text-slate-300 uppercase tracking-wider block">Itens & Equipamentos</span>
-                
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newInvName}
-                      onChange={(e) => setNewInvName(e.target.value)}
-                      placeholder="Nome do item"
-                      className="flex-1 min-w-0 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200"
-                    />
-                    <input
-                      type="number"
-                      value={newInvQty}
-                      onChange={(e) => setNewInvQty(parseInt(e.target.value, 10) || 1)}
-                      className="w-16 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 shrink-0"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <select
-                      value={newInvBonusAttr}
-                      onChange={(e) => setNewInvBonusAttr(e.target.value)}
-                      className="flex-1 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-350"
-                    >
-                      <option value="">Sem bônus de atributo</option>
-                      <option value="F">Força (C/C)</option>
-                      <option value="H">Habilidade</option>
-                      <option value="R">Resistência</option>
-                      <option value="A">Armadura</option>
-                      <option value="PdF">Poder de Fogo</option>
-                    </select>
-                    {newInvBonusAttr && (
-                      <input
-                        type="number"
-                        value={newInvBonusVal}
-                        onChange={(e) => setNewInvBonusVal(parseInt(e.target.value, 10) || 0)}
-                        placeholder="Bônus"
-                        className="w-20 bg-slate-800/40 border border-slate-700/50 rounded-xl py-2 px-3 text-xs focus:outline-none text-slate-200 shrink-0"
-                      />
-                    )}
-                    <button
-                      onClick={handleAddInventory}
-                      className="bg-cyan-600 hover:bg-cyan-500 text-white px-3.5 rounded-xl shrink-0 transition-colors flex items-center justify-center cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {(character.inventory || []).map((item) => {
-                    const isConfirmingDelete = itemToDelete === item.id;
-                    return (
-                      <div key={item.id} className="p-3 bg-slate-800/20 border border-slate-800/50 rounded-xl flex justify-between items-center gap-4 min-h-[46px]">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span 
-                              onClick={() => setExpandedItemNameId(expandedItemNameId === item.id ? null : item.id)}
-                              className={`font-semibold text-slate-200 text-sm block cursor-pointer transition-all hover:text-white ${
-                                expandedItemNameId === item.id ? 'break-words whitespace-normal' : 'truncate'
-                              }`}
-                              title="Clique para ver o nome completo"
-                            >
-                              {item.name}
-                            </span>
-                            
-                            {item.bonus_attribute && item.bonus_value !== undefined && (
-                              <span className="text-[9px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap">
-                                {item.bonus_value >= 0 ? `+${item.bonus_value}` : item.bonus_value} {
-                                  item.bonus_attribute === 'F' ? 'Força' :
-                                  item.bonus_attribute === 'H' ? 'Habilidade' :
-                                  item.bonus_attribute === 'R' ? 'Resistência' :
-                                  item.bonus_attribute === 'A' ? 'Armadura' :
-                                  item.bonus_attribute === 'PdF' ? 'Poder de Fogo' : item.bonus_attribute
-                                }
-                              </span>
-                            )}
-
-                            {item.bonus_attribute && (
-                              <button
-                                type="button"
-                                onClick={() => handleToggleEquipInventory(item.id)}
-                                className={`text-[9px] px-2 py-0.5 rounded-full border transition-all active:scale-95 cursor-pointer font-bold ${
-                                  item.is_equipped
-                                    ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30'
-                                    : 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:bg-slate-700 hover:text-slate-200'
-                                }`}
-                              >
-                                {item.is_equipped ? 'Equipado ⚔️' : 'Equipar'}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {isConfirmingDelete ? (
-                          <div className="flex items-center gap-1.5 shrink-0 animate-fade-in">
-                            <span className="text-[10px] text-rose-400 font-semibold mr-1">Excluir?</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleDeleteInventory(item.id);
-                                setItemToDelete(null);
-                              }}
-                              className="px-2 py-0.5 bg-rose-600 hover:bg-rose-500 rounded-md text-white text-[10px] font-bold transition-all active:scale-95 cursor-pointer"
-                            >
-                              Sim
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setItemToDelete(null)}
-                              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md text-slate-300 text-[10px] font-bold transition-all active:scale-95 cursor-pointer"
-                            >
-                              Não
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 shrink-0 bg-slate-900/60 border border-slate-800 p-1 rounded-lg">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (item.quantity === 0) {
-                                  setItemToDelete(item.id);
-                                } else {
-                                  handleUpdateInventoryQty(item.id, item.quantity - 1);
-                                }
-                              }}
-                              className="w-5 h-5 flex items-center justify-center text-xs bg-slate-800 hover:bg-slate-700 rounded text-slate-355 hover:text-white transition-all font-bold cursor-pointer"
-                            >
-                              -
-                            </button>
-                            <span className="text-[11px] font-bold font-mono text-slate-200 min-w-[18px] text-center select-none">
-                              {item.quantity}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateInventoryQty(item.id, item.quantity + 1)}
-                              className="w-5 h-5 flex items-center justify-center text-xs bg-slate-800 hover:bg-slate-700 rounded text-slate-355 hover:text-white transition-all font-bold cursor-pointer"
-                            >
-                              +
-                        </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <InventorySection
+                character={character}
+                setCharacter={setCharacter}
+                themeConfig={themeConfig}
+              />
 
               {/* Card de Background e Anotações */}
               <div className="bg-[#0f172a]/70 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
@@ -2813,130 +1433,10 @@ export default function CharacterClient({
             </div>
           </div>
         </div>
-      </div>
 
       </main>
 
-      {/* Modal para configurar Vantagem Modular */}
-      {selectedCatalogItem && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-6">
-            <div>
-              <h3 className="text-lg font-bold text-white">{selectedCatalogItem.name}</h3>
-              <p className="text-xs text-slate-400 mt-1">{selectedCatalogItem.description}</p>
-            </div>
 
-            <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Selecione os Modificadores:
-              </label>
-              {(selectedCatalogItem.modifiers || []).map((mod: ModifierOption) => {
-                const isChecked = selectedModifiers.includes(mod.id);
-                return (
-                  <label 
-                    key={mod.id} 
-                    className={`flex items-start gap-3 p-3 rounded-xl border transition-colors cursor-pointer ${
-                      isChecked 
-                        ? 'bg-purple-950/20 border-purple-500/30' 
-                        : 'bg-slate-800/20 border-slate-800/40 hover:bg-slate-800/40'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => {
-                        if (isChecked) {
-                          setSelectedModifiers(prev => prev.filter(id => id !== mod.id));
-                        } else {
-                          setSelectedModifiers(prev => [...prev, mod.id]);
-                        }
-                      }}
-                      className="mt-1 accent-purple-500"
-                    />
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-sm text-slate-200">{mod.name}</span>
-                        <span className="text-xs font-mono font-bold text-purple-400">
-                          {mod.costPt >= 0 ? `+${mod.costPt}` : mod.costPt} Ponto(s)
-                        </span>
-                      </div>
-                      {mod.description && (
-                        <p className="text-xs text-slate-400 mt-1">{mod.description}</p>
-                      )}
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            {/* Totalizador */}
-            <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl flex justify-between items-center text-sm">
-              <span className="text-slate-400 font-medium">Custo Final Estimado:</span>
-              <span className="text-base font-black text-purple-400">
-                {(() => {
-                  const dummyItem: AdvantageItem = {
-                    id: 'dummy',
-                    name: selectedCatalogItem.name,
-                    description: '',
-                    cost: 'Modular',
-                    isModular: true,
-                    baseCostPt: selectedCatalogItem.baseCostPt || 0,
-                    modifiers: selectedCatalogItem.modifiers || [],
-                    selectedModifiers: selectedModifiers
-                  };
-                  const cost = computedCostPt(dummyItem);
-                  return `${cost} ponto${Math.abs(cost) !== 1 ? 's' : ''}`;
-                })()}
-              </span>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setSelectedCatalogItem(null);
-                  setSelectedModifiers([]);
-                }}
-                className="flex-1 py-2.5 rounded-xl border border-slate-800 hover:bg-slate-800 text-xs font-semibold transition-colors"
-              >
-                Cancelar
-              </button>
-              {(() => {
-                const dummyItem: AdvantageItem = {
-                  id: 'dummy',
-                  name: selectedCatalogItem.name,
-                  description: '',
-                  cost: 'Modular',
-                  isModular: true,
-                  baseCostPt: selectedCatalogItem.baseCostPt || 0,
-                  modifiers: selectedCatalogItem.modifiers || [],
-                  selectedModifiers: selectedModifiers
-                };
-                const computedCost = computedCostPt(dummyItem);
-                const isModularTooExpensive = computedCost > 0 && pointsAvailable < computedCost;
-
-                return (
-                  <button
-                    onClick={() => {
-                      if (isModularTooExpensive) {
-                        showToast("Saldo de Pontos Guardados insuficiente.");
-                      } else {
-                        handleAddModularItem();
-                      }
-                    }}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors border ${
-                      isModularTooExpensive
-                        ? 'opacity-40 bg-slate-800/20 border-slate-800 text-slate-400 cursor-not-allowed'
-                        : 'bg-purple-600 hover:bg-purple-500 border-purple-500 text-white cursor-pointer active:scale-95'
-                    }`}
-                  >
-                    Confirmar & Adicionar
-                  </button>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal para exibir o Resultado da Rolagem Customizada */}
       {activeRollResult && (

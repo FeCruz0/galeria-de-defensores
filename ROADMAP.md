@@ -219,7 +219,7 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 🧩 1. Sub-decomposição de Componentes Monolíticos de Ficha & VTT
 * **Descrição**: Extrair abas extensas do `CharacterClient.tsx` (~3.400 linhas) e painéis do `TableClient.tsx` (~2.200 linhas) para subcomponentes modulares e isolados em `src/components/character-sheet/` e `src/components/vtt/`.
 * **Checklist**:
-  - [ ] Extrair abas de Atributos, Vantagens, Inventário, Magias e Rolagens da ficha para componentes dedicados.
+  - [x] Extrair abas de Atributos, Vantagens, Inventário, Magias e Rolagens da ficha para componentes dedicados.
   - [ ] Extrair gerenciador de NPCs do Mestre e diário de campanha da mesa VTT para componentes dedicados.
   - [ ] Criar custom hooks (`useCharacterPoints`, `useVttSession`) para encapsular o estado e regras de negócio.
 

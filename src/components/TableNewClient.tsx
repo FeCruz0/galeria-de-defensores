@@ -28,8 +28,19 @@ export default function TableNewClient() {
   // Form states
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [isPrivate, setIsPrivate] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(true);
   const [password, setPassword] = useState('');
+
+  const handlePrivateChange = (checked: boolean) => {
+    setIsPrivate(checked);
+    if (!checked) {
+      showSystemModal({
+        type: 'info',
+        title: 'Mesa Pública',
+        message: 'Aviso: Qualquer usuário poderá entrar nesta mesa como jogador se não houver senha.'
+      });
+    }
+  };
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [allowSpectators, setAllowSpectators] = useState(true);
   const [hasSeparatedChat, setHasSeparatedChat] = useState(true);
@@ -268,7 +279,7 @@ export default function TableNewClient() {
                 <input
                   type="checkbox"
                   checked={isPrivate}
-                  onChange={(e) => setIsPrivate(e.target.checked)}
+                  onChange={(e) => handlePrivateChange(e.target.checked)}
                   className="w-5 h-5 rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-purple-500"
                 />
               </div>

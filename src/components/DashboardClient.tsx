@@ -40,14 +40,7 @@ import { getTheme, ThemeId, DEFAULT_SECTION_ORDER } from '@/lib/theme';
 import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
 import { fetchAllPublicTables, joinTable } from '@/services/tableService';
 import ProfileEditModal from '@/components/ProfileEditModal';
-
-function formatDate(dateString: string) {
-  const d = new Date(dateString);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
-}
+import { formatDate } from '@/lib/formatters';
 
 
 export interface DashboardClientProps {
@@ -104,6 +97,31 @@ export default function DashboardClient({
   const [editingSystem, setEditingSystem] = useState<any>(null);
   const [isEditingSystem, setIsEditingSystem] = useState(false);
   const [systemJsonImport, setSystemJsonImport] = useState('');
+
+  const [tableRoles, setTableRoles] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const profileId = profile?.id;
+    if (!profileId) return;
+    async function loadTableRoles() {
+      try {
+        const { data, error } = await supabase
+          .from('table_players')
+          .select('table_id, role')
+          .eq('player_id', profileId);
+        if (data) {
+          const roles: Record<string, string> = {};
+          data.forEach((item: any) => {
+            roles[item.table_id] = item.role;
+          });
+          setTableRoles(roles);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar cargos:', err);
+      }
+    }
+    loadTableRoles();
+  }, [profile?.id, tables]);
 
 
 
@@ -941,6 +959,9 @@ export default function DashboardClient({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {publicTables.map((pubTable) => {
                     const isMemberOrMaster = tables.some(t => t.id === pubTable.id);
+                    const isMaster = pubTable.master_id === profile?.id;
+                    const playerRole = tableRoles[pubTable.id]; // 'player' or 'spectator'
+                    const isPlayer = isMaster || playerRole === 'player';
                     const activePlayers = pubTable.player_count ?? 0;
                     const maxLimit = pubTable.max_players ?? 4;
                     const isFull = activePlayers >= maxLimit;
@@ -984,12 +1005,53 @@ export default function DashboardClient({
 
                         <div className="mt-5 pt-4 border-t border-slate-800/60 flex gap-2">
                           {isMemberOrMaster ? (
-                            <button
-                              onClick={() => router.push(`/tables/${pubTable.id}`)}
-                              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                              Entrar na Mesa (Membro)
-                            </button>
+                            <>
+                              {isPlayer ? (
+                                <>
+                                  <button
+                                    onClick={() => router.push(`/tables/${pubTable.id}`)}
+                                    className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                  >
+                                    Entrar como Jogador
+                                  </button>
+                                  <button
+                                    disabled
+                                    className="flex-1 bg-slate-850 text-slate-500 border border-slate-800 font-semibold py-2 rounded-xl text-[10px] flex items-center justify-center gap-1 cursor-not-allowed opacity-50"
+                                    title="Você já é jogador ativo desta mesa."
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    Assistir (Já é Jogador)
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  {!isFull && (
+                                    <button
+                                      onClick={async () => {
+                                        if (!profile) return;
+                                        const res = await joinTable(pubTable.id, profile.id, 'player');
+                                        if (res.success) {
+                                          showSystemModal({ type: 'success', title: 'Sucesso', message: 'Você ingressou na mesa como jogador!' });
+                                          setTables(prev => prev.map(t => t.id === pubTable.id ? { ...t } : t));
+                                          router.push(`/tables/${pubTable.id}`);
+                                        } else {
+                                          showSystemModal({ type: 'alert', title: 'Erro', message: res.message || 'Erro ao ingressar.' });
+                                        }
+                                      }}
+                                      className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                    >
+                                      Virar Jogador
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => router.push(`/tables/${pubTable.id}`)}
+                                    className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                  >
+                                    Assistir Espectador
+                                  </button>
+                                </>
+                              )}
+                            </>
                           ) : (
                             <>
                               {!isFull && (
@@ -999,6 +1061,7 @@ export default function DashboardClient({
                                     const res = await joinTable(pubTable.id, profile.id, 'player');
                                     if (res.success) {
                                       showSystemModal({ type: 'success', title: 'Sucesso', message: 'Você ingressou na mesa como jogador!' });
+                                      setTables(prev => [...prev, pubTable]);
                                       router.push(`/tables/${pubTable.id}`);
                                     } else {
                                       showSystemModal({ type: 'alert', title: 'Erro', message: res.message || 'Erro ao ingressar.' });
@@ -1011,7 +1074,16 @@ export default function DashboardClient({
                               )}
                               {(pubTable.allow_spectators ?? true) && (
                                 <button
-                                  onClick={() => router.push(`/tables/${pubTable.id}`)}
+                                  onClick={async () => {
+                                    if (!profile) return;
+                                    const res = await joinTable(pubTable.id, profile.id, 'spectator');
+                                    if (res.success) {
+                                      setTables(prev => [...prev, pubTable]);
+                                      router.push(`/tables/${pubTable.id}`);
+                                    } else {
+                                      showSystemModal({ type: 'alert', title: 'Erro', message: res.message || 'Erro ao ingressar como espectador.' });
+                                    }
+                                  }}
                                   className="flex-1 bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/30 font-semibold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
                                 >
                                   <Eye className="w-3.5 h-3.5" />

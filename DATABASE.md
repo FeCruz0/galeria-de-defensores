@@ -43,6 +43,11 @@ Armazena as informações públicas do usuário vinculadas à conta do `auth.use
   * `id` (`uuid`, PK, FK `auth.users.id` ON DELETE CASCADE)
   * `username` (`text`, UNIQUE, NOT NULL) — Nome de exibição único
   * `avatar_url` (`text`, NULL) — URL da imagem de perfil
+  * `bio` (`text`, NULL) — Biografia/sobre do usuário
+  * `cep` (`text`, NULL) — Código de Endereçamento Postal (ViaCEP)
+  * `country` (`text`, NULL) — País
+  * `state` (`text`, NULL) — Estado / UF
+  * `city` (`text`, NULL) — Cidade
   * `updated_at` (`timestamp with time zone`, DEFAULT `now()`)
 
 ### 2. `public.rule_systems`

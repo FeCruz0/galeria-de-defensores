@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send } from 'lucide-react';
 import { Table, Profile, Character, ChatMessage } from '@/types/game';
+import { formatTime } from '@/lib/formatters';
 
 interface TableChatPanelProps {
   table: Table | null;
@@ -89,7 +90,7 @@ export default function TableChatPanel({
               <div key={msg.id} className="p-3 bg-purple-950/20 border border-purple-800/30 rounded-xl space-y-2">
                 <div className="flex justify-between items-center text-xs text-purple-400">
                   <span className="font-bold">{msg.sender_name}</span>
-                  <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span>{formatTime(msg.created_at)}</span>
                 </div>
                 <p className="text-xs text-slate-300">{msg.content}</p>
                 {msg.roll_result && (
@@ -119,7 +120,7 @@ export default function TableChatPanel({
                   {msg.sender_name}
                 </span>
                 <span className="text-[9px] text-slate-500">
-                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {formatTime(msg.created_at)}
                 </span>
               </div>
               <div

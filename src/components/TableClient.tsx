@@ -801,6 +801,17 @@ export default function TableClient({
   async function handleRollFromQuickSheet(name: string, value: number, isAttribute: boolean, rollObj?: any) {
     if (!currentUser || !profile || !selectedCharacterSheet || rollCooldownRemaining > 0) return;
 
+    if (userRole === 'SPECTATOR' || userRole === 'GUEST') {
+      showToast('Espectadores estão em modo somente leitura.');
+      return;
+    }
+
+    const canRoll = userRole === 'MASTER' || currentUser.id === selectedCharacterSheet.user_id;
+    if (!canRoll) {
+      showToast('Você só pode rolar dados usando sua própria ficha.');
+      return;
+    }
+
     setRollCooldownRemaining(1);
 
     let rollResultPayload: any = null;
@@ -933,6 +944,17 @@ export default function TableClient({
   // Alternar status do personagem
   async function handleToggleStatus(statusId: string) {
     if (!selectedCharacterSheet) return;
+
+    if (userRole === 'SPECTATOR' || userRole === 'GUEST') {
+      showToast('Espectadores estão em modo somente leitura.');
+      return;
+    }
+
+    const canEdit = userRole === 'MASTER' || currentUser?.id === selectedCharacterSheet.user_id;
+    if (!canEdit) {
+      showToast('Você não tem permissão para alterar este personagem.');
+      return;
+    }
     
     const currentStatus = selectedCharacterSheet.status_effects || [];
     let newStatus: string[];
@@ -1460,8 +1482,10 @@ export default function TableClient({
       </div>
 
       {/* Drawer/Modal da Ficha Rápida do Jogador */}
-      {selectedCharacterSheet && (
-        <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-[#0f172a] border-l border-slate-800 z-50 p-6 shadow-2xl flex flex-col justify-between overflow-y-auto">
+      {selectedCharacterSheet && (() => {
+        const canEdit = userRole === 'MASTER' || currentUser?.id === selectedCharacterSheet.user_id;
+        return (
+          <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-[#0f172a] border-l border-slate-800 z-50 p-6 shadow-2xl flex flex-col justify-between overflow-y-auto">
           <div className="space-y-6">
             
             {/* Cabeçalho */}
@@ -1519,7 +1543,7 @@ export default function TableClient({
                         <button
                           key={attrKey}
                           onClick={() => handleRollFromQuickSheet(attrLabels[attrKey] || attrKey, baseVal, true)}
-                          disabled={rollCooldownRemaining > 0}
+                          disabled={rollCooldownRemaining > 0 || !canEdit}
                           className={`flex flex-col items-center p-3 rounded-xl border text-center transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                             colors[attrKey] || 'border-slate-700 text-slate-200'
                           }` }
@@ -1598,8 +1622,9 @@ export default function TableClient({
                     <button
                       key={status.id}
                       onClick={() => handleToggleStatus(status.id)}
+                      disabled={!canEdit}
                       title={status.description}
-                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-left text-xs font-medium transition-all duration-200 active:scale-95 cursor-pointer ${
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-left text-xs font-medium transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                         isActive
                           ? status.colorClass + ' border-purple-500/50 shadow-md shadow-purple-500/5'
                           : 'border-slate-800 bg-slate-900/20 text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -1624,7 +1649,7 @@ export default function TableClient({
                   <button
                     key={roll.id || index}
                     onClick={() => handleRollFromQuickSheet(roll.name, 0, false, roll)}
-                    disabled={rollCooldownRemaining > 0}
+                    disabled={rollCooldownRemaining > 0 || !canEdit}
                     className="w-full flex justify-between items-center bg-[#1e293b]/30 hover:bg-[#1e293b]/50 border border-slate-800/80 p-3 rounded-xl transition-all duration-200 text-left active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="space-y-1">
@@ -1726,6 +1751,7 @@ export default function TableClient({
                     {item.bonus_attribute && (
                       <button
                         type="button"
+                        disabled={!canEdit}
                         onClick={async () => {
                           const updatedInventory = selectedCharacterSheet.inventory.map((i: any) => 
                             i.id === item.id ? { ...i, is_equipped: !i.is_equipped } : i
@@ -1741,7 +1767,7 @@ export default function TableClient({
                             .update({ inventory: updatedInventory })
                             .eq('id', selectedCharacterSheet.id);
                         }}
-                        className={`text-[9px] px-2 py-1 rounded-lg border transition-all active:scale-95 cursor-pointer font-bold shrink-0 ${
+                        className={`text-[9px] px-2 py-1 rounded-lg border transition-all active:scale-95 cursor-pointer font-bold shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
                           item.is_equipped
                             ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30'
                             : 'bg-slate-800/40 text-slate-400 border-slate-700/50 hover:bg-slate-700 hover:text-slate-200'
@@ -1772,7 +1798,8 @@ export default function TableClient({
           </div>
 
         </div>
-      )}
+        );
+      })()}
 
       {/* Modal de Gerenciamento de Status Customizados (Mestre) */}
       {isManagingStatus && (

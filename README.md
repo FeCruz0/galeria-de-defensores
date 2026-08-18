@@ -35,16 +35,17 @@ Galeria de Defensores is a fullstack web application designed for managing chara
 
 ## Tech Stack
 
-1. **Frontend & Backend (API)**: Next.js (App Router) + TypeScript + React
+1. **Frontend & Backend (API)**: Next.js 16 (App Router) + TypeScript + React 19
 2. **Styling & Typography**: Tailwind CSS + Lucide Icons + Google Fonts Outfit (sans-serif)
 3. **Database & Realtime**: Supabase (PostgreSQL, Row Level Security - RLS, and Realtime replication)
-4. **Testing**: Vitest
+4. **Testing**: Vitest (111 unit & integration tests)
+5. **Runtime**: Node.js 22 (LTS) via Docker Alpine
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (v18 or higher)
+- Node.js (v20 or higher, v22 recommended)
 - npm
 
 ### Installation
@@ -68,7 +69,7 @@ Galeria de Defensores is a fullstack web application designed for managing chara
      npm run dev
      ```
 
-   **Option B: Running with Docker (Recommended for testing)**
+   **Option B: Running with Docker (Recommended for testing & automatic migrations)**
    - Start the container:
      ```bash
      docker compose up --build
@@ -84,10 +85,12 @@ Galeria de Defensores is a fullstack web application designed for managing chara
 ## Database Setup & Migrations
 
 1. For new environments, execute the consolidated schema in [supabase/schema.sql](supabase/schema.sql) using the Supabase SQL Editor.
-2. For version-controlled migrations using Supabase CLI, run the sequential migration files located in `supabase/migrations/`:
+2. For version-controlled migrations using Supabase CLI or automatic runner (`scripts/runMigrations.js`), run the sequential migration files located in `supabase/migrations/`:
    - `20260807000000_init_schema.sql`
    - `20260807000001_phase11_social_and_spectators.sql`
    - `20260807000002_future_npcs_audit_and_indexes.sql`
+   - `20260810000000_profile_details_and_location.sql`
+   - `20260810000001_storage_and_audit_rls_hardening.sql`
 3. Refer to [DATABASE.md](DATABASE.md) for full relational table specifications and RLS security rules.
    ```sql
    -- 1. Make user_id optional in rule_systems (for native systems)

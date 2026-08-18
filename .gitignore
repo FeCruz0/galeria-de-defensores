@@ -43,3 +43,14 @@ next-env.d.ts
 # legacy folders
 /galeria-defensores-legacy/
 /galeria-defensores-offline-legacy/
+
+# AI rules & agent configurations
+ai.rules
+AGENTS.md
+CLAUDE.md
+.ai/
+.cursorrules
+.windsurfrules
+.clinerules
+.copilotignore
+

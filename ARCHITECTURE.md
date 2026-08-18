@@ -6,11 +6,12 @@ Este documento descreve a arquitetura de software, padrões de código e diretri
 
 ## 📐 Visão Geral da Stack Tecnológica
 
-* **Core Framework:** Next.js 15+ (App Router)
+* **Core Framework:** Next.js 16 (App Router)
+* **Runtime / Ambientes:** Node.js 22 (LTS) via Docker Alpine
 * **Linguagem:** TypeScript (Modo Estrito)
 * **Estilização & UI:** Vanilla CSS + Tailwind CSS v4 + Lucide React Icons
 * **Banco de Dados & BaaS:** Supabase (PostgreSQL, Row Level Security - RLS, Realtime & Auth)
-* **Testes Unitários:** Vitest
+* **Testes Unitários:** Vitest (111 testes automatizados)
 * **Validação de Schemas:** Zod
 
 ---
@@ -41,24 +42,26 @@ A aplicação segue um desacoplamento estrito em 4 camadas para garantir manuten
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 1. Camada de UI (React Client & Server Components)
-* Localização: `src/app/` e `src/components/`
-* Diretriz: Componentes de cliente (`'use client'`) mantêm apenas estado de UI e chamam Server Actions ou a camada de serviços.
-* UX: Sem uso de `alert()`, `confirm()` ou `prompt()` nativos do navegador. Confirmações e avisos são exibidos via `SystemModal.tsx` e toasts glassmorphic.
+### 1. Camada de UI (React Server & Client Components)
+* **Localização:** `src/app/` e `src/components/`
+* **Arquitetura RSC:** As rotas principais (`/dashboard`, `/tables/[id]`, `/characters/[id]`) são **Server Components assíncronos** que buscam os dados em paralelo (`Promise.all()`) no servidor e alimentam os componentes interativos de cliente (`DashboardClient.tsx`, `TableClient.tsx`, `CharacterClient.tsx`).
+* **Proxy de Rede (`src/proxy.ts`):** O middleware segue a convenção do Next.js 16, interceptando rotas privadas para verificação de sessão e ignorando arquivos estáticos e de erro.
+* **UX:** Sem uso de `alert()`, `confirm()` ou `prompt()` nativos do navegador. Confirmações e avisos são exibidos via `SystemModal.tsx` e toasts glassmorphic.
 
 ### 2. Camada de Server Actions (`src/actions/`)
-* Localização: `src/actions/tableActions.ts`, `src/actions/socialActions.ts`, etc.
-* Responsabilidade: **Validação Server-Side e Anti-Cheat**.
-* Funcionamento: Toda mutação que chega do cliente é parseada via esquemas `Zod` (`safeParse`). Se os dados forem manipulados ou inválidos, o servidor rejeita a ação antes de contatar o banco de dados.
+* **Localização:** `src/actions/tableActions.ts`, `src/actions/socialActions.ts`, `src/actions/profileActions.ts`, `src/actions/npcActions.ts`, `src/actions/gameActions.ts`.
+* **Responsabilidade:** **Validação Server-Side e Anti-Cheat**.
+* **Funcionamento:** Toda mutação que chega do cliente é parseada via esquemas `Zod` (`safeParse`). Se os dados forem manipulados ou inválidos, o servidor rejeita a ação antes de contatar o banco de dados.
 
 ### 3. Camada de Serviços (`src/services/`)
-* Localização: `src/services/tableService.ts`, `src/services/socialService.ts`, `src/services/characterService.ts`, `src/services/systemService.ts`.
-* Responsabilidade: Isolar completamente chamadas diretas do SDK do Supabase (`supabase.from(...)`) da camada de renderização React.
-* Facilidade de Testes: Permite mockar serviços com facilidade em testes unitários com Vitest.
+* **Localização:** `src/services/tableService.ts`, `src/services/socialService.ts`, `src/services/characterService.ts`, `src/services/systemService.ts`, `src/services/profileService.ts`, `src/services/npcService.ts`.
+* **Responsabilidade:** Isolar completamente chamadas diretas do SDK do Supabase (`supabase.from(...)`) da camada de renderização React.
+* **Facilidade de Testes:** Permite mockar serviços com facilidade em testes unitários com Vitest.
 
 ### 4. Camada de Banco de Dados (`supabase/`)
-* Localização: `supabase/schema.sql` e `supabase/migrations/`
-* Responsabilidade: Garantir a integridade física dos dados através de restrições `CHECK`, triggers nativas do PostgreSQL e políticas RLS (Row Level Security).
+* **Localização:** `supabase/schema.sql`, `supabase/migrations/` e `scripts/runMigrations.js`.
+* **Execução Automática de Migrações:** O script `runMigrations.js` rastreia migrações SQL aplicadas via tabela `schema_migrations` e as executa automaticamente no boot do Docker.
+* **Responsabilidade:** Garantir a integridade física dos dados através de restrições `CHECK`, triggers nativas do PostgreSQL e políticas RLS (Row Level Security).
 
 ---
 
@@ -68,7 +71,7 @@ A aplicação segue um desacoplamento estrito em 4 camadas para garantir manuten
    Nenhum parâmetro de rolagem crítica ou saldo de pontos (`points_total`, `experience`) é aceito cegamente do cliente. O servidor re-calcula o saldo disponível usando as regras oficiais de [rules.ts](file:///home/felipe/projetos/galeria-de-defensores/src/lib/rules.ts).
 
 2. **RLS (Row Level Security):**
-   Todas as 13 tabelas do Supabase possuem RLS ativado. Mesmo que um usuário mal-intencionado execute requisições HTTP diretas à API do Supabase, o banco de dados rejeitará a operação se ele não for o autor/mestre/membro autorizado.
+   Todas as 13 tabelas do Supabase e o Storage Bucket `avatars` possuem RLS ativado. Mesmo que um usuário mal-intencionado execute requisições HTTP diretas à API do Supabase, o banco de dados rejeitará a operação se ele não for o autor/mestre/membro autorizado.
 
 3. **Modo Espectador Passivo:**
    Espectadores possuem permissão de leitura de chat e fichas, mas a política RLS da tabela `chat_messages` bloqueia requisições `INSERT` para usuários com `role = 'spectator'`.
@@ -79,4 +82,4 @@ A aplicação segue um desacoplamento estrito em 4 camadas para garantir manuten
 
 * **Framework:** Vitest
 * **Suíte de Testes:** Localizada em `src/services/__tests__/`, `src/actions/__tests__/` e `src/lib/__tests__/`.
-* **Comando de Execução:** `npx vitest run`
+* **Comando de Execução:** `npx vitest run` (111 testes passando com 100% de sucesso).

@@ -25,6 +25,7 @@ import {
   sendDirectMessageAction 
 } from '@/actions/socialActions';
 import { supabase } from '@/lib/supabase';
+import { formatTime } from '@/lib/formatters';
 import SystemModal, { SystemModalType } from './SystemModal';
 
 interface FriendsDrawerProps {
@@ -404,7 +405,7 @@ export default function FriendsDrawer({
                           {msg.content}
                         </div>
                         <span className="text-[9px] text-slate-500 mt-1 px-1">
-                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatTime(msg.created_at)}
                         </span>
                       </div>
                     );

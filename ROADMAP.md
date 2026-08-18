@@ -205,6 +205,13 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
   - [x] Criar triggers PostgreSQL para atualização automática do campo `updated_at`.
   - [x] Realizar auditoria completa de políticas RLS em todas as tabelas.
 
+### 🛡️ 4. Restrições de Espectadores & Configuração de Mesa Privada — High Priority
+* **Descrição**: Bloqueio de rolagens de dados por espectadores, desativação de controles na Ficha Rápida e nova regra para impedir que um jogador ativo entre como espectador.
+* **Checklist**:
+  - [x] Restringir rolagens e toggles de status na Ficha Rápida (`TableClient.tsx`) quando visualizada por espectadores ou usuários não autorizados.
+  - [x] Desabilitar botão de espectador na exploração de mesas do Dashboard se o usuário já for jogador ativo daquela mesa.
+  - [x] Definir mesas como privadas por padrão ao criar (`TableNewClient.tsx`) e alertar visualmente sobre a visibilidade pública ao desmarcar.
+
 ---
 
 ## 🚀 Fase 13: Modularização Avançada, Realtime Presence & Testes E2E (Planejado)

@@ -17,6 +17,8 @@ describe('Módulo OfflineDB (IndexedDB Helper)', () => {
     name: 'Herói Offline',
     scale: 0,
     points_total: 10,
+    points_spent: 5,
+    concept: 'Herói de Testes',
     experience: 0,
     attributes_values: { F: 2, H: 2, R: 1, A: 0, PdF: 0 },
     resources_current: { PV: 5, PM: 5 },

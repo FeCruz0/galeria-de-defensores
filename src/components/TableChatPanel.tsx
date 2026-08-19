@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useOptimistic } from 'react';
 import { Send } from 'lucide-react';
 import { Table, Profile, Character, ChatMessage } from '@/types/game';
 import { formatTime } from '@/lib/formatters';
@@ -35,20 +35,42 @@ export default function TableChatPanel({
   const [messageText, setMessageText] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Hook otimista do React 19 para mensagens
+  const [optimisticMessages, addOptimisticMessage] = useOptimistic(
+    messages,
+    (state, newMessage: ChatMessage) => [...state, newMessage]
+  );
+
   // Auto-scroll chat feed to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, chatChannel]);
+  }, [optimisticMessages, chatChannel]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageText.trim() || chatCooldownRemaining > 0) return;
     const textToSend = messageText.trim();
+
+    // Adicionar mensagem otimista localmente antes do retorno da requisição assíncrona
+    addOptimisticMessage({
+      id: `temp-${Date.now()}`,
+      table_id: table?.id || '',
+      sender_id: currentUser?.id || '',
+      sender_name: selectedSenderIdentity === 'MASTER'
+        ? (profile?.username || 'Mestre')
+        : (linkedCharacters.find(c => c.id === selectedSenderIdentity)?.name || 'Personagem'),
+      content: textToSend,
+      type: 'TEXT',
+      channel: chatChannel,
+      is_edited: false,
+      created_at: new Date().toISOString()
+    });
+
     setMessageText('');
     await onSendMessage(textToSend);
   };
 
-  const filteredMessages = messages.filter(
+  const filteredMessages = optimisticMessages.filter(
     (msg) => !table?.has_separated_chat || (msg.channel || 'ON') === chatChannel
   );
 

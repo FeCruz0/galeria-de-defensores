@@ -35,6 +35,40 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  const mockSessionCookie = request.cookies.get('gdd-mock-session');
+  if (mockSessionCookie && mockSessionCookie.value) {
+    try {
+      const mockData = JSON.parse(mockSessionCookie.value);
+      const mockUser = {
+        id: mockData.user_id,
+        aud: 'authenticated',
+        role: 'authenticated',
+        email: mockData.email,
+        email_confirmed_at: new Date().toISOString(),
+        confirmed_at: new Date().toISOString(),
+        last_sign_in_at: new Date().toISOString(),
+        user_metadata: { username: mockData.username },
+        app_metadata: { provider: 'email', providers: ['email'] }
+      };
+
+      supabase.auth.getUser = async () => ({ data: { user: mockUser as any }, error: null });
+      supabase.auth.getSession = async () => ({
+        data: {
+          session: {
+            access_token: 'mock-token',
+            token_type: 'bearer',
+            expires_in: 3600,
+            refresh_token: 'mock-refresh-token',
+            user: mockUser as any
+          }
+        },
+        error: null
+      });
+    } catch (e) {
+      // Ignora erro de parsing
+    }
+  }
+
   // IMPORTANTE: NÃO remova a chamada getUser() para manter a sessão ativa
   const {
     data: { user },

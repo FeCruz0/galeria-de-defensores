@@ -1,6 +1,4 @@
-'use client';
-
-import React, { useState } from 'react';
+import React, { useState, useOptimistic } from 'react';
 import { TableNPC } from '@/types/game';
 import { createNpcAction, updateNpcAction, deleteNpcAction } from '@/actions/npcActions';
 import { Skull, Plus, Trash2, Shield, Heart, Zap, Sword, Target, Activity, X } from 'lucide-react';
@@ -35,6 +33,23 @@ export function NpcTrackerDrawer({
   const [pvMax, setPvMax] = useState(5);
   const [pmMax, setPmMax] = useState(5);
   const [annotations, setAnnotations] = useState('');
+
+  // Hook otimista do React 19 para ajuste rápido de PV/PM nos NPCs
+  const [optimisticNpcs, setOptimisticNpcs] = useOptimistic(
+    npcs,
+    (state, action: { npcId: string; resourceKey: 'PV' | 'PM'; value: number }) =>
+      state.map((npc) =>
+        npc.id === action.npcId
+          ? {
+              ...npc,
+              resources_current: {
+                ...npc.resources_current,
+                [action.resourceKey]: action.value,
+              },
+            }
+          : npc
+      )
+  );
 
   if (!isOpen) return null;
 
@@ -74,6 +89,9 @@ export function NpcTrackerDrawer({
     const currentVal = npc.resources_current[resourceKey] ?? 0;
     const maxVal = npc.resources_current[`${resourceKey}_max`] ?? (resourceKey === 'PV' ? (npc.attributes_values.R || 1) * 5 : (npc.attributes_values.R || 1) * 5);
     const newVal = Math.max(0, Math.min(maxVal * 2, currentVal + delta));
+
+    // Atualização otimista imediata na interface
+    setOptimisticNpcs({ npcId: npc.id, resourceKey, value: newVal });
 
     const newResources = {
       ...npc.resources_current,
@@ -254,7 +272,7 @@ export function NpcTrackerDrawer({
 
           {/* Lista de NPCs */}
           <div className="space-y-3">
-            {npcs.map((npc) => {
+            {optimisticNpcs.map((npc) => {
               const pvCurr = npc.resources_current?.PV ?? 5;
               const pvMaxVal = npc.resources_current?.PV_max ?? (npc.attributes_values.R || 1) * 5;
               const pmCurr = npc.resources_current?.PM ?? 5;
@@ -368,7 +386,7 @@ export function NpcTrackerDrawer({
               );
             })}
 
-            {npcs.length === 0 && !isCreating && (
+            {optimisticNpcs.length === 0 && !isCreating && (
               <div className="text-center py-10 bg-slate-900/30 border border-slate-800/60 rounded-2xl">
                 <Skull className="w-10 h-10 text-slate-600 mx-auto mb-2" />
                 <p className="text-xs text-slate-400 font-semibold">Nenhum NPC ou Ameaça cadastrado nesta mesa.</p>

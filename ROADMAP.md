@@ -226,15 +226,15 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 👥 2. Supabase Realtime Presence & Experiência Otimista (React 19)
 * **Descrição**: Adicionar indicadores de presença de jogadores online na mesa em tempo real e atualizações instantâneas de interface com `useOptimistic`.
 * **Checklist**:
-  - [ ] Configurar canal de Presence do Supabase Realtime para exibir avatares de jogadores online/offline na mesa.
-  - [ ] Adicionar indicadores de "digitando no chat..." e "rolando dados...".
-  - [ ] Utilizar `useOptimistic` do React 19 para atualizações instantâneas de PV/PM e envio de chat sem lag de rede.
+  - [x] Configurar canal de Presence do Supabase Realtime para exibir avatares de jogadores online/offline na mesa.
+  - [x] Adicionar indicadores de "digitando no chat..." e "rolando dados...".
+  - [x] Utilizar `useOptimistic` do React 19 para atualizações instantâneas de PV/PM e envio de chat sem lag de rede.
 
 ### 🎭 3. Testes End-to-End (E2E) com Playwright
 * **Descrição**: Implementar suíte de testes de ponta a ponta simulando navegadores reais para validar a jornada completa do usuário.
 * **Checklist**:
-  - [ ] Configurar Playwright no projeto e integrar scripts de teste no `package.json`.
-  - [ ] Escrever teste E2E para o fluxo: Login -> Criar Personagem -> Entrar na Mesa -> Rolar Dados -> Baixar PDF.
+  - [x] Configurar Playwright no projeto e integrar scripts de teste no `package.json`.
+  - [x] Escrever teste E2E para o fluxo: Login -> Criar Personagem -> Entrar na Mesa -> Rolar Dados -> Baixar PDF.
 
 ---
 

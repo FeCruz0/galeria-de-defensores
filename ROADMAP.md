@@ -221,7 +221,7 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 * **Checklist**:
   - [x] Extrair abas de Atributos, Vantagens, Inventário, Magias e Rolagens da ficha para componentes dedicados.
   - [x] Extrair gerenciador de NPCs do Mestre e diário de campanha da mesa VTT para componentes dedicados.
-  - [ ] Criar custom hooks (`useCharacterPoints`, `useVttSession`) para encapsular o estado e regras de negócio.
+  - [x] Criar custom hooks (`useCharacterPoints`, `useVttSession`) para encapsular o estado e regras de negócio.
 
 ### 👥 2. Supabase Realtime Presence & Experiência Otimista (React 19)
 * **Descrição**: Adicionar indicadores de presença de jogadores online na mesa em tempo real e atualizações instantâneas de interface com `useOptimistic`.

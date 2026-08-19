@@ -46,6 +46,8 @@ import TableSettingsModal from '@/components/TableSettingsModal';
 import TableMembersModal from '@/components/TableMembersModal';
 import CampaignJournalPanel from '@/components/vtt/CampaignJournalPanel';
 import { useVttSession } from '@/hooks/useVttSession';
+import { useTablePresence } from '@/hooks/useTablePresence';
+import OnlineMembersBar from '@/components/vtt/OnlineMembersBar';
 
 type Params = Promise<{ id: string }>;
 
@@ -102,7 +104,14 @@ export default function TableClient({
     rollCooldownRemaining,
     setRollCooldownRemaining,
   } = useVttSession(initialUserRole);
-  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+  const {
+    onlineUsers,
+    isTyping,
+    setIsTyping,
+    isRolling,
+    setIsRolling
+  } = useTablePresence(supabase, id, currentUser, profile, userRole);
+  const onlineUserIds = onlineUsers.map((u) => u.user_id);
   const [tableNpcs, setTableNpcs] = useState<TableNPC[]>(initialTableNpcs);
   const [isNpcDrawerOpen, setIsNpcDrawerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -167,6 +176,10 @@ export default function TableClient({
     const timer = setTimeout(() => setToastMessage(null), 3000);
     return () => clearTimeout(timer);
   }, [toastMessage]);
+
+  useEffect(() => {
+    setIsRolling(!!virtualRoll);
+  }, [virtualRoll, setIsRolling]);
 
 
 
@@ -331,29 +344,8 @@ export default function TableClient({
         console.log('Realtime channel subscription status:', status);
       });
 
-    // Realtime Presence para usuários online na mesa
-    const presenceChannel = supabase.channel(`presence-table-${id}`, {
-      config: { presence: { key: currentUser?.id || `guest-${Date.now()}` } }
-    })
-    .on('presence', { event: 'sync' }, () => {
-      const state = presenceChannel.presenceState();
-      const onlineIds = Object.keys(state);
-      setOnlineUserIds(onlineIds);
-    });
-
-    presenceChannel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED' && currentUser) {
-        await presenceChannel.track({
-          user_id: currentUser.id,
-          username: profile?.username || 'Usuário',
-          online_at: new Date().toISOString()
-        });
-      }
-    });
-
     return () => {
       supabase.removeChannel(channel);
-      supabase.removeChannel(presenceChannel);
     };
   }, [id, loading, supabase, currentUser, table, profile]);
 
@@ -1096,15 +1088,10 @@ export default function TableClient({
             </div>
           )}
 
-          <button
-            onClick={() => setIsMembersOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/30 border border-emerald-800/35 px-3 py-1.5 rounded-full transition-all cursor-pointer"
-            title="Ver Membros & Status Online"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <Users className="w-3.5 h-3.5" />
-            <span className="font-bold">{onlineUserIds.length} Online</span>
-          </button>
+          <OnlineMembersBar
+            onlineUsers={onlineUsers}
+            onOpenMembersModal={() => setIsMembersOpen(true)}
+          />
 
           {userRole === 'MASTER' && (
             <>

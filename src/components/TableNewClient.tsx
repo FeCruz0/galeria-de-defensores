@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useActionState, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { ArrowLeft, Users, Loader2, Save, BookOpen, HelpCircle, MessageSquare } from 'lucide-react';
 import { RuleSystem } from '@/types/game';
+import { createTableAction } from '@/actions/tableActions';
 
 import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
 
@@ -12,8 +13,24 @@ export default function TableNewClient() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+
+  const [state, formAction, isPending] = useActionState(
+    async (prevState: any, payload: any) => {
+      const res = await createTableAction(payload);
+      if (res.success && res.data) {
+        router.push(`/tables/${res.data.id}`);
+      } else if (res.error) {
+        showSystemModal({
+          type: 'alert',
+          title: 'Erro ao Criar Mesa',
+          message: res.error,
+        });
+      }
+      return res;
+    },
+    { success: false }
+  );
 
   // Modal State
   const [modalConfig, setModalConfig] = useState<SystemModalOptions>({
@@ -82,43 +99,19 @@ export default function TableNewClient() {
     e.preventDefault();
     if (!userId) return;
 
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase
-        .from('tables')
-        .insert({
-          name: name.trim(),
-          description: description.trim(),
-          master_id: userId,
-          rule_system_id: ruleSystemId || null,
-          is_private: isPrivate,
-          password: isPrivate && password ? password : null,
-          max_players: maxPlayers,
-          allow_spectators: allowSpectators,
-          has_separated_chat: hasSeparatedChat,
-          rules_mod: {},
-          custom_damage_types: [],
-          custom_unique_advantages: [],
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
-        // Redireciona para a mesa criada
-        router.push(`/tables/${data.id}`);
-      }
-    } catch (err) {
-      console.error('Erro ao criar mesa:', err);
-      showSystemModal({
-        type: 'alert',
-        title: 'Erro ao Criar Mesa',
-        message: 'Ocorreu um erro ao criar a mesa de jogo.',
+    startTransition(() => {
+      formAction({
+        name,
+        description,
+        master_id: userId,
+        rule_system_id: ruleSystemId || null,
+        is_private: isPrivate,
+        password: isPrivate && password ? password : null,
+        max_players: maxPlayers,
+        allow_spectators: allowSpectators,
+        has_separated_chat: hasSeparatedChat,
       });
-      setLoading(false);
-    }
+    });
   }
 
   return (
@@ -304,10 +297,10 @@ export default function TableNewClient() {
             {/* Botão de Enviar */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={isPending}
               className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-[0.98] disabled:opacity-55"
             >
-              {loading ? (
+              {isPending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>

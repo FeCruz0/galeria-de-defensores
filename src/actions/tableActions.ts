@@ -4,35 +4,24 @@ import { createTableSchema, updateTableSettingsSchema, updateMemberRoleSchema } 
 import * as tableService from '@/services/tableService';
 import { createClient } from '../utils/supabase/server';
 import { checkActionRateLimit } from '@/lib/rateLimit';
+import { createSafeAction } from '@/lib/actionWrapper';
 
-export async function createTableAction(formData: unknown) {
-  const result = createTableSchema.safeParse(formData);
-  if (!result.success) {
-    return { success: false, errors: result.error.flatten().fieldErrors };
-  }
+export const createTableAction = createSafeAction(
+  createTableSchema,
+  async (data, { user, supabase }) => {
+    const newTable = await tableService.createTable({
+      ...data,
+      master_id: user.id
+    }, supabase);
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return { success: false, error: 'Usuário não autenticado.' };
-  }
+    if (!newTable) {
+      return { success: false, error: 'Falha ao criar mesa de jogo no servidor.' };
+    }
 
-  // Rate Limiting
-  if (!(await checkActionRateLimit(user.id, 'table-actions', 10, 60000))) {
-    return { success: false, error: 'Muitas requisições em pouco tempo. Por favor, aguarde alguns instantes.' };
-  }
-
-  const newTable = await tableService.createTable({
-    ...result.data,
-    master_id: user.id
-  }, supabase);
-
-  if (!newTable) {
-    return { success: false, error: 'Falha ao criar mesa de jogo no servidor.' };
-  }
-
-  return { success: true, table: newTable };
-}
+    return { success: true, table: newTable, data: newTable };
+  },
+  { requireAuth: true, rateLimitKey: 'table-actions', rateLimitMax: 10 }
+);
 
 export async function updateTableSettingsAction(tableId: string, updates: unknown) {
   const result = updateTableSettingsSchema.safeParse(updates);

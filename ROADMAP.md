@@ -244,19 +244,19 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 * **Descrição**: Refatoração do `TableClient.tsx` em subcomponentes modulares e virtualização da lista de chat para alta escala.
 * **Checklist**:
   - [x] Extrair `VttHeader.tsx`, `VttJournalDrawer.tsx` e `VttQuickSheetDrawer.tsx` sob `src/components/vtt/`.
-  - [ ] Implementar virtualização de lista em `TableChatPanel.tsx` (ex: `@tanstack/react-virtual`) para suportar 500+ mensagens sem degradação do DOM.
+  - [x] Implementar virtualização de lista em `TableChatPanel.tsx` (ex: `@tanstack/react-virtual`) para suportar 500+ mensagens sem degradação do DOM.
 
 ### ⚡ 2. Otimização de Canais Supabase Realtime & Índices do Banco
 * **Descrição**: Redução de uso de IOPS no banco separando dados temporários (broadcast) de permanentes e criando índices no PostgreSQL.
 * **Checklist**:
-  - [ ] Migrar indicadores de digitação e animações de dados para canais Ephemerais/Broadcast do Supabase (Zero DB).
-  - [ ] Aplicar índices compostos no banco relacional (`idx_chat_messages_table_created`, `idx_table_players_table_user`).
+  - [x] Migrar indicadores de digitação e animações de dados para canais Ephemerais/Broadcast do Supabase (Zero DB).
+  - [x] Aplicar índices compostos no banco relacional (`idx_chat_messages_table_created`, `idx_table_players_table_user`).
 
 ### 📝 3. Formulários React 19 (`useActionState`) & Action Wrappers Tipados
 * **Descrição**: Modernização de formulários com primitivos do React 19 e tratamento padronizado de segurança nas Server Actions.
 * **Checklist**:
-  - [ ] Substituir estados manuais de formulários em `RegisterPage`, `CharacterNewClient` e `TableNewClient` por `useActionState`.
-  - [ ] Criar wrapper unificado para Server Actions com validação Zod e checagem de autorização server-side.
+  - [x] Substituir estados manuais de formulários em `RegisterPage`, `CharacterNewClient` e `TableNewClient` por `useActionState`.
+  - [x] Criar wrapper unificado para Server Actions com validação Zod e checagem de autorização server-side.
 
 ### 🎭 4. Testes Multiplayer E2E & Testes de Serviço
 * **Descrição**: Teste automatizado de sincronização entre múltiplos navegadores e cobertura nos arquivos sob `src/services/`.

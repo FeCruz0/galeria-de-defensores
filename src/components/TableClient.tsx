@@ -1300,6 +1300,7 @@ export default function TableClient({
               chatCooldownRemaining={chatCooldownRemaining}
               onSendMessage={handleSendMessage}
               userRole={userRole}
+              setIsTyping={setIsTyping}
             />
           )}
 

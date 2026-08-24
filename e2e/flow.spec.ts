@@ -37,8 +37,8 @@ test.describe('Galeria de Defensores Complete E2E Flow', () => {
     await page.fill('input[type="text"] >> nth=1', 'Combatente E2E'); // Conceito/Classe
     await page.click('button[type="submit"]');
 
-    // Aguardar redirecionamento para a Ficha do Personagem
-    await page.waitForURL(/\/characters\/.+/, { timeout: 15000 });
+    // Aguardar redirecionamento para a Ficha do Personagem (evitando resolver imediatamente em /characters/new)
+    await page.waitForURL(url => url.pathname.startsWith('/characters/') && url.pathname !== '/characters/new', { timeout: 15000 });
     await expect(page.locator('h1').first()).toContainText('Hero E2E');
 
     // 3. Exportação e Download de Ficha em PDF
@@ -50,12 +50,19 @@ test.describe('Galeria de Defensores Complete E2E Flow', () => {
 
     // 4. Criação de Mesa de Jogo
     await page.goto('/tables/new');
+    
+    // Esperar até que o sistema de regras seja carregado no select
+    await page.waitForFunction(() => {
+      const select = document.querySelector('select') as HTMLSelectElement;
+      return select && select.value !== '';
+    }, { timeout: 10000 });
+
     await page.fill('input[type="text"]', tableName);
     await page.fill('input[type="password"]', 'tablepass123');
     await page.click('button[type="submit"]');
 
-    // Aguardar redirecionamento para a Mesa de Jogo (VTT)
-    await page.waitForURL(/\/tables\/.+/, { timeout: 15000 });
+    // Aguardar redirecionamento para a Mesa de Jogo (VTT) (evitando resolver imediatamente em /tables/new)
+    await page.waitForURL(url => url.pathname.startsWith('/tables/') && url.pathname !== '/tables/new', { timeout: 15000 });
     await expect(page.locator('h1').first()).toContainText('Table E2E');
 
     // 5. Rolar Dados na Mesa (VTT)

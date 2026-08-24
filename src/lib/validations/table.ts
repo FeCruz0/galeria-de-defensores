@@ -4,7 +4,7 @@ export const createTableSchema = z.object({
   name: z.string().min(3, 'O nome da mesa deve ter pelo menos 3 caracteres.').max(60, 'Nome muito longo.'),
   description: z.string().max(500, 'A descrição deve ter no máximo 500 caracteres.').optional().default(''),
   master_id: z.string().uuid('ID de mestre inválido.'),
-  rule_system_id: z.string().uuid('ID de sistema de regras inválido.').nullable().optional(),
+  rule_system_id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, 'ID de sistema de regras inválido.').nullable().optional(),
   is_private: z.boolean().default(false),
   password: z.string().nullable().optional(),
   max_players: z.number().int().min(1, 'Mínimo de 1 jogador.').max(20, 'Máximo de 20 jogadores.').default(4),

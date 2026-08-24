@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useActionState, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { Mail, Lock, Shield, User, ArrowRight, Loader2, Check, AlertCircle } from 'lucide-react';
 import { registerSchema } from '@/lib/validations/auth';
 import { translateAuthError } from '@/lib/authErrors';
+import { registerUserAction } from '@/actions/authActions';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,9 +16,25 @@ export default function RegisterPage() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const [state, formAction, isPending] = useActionState(
+    async (prevState: any, payload: any) => {
+      const res = await registerUserAction(payload);
+      if (res.success) {
+        setSuccessMsg('Cadastro realizado com sucesso! Redirecionando...');
+        setTimeout(() => {
+          router.push('/dashboard');
+          router.refresh();
+        }, 1500);
+      } else if (res.error) {
+        setErrorMsg(res.error);
+      }
+      return res;
+    },
+    { success: false }
+  );
 
   // Live validation states
   const [usernameError, setUsernameError] = useState<string | null>(null);
@@ -119,40 +136,16 @@ export default function RegisterPage() {
       return;
     }
 
-    setLoading(true);
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const trimmedUsername = username.trim();
-    const trimmedEmail = email.trim();
-
-    try {
-      // Supabase SignUp
-      const { error } = await supabase.auth.signUp({
-        email: trimmedEmail,
-        password,
-        options: {
-          data: {
-            username: trimmedUsername,
-          },
-        },
+    startTransition(() => {
+      formAction({
+        username,
+        email,
+        password
       });
-
-      if (error) {
-        setErrorMsg(translateAuthError(error));
-        setLoading(false);
-      } else {
-        setSuccessMsg('Cadastro realizado com sucesso! Redirecionando...');
-        setLoading(false);
-        setTimeout(() => {
-          router.push('/dashboard');
-          router.refresh();
-        }, 1500);
-      }
-    } catch (err) {
-      setErrorMsg('Ocorreu um erro inesperado ao realizar o cadastro.');
-      setLoading(false);
-    }
+    });
   }
 
   return (
@@ -296,10 +289,10 @@ export default function RegisterPage() {
  
           <button
             type="submit"
-            disabled={loading || !usernameValid || !emailValid || !passwordValid}
+            disabled={isPending || !usernameValid || !emailValid || !passwordValid}
             className="w-full mt-2 bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-[0.98] disabled:opacity-55 disabled:cursor-not-allowed"
           >
-            {loading ? (
+            {isPending ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
               <>

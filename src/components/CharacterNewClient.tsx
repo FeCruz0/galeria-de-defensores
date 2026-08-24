@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useActionState, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { RuleSystem } from '@/types/game';
 import { ArrowLeft, Sword, Shield, Loader2, Save } from 'lucide-react';
-
+import { createCharacterAction } from '@/actions/characterActions';
 
 import SystemModal, { SystemModalOptions } from '@/components/SystemModal';
 
@@ -13,10 +13,26 @@ export default function CharacterNewClient() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [loading, setLoading] = useState(false);
   const [baseSystems, setBaseSystems] = useState<RuleSystem[]>([]);
   const [customSystems, setCustomSystems] = useState<RuleSystem[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+
+  const [state, formAction, isPending] = useActionState(
+    async (prevState: any, payload: any) => {
+      const res = await createCharacterAction(payload);
+      if (res.success && res.data) {
+        router.push(`/characters/${res.data.id}`);
+      } else if (res.error) {
+        showSystemModal({
+          type: 'alert',
+          title: 'Erro ao Criar',
+          message: res.error,
+        });
+      }
+      return res;
+    },
+    { success: false }
+  );
 
   // Modal State
   const [modalConfig, setModalConfig] = useState<SystemModalOptions>({
@@ -63,100 +79,14 @@ export default function CharacterNewClient() {
     e.preventDefault();
     if (!userId) return;
 
-    setLoading(true);
-
-    // Encontrar definição do sistema selecionado
-    let systemAttrs: Record<string, any> = {};
-    let systemRes: Record<string, any> = {};
-    let dbRuleSystemId: string | null = null;
-
-    const selectedSys = [...baseSystems, ...customSystems].find(s => s.id === selectedSystemId);
-    if (selectedSys) {
-      systemAttrs = selectedSys.attributes;
-      systemRes = selectedSys.resources;
-      dbRuleSystemId = selectedSys.id;
-    }
-
-    // Inicializar atributos a zero
-    const attributes_values: Record<string, number> = {};
-    Object.keys(systemAttrs).forEach(key => {
-      attributes_values[key] = 0;
-    });
-
-    // Inicializar recursos correntes com base na Resistência (começa em 0, logo valor = 1)
-    const resources_current: Record<string, number> = {};
-    Object.keys(systemRes).forEach(key => {
-      resources_current[key] = 1; // Minimo inicial
-    });
-
-    const defaultDamageType = (selectedSys?.damage_types && Array.isArray(selectedSys.damage_types) && selectedSys.damage_types.length > 0)
-      ? selectedSys.damage_types[0]
-      : 'Corte';
-
-    try {
-      // Verificar se já existe um personagem com o mesmo nome para este usuário
-      const { data: duplicate } = await supabase
-        .from('characters')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('name', name.trim())
-        .maybeSingle();
-
-      if (duplicate) {
-        showSystemModal({
-          type: 'alert',
-          title: 'Nome Indisponível',
-          message: `Você já possui um personagem com o nome "${name}"! Por favor, escolha um nome diferente.`,
-        });
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('characters')
-        .insert({
-          user_id: userId,
-          rule_system_id: dbRuleSystemId,
-          name,
-          concept,
-          points_total: pointsTotal,
-          points_spent: 0,
-          attributes_values,
-          resources_current,
-          advantages: [],
-          disadvantages: [],
-          skills: [],
-          specializations: [],
-          spells: [],
-          inventory: [],
-          custom_rolls: [],
-          damage_type_forca: defaultDamageType,
-          damage_type_pdf: defaultDamageType,
-          saved_points: pointsTotal,
-          experience: 0,
-          annotations: '',
-          is_hidden: false,
-          image_url: ''
-        })
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        router.push(`/characters/${data.id}`);
-      }
-    } catch (err) {
-      console.error('Erro ao salvar personagem:', err);
-      showSystemModal({
-        type: 'alert',
-        title: 'Erro ao Criar',
-        message: 'Falha ao criar o personagem. Tente novamente.',
+    startTransition(() => {
+      formAction({
+        name,
+        concept,
+        points_total: pointsTotal,
+        rule_system_id: selectedSystemId,
       });
-      setLoading(false);
-    }
+    });
   }
 
   return (
@@ -273,12 +203,12 @@ export default function CharacterNewClient() {
             </div>
 
             {/* Botão de Enviar */}
-            <button
+             <button
               type="submit"
-              disabled={loading}
+              disabled={isPending}
               className="w-full bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-purple-500/20 active:scale-[0.98] disabled:opacity-55"
             >
-              {loading ? (
+              {isPending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>

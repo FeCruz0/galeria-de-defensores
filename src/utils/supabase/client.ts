@@ -239,6 +239,7 @@ export function createClient() {
           },
           track: async () => {},
           unsubscribe: async () => {},
+          send: async () => ({ error: null }),
         };
         return channel as any;
       };

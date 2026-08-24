@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useOptimistic } from 'react';
 import { Send } from 'lucide-react';
 import { Table, Profile, Character, ChatMessage } from '@/types/game';
 import { formatTime } from '@/lib/formatters';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 interface TableChatPanelProps {
   table: Table | null;
@@ -16,6 +17,7 @@ interface TableChatPanelProps {
   chatCooldownRemaining: number;
   onSendMessage: (content: string) => Promise<void>;
   userRole: 'MASTER' | 'PLAYER' | 'SPECTATOR' | 'GUEST';
+  setIsTyping?: (typing: boolean) => void;
 }
 
 export default function TableChatPanel({
@@ -31,9 +33,36 @@ export default function TableChatPanel({
   chatCooldownRemaining,
   onSendMessage,
   userRole,
+  setIsTyping,
 }: TableChatPanelProps) {
   const [messageText, setMessageText] = useState('');
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Limpar timeout de digitação quando desmontar
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessageText(e.target.value);
+    
+    if (setIsTyping) {
+      setIsTyping(true);
+      
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsTyping(false);
+      }, 2000);
+    }
+  };
 
   // Hook otimista do React 19 para mensagens
   const [optimisticMessages, addOptimisticMessage] = useOptimistic(
@@ -41,15 +70,36 @@ export default function TableChatPanel({
     (state, newMessage: ChatMessage) => [...state, newMessage]
   );
 
+  const filteredMessages = optimisticMessages.filter(
+    (msg) => !table?.has_separated_chat || (msg.channel || 'ON') === chatChannel
+  );
+
+  // Virtualizador de lista para alta escala de mensagens
+  const virtualizer = useVirtualizer({
+    count: filteredMessages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 80,
+    overscan: 5,
+  });
+
   // Auto-scroll chat feed to bottom on new messages
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [optimisticMessages, chatChannel]);
+    if (filteredMessages.length > 0) {
+      virtualizer.scrollToIndex(filteredMessages.length - 1, { align: 'end' });
+    }
+  }, [filteredMessages.length, chatChannel]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageText.trim() || chatCooldownRemaining > 0) return;
     const textToSend = messageText.trim();
+
+    if (setIsTyping) {
+      setIsTyping(false);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    }
 
     // Adicionar mensagem otimista localmente antes do retorno da requisição assíncrona
     addOptimisticMessage({
@@ -69,10 +119,6 @@ export default function TableChatPanel({
     setMessageText('');
     await onSendMessage(textToSend);
   };
-
-  const filteredMessages = optimisticMessages.filter(
-    (msg) => !table?.has_separated_chat || (msg.channel || 'ON') === chatChannel
-  );
 
   return (
     <>
@@ -103,61 +149,85 @@ export default function TableChatPanel({
       )}
 
       {/* Feed de Mensagens */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {filteredMessages.map((msg) => {
-          const isMe = msg.sender_id === currentUser?.id;
+      <div
+        ref={parentRef}
+        className="flex-1 overflow-y-auto p-4 scrollbar-none"
+      >
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const msg = filteredMessages[virtualItem.index];
+            if (!msg) return null;
+            const isMe = msg.sender_id === currentUser?.id;
 
-          if (msg.type === 'ROLL') {
             return (
-              <div key={msg.id} className="p-3 bg-purple-950/20 border border-purple-800/30 rounded-xl space-y-2">
-                <div className="flex justify-between items-center text-xs text-purple-400">
-                  <span className="font-bold">{msg.sender_name}</span>
-                  <span>{formatTime(msg.created_at)}</span>
-                </div>
-                <p className="text-xs text-slate-300">{msg.content}</p>
-                {msg.roll_result && (
-                  <div className="bg-slate-900/60 p-2.5 rounded-lg flex items-center justify-between border border-slate-800">
-                    <span className="text-xs font-mono text-slate-400">{msg.roll_result.componentsText}</span>
-                    <div className="text-right">
-                      <span className={`text-lg font-black ${msg.roll_result.isCrit ? 'text-amber-400 animate-pulse' : 'text-white'}`}>
-                        {msg.roll_result.total}
+              <div
+                key={virtualItem.key}
+                ref={virtualizer.measureElement}
+                data-index={virtualItem.index}
+                className="w-full flex flex-col py-1.5"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                {msg.type === 'ROLL' ? (
+                  <div className="p-3 bg-purple-950/20 border border-purple-800/30 rounded-xl space-y-2">
+                    <div className="flex justify-between items-center text-xs text-purple-400">
+                      <span className="font-bold">{msg.sender_name}</span>
+                      <span>{formatTime(msg.created_at)}</span>
+                    </div>
+                    <p className="text-xs text-slate-300">{msg.content}</p>
+                    {msg.roll_result && (
+                      <div className="bg-slate-900/60 p-2.5 rounded-lg flex items-center justify-between border border-slate-800">
+                        <span className="text-xs font-mono text-slate-400">{msg.roll_result.componentsText}</span>
+                        <div className="text-right">
+                          <span className={`text-lg font-black ${msg.roll_result.isCrit ? 'text-amber-400 animate-pulse' : 'text-white'}`}>
+                            {msg.roll_result.total}
+                          </span>
+                          {msg.roll_result.isCrit && (
+                            <span className="text-[10px] text-amber-400 block font-bold">CRÍTICO!</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className={`flex flex-col max-w-[85%] ${isMe ? 'self-end ml-auto' : 'mr-auto'}`}>
+                    <div className="flex items-center justify-between gap-2 mb-1 px-1">
+                      <span className="text-[11px] font-bold text-slate-400 truncate flex items-center gap-1">
+                        {msg.sender_avatar && (
+                          <img src={msg.sender_avatar} alt="" className="w-3.5 h-3.5 rounded-full object-cover inline-block" />
+                        )}
+                        {msg.sender_name}
                       </span>
-                      {msg.roll_result.isCrit && (
-                        <span className="text-[10px] text-amber-400 block font-bold">CRÍTICO!</span>
-                      )}
+                      <span className="text-[9px] text-slate-500">
+                        {formatTime(msg.created_at)}
+                      </span>
+                    </div>
+                    <div
+                      className={`p-3 text-xs leading-relaxed break-words whitespace-pre-wrap rounded-2xl ${
+                        isMe
+                          ? 'bg-purple-600 text-white rounded-tr-none'
+                          : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-none'
+                      }`}
+                    >
+                      {msg.content}
                     </div>
                   </div>
                 )}
               </div>
             );
-          }
-
-          return (
-            <div key={msg.id} className={`flex flex-col max-w-[85%] ${isMe ? 'self-end ml-auto' : 'mr-auto'}`}>
-              <div className="flex items-center justify-between gap-2 mb-1 px-1">
-                <span className="text-[11px] font-bold text-slate-400 truncate flex items-center gap-1">
-                  {msg.sender_avatar && (
-                    <img src={msg.sender_avatar} alt="" className="w-3.5 h-3.5 rounded-full object-cover inline-block" />
-                  )}
-                  {msg.sender_name}
-                </span>
-                <span className="text-[9px] text-slate-500">
-                  {formatTime(msg.created_at)}
-                </span>
-              </div>
-              <div
-                className={`p-3 text-xs leading-relaxed break-words whitespace-pre-wrap rounded-2xl ${
-                  isMe
-                    ? 'bg-purple-600 text-white rounded-tr-none'
-                    : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-none'
-                }`}
-              >
-                {msg.content}
-              </div>
-            </div>
-          );
-        })}
-        <div ref={chatEndRef} />
+          })}
+        </div>
       </div>
 
       {/* Input Form com Seletor de Identidade */}
@@ -204,7 +274,7 @@ export default function TableChatPanel({
           <input
             type="text"
             value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
+            onChange={handleInputChange}
             placeholder={
               chatCooldownRemaining > 0
                 ? `Aguarde ${chatCooldownRemaining}s...`

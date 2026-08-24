@@ -380,6 +380,19 @@ export default function DiceRollOverlay({
     };
   }, [diceResults, diceFaces, onComplete]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onComplete();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onComplete]);
+
   // Manipulação de Eventos de Arraste/Arremesso em Grupo (Pointer Events para Touch e Mouse)
   const handlePointerDown = (e: React.PointerEvent) => {
     if (animationPhase === 'settled') return;
@@ -492,9 +505,8 @@ export default function DiceRollOverlay({
       wasDraggingRef.current = false;
       return;
     }
-    if (animationPhase === 'settled') {
-      onComplete();
-    }
+    // Permite pular/concluir a animação instantaneamente com um clique na tela
+    onComplete();
   };
 
   const total = diceResults.reduce((acc, curr) => acc + curr, 0);

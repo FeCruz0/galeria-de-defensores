@@ -37,7 +37,21 @@ export function createClient() {
     if (match) mockSessionCookieValue = decodeURIComponent(match[1]);
   }
 
-  if (mockSessionCookieValue) {
+// Shared variables for mock realtime sync
+let channelListeners: any[] = [];
+
+if (typeof window !== 'undefined') {
+  (window as any).__supabaseMockRealtimeTrigger = (table: string, eventType: string, newRecord: any) => {
+    console.log('[MOCK REALTIME] triggering mock event via window trigger:', table, eventType);
+    channelListeners.forEach((listener) => {
+      if (listener.table === table && (listener.eventType === '*' || listener.eventType === eventType)) {
+        listener.callback({ new: newRecord, old: newRecord, eventType, schema: 'public', table });
+      }
+    });
+  };
+}
+
+if (mockSessionCookieValue) {
     try {
       const mockData = JSON.parse(mockSessionCookieValue);
       const mockUser = {
@@ -66,6 +80,8 @@ export function createClient() {
         error: null
       });
 
+      let lastInserted: any = null;
+
       // Mock database queries
       client.from = (table: string) => {
         let selectedCols = '';
@@ -74,15 +90,40 @@ export function createClient() {
             selectedCols = cols || '*';
             return builder;
           },
-          insert: () => builder,
-          update: () => builder,
-          delete: () => builder,
+          insert: (records: any) => {
+            const arr = Array.isArray(records) ? records : [records];
+            lastInserted = {
+              id: Math.random().toString(),
+              created_at: new Date().toISOString(),
+              ...arr[0]
+            };
+            console.log('[MOCK REALTIME] database insert on:', table, JSON.stringify(lastInserted));
+            return builder;
+          },
+          update: (updates: any) => {
+            lastInserted = {
+              id: 'mock-id',
+              ...updates,
+              updated_at: new Date().toISOString()
+            };
+            console.log('[MOCK REALTIME] database update on:', table, JSON.stringify(lastInserted));
+            return builder;
+          },
+          delete: () => {
+            console.log('[MOCK REALTIME] database delete on:', table, JSON.stringify({ id: 'mock-id' }));
+            return builder;
+          },
           eq: () => builder,
           neq: () => builder,
           or: () => builder,
           order: () => builder,
           limit: () => builder,
           maybeSingle: async () => {
+            if (lastInserted) {
+              const res = { data: lastInserted, error: null };
+              lastInserted = null;
+              return res;
+            }
             if (table === 'profiles') {
               return { data: { id: mockData.user_id, username: mockData.username }, error: null };
             }
@@ -132,6 +173,11 @@ export function createClient() {
             return { data: null, error: null };
           },
           single: async () => {
+            if (lastInserted) {
+              const res = { data: lastInserted, error: null };
+              lastInserted = null;
+              return res;
+            }
             if (table === 'profiles') {
               return { data: { id: mockData.user_id, username: mockData.username }, error: null };
             }
@@ -168,7 +214,10 @@ export function createClient() {
           },
           then: (onfulfilled: any) => {
             let data: any = [];
-            if (table === 'profiles') {
+            if (lastInserted) {
+              data = [lastInserted];
+              lastInserted = null;
+            } else if (table === 'profiles') {
               data = { id: mockData.user_id, username: mockData.username };
             } else if (table === 'rule_systems') {
               data = [
@@ -232,7 +281,17 @@ export function createClient() {
 
       client.channel = (name: string) => {
         const channel = {
-          on: () => channel,
+          on: (eventType: string, config: any, callback: any) => {
+            if (eventType === 'postgres_changes') {
+              console.log('[MOCK REALTIME] registering listener for:', config.table, config.event);
+              channelListeners.push({
+                table: config.table,
+                eventType: config.event || '*',
+                callback
+              });
+            }
+            return channel;
+          },
           subscribe: (cb: any) => {
             if (cb) cb('SUBSCRIBED');
             return channel;

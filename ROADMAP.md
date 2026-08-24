@@ -261,8 +261,8 @@ Este documento reúne e organiza as próximas atualizações e novas funcionalid
 ### 🎭 4. Testes Multiplayer E2E & Testes de Serviço
 * **Descrição**: Teste automatizado de sincronização entre múltiplos navegadores e cobertura nos arquivos sob `src/services/`.
 * **Checklist**:
-  - [ ] Escrever teste E2E Playwright de sincronização multiplayer em tempo real (2 navegadores simultâneos).
-  - [ ] Criar testes unitários em Vitest para `characterService.ts`, `tableService.ts` e `npcService.ts`.
+  - [x] Escrever teste E2E Playwright de sincronização multiplayer em tempo real (2 navegadores simultâneos).
+  - [x] Criar testes unitários em Vitest para `characterService.ts`, `tableService.ts` e `npcService.ts`.
 
 ---
 

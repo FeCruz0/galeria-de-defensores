@@ -70,8 +70,12 @@ test.describe('Galeria de Defensores Complete E2E Flow', () => {
     await expect(rollButton).toBeVisible();
     await rollButton.click();
 
+    // Aguardar o overlay do dado e pressionar Escape para concluir
+    await expect(page.locator('text=Segure e arremesse os dados para rolar!')).toBeVisible({ timeout: 5000 });
+    await page.keyboard.press('Escape');
+
     // Validar que o feed de chat agora contém uma mensagem indicando a rolagem
-    const chatFeed = page.locator('div', { hasText: 'Rolagem de Dados' });
+    const chatFeed = page.locator('div', { hasText: 'rolou' });
     await expect(chatFeed.first()).toBeVisible();
   });
 });
